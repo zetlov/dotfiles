@@ -36,7 +36,7 @@ jobs:
           version: 2026.8.3
           sha256: 66585ac496c10bf6fbf13272e3e550c1813aed0e1cb780b9bb73c1751de49289
       - name: Install test tools
-        run: sudo apt-get update && sudo apt-get install -y jq lua5.4 ripgrep stow
+        run: sudo apt-get update && sudo apt-get install -y jq lua5.4 ripgrep stow zsh
       - name: Run repository tests
         run: mise run test
       - name: Scan for secrets
@@ -76,7 +76,7 @@ jobs:
             archlinux@sha256:5c0a4c06b4aca92db11a9db181461d9e412fbee3aa3561d318aec2df2f318769 \
             bash -eu -c '
               sed -i "/^\[options\]/a DisableSandbox" /etc/pacman.conf
-              pacman -Syu --noconfirm --needed base-devel git sudo util-linux
+              pacman -Syu --noconfirm --needed base-devel git stow sudo util-linux
               useradd -m -G wheel builder
               echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
               builder_home=$(getent passwd builder | cut -d: -f6)
@@ -104,7 +104,7 @@ jobs:
             menci/archlinuxarm@sha256:bd173cb4db756109cd20213678f0aca01242c95ab7ee3b644e92a92527ab1e04 \
             bash -eu -c '
               sed -i "/^\[options\]/a DisableSandbox" /etc/pacman.conf
-              pacman -Syu --noconfirm --needed base-devel git sudo util-linux
+              pacman -Syu --noconfirm --needed base-devel git stow sudo util-linux
               useradd -m -G wheel builder
               echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
               builder_home=$(getent passwd builder | cut -d: -f6)
