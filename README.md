@@ -85,6 +85,35 @@ Empty monitor names use the compositor's preferred automatic layout.
 Secrets belong in `~/.zsh_secrets`; machine-only shell configuration belongs
 in `~/.zshrc.local`. Neither file is tracked.
 
+## Development tools
+
+Tool ownership follows the runtime boundary:
+
+- yay/pacman owns OS-integrated commands and desktop runtime dependencies,
+  including Git, GitHub CLI, jq, Python, Neovim, ripgrep, fd, fzf, and lazygit.
+- mise owns language runtimes and version-sensitive development tools. The
+  shared global defaults live in
+  `stow/base/.config/mise/conf.d/dotfiles.toml`; repository-only audit tools
+  live in `mise.toml`.
+- mise itself is installed by yay/pacman so a fresh machine has a stable
+  bootstrap path. A full `install.sh` run links the shared configuration and
+  then runs `mise install`.
+
+The global Node.js entry tracks a major release so compatible updates arrive
+without jumping to a new major. Codex CLI, Herdr, and AWS CLI track their latest
+releases because they are interactive user tools, while repository audit tools
+use exact versions for reproducible checks. Herdr's official installation
+documentation supports mise; using that path avoids executing a mutable remote
+installer during bootstrap. A full bootstrap also installs Herdr's Codex
+integration after the local Codex configuration has been initialized. AWS
+credentials and configuration remain local and are never managed by this
+repository. Run `mise upgrade` to update the global tools. Keep
+machine- or project-specific overrides in an untracked
+`~/.config/mise/config.toml` or project `mise.local.toml` rather than adding
+them to the shared global file. The unmanaged global file has higher priority
+than `conf.d`, so avoid redefining shared tools there unless an override is
+intentional.
+
 ## Key entrypoints
 
 - Neovim: `stow/base/.config/nvim/init.lua`

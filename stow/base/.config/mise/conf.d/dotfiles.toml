@@ -1,0 +1,5 @@
+[tools]
+node = "26"
+"npm:@openai/codex" = "latest"
+herdr = "latest"
+aws = "latest"

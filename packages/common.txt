@@ -24,6 +24,7 @@ fd
 fzf
 jq
 mise
+python
 curl
 ripgrep
 yazi

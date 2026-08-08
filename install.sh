@@ -32,6 +32,22 @@ link_dotfiles() {
     DOTFILES_DIR="${DOTFILES_DIR}" "${DOTFILES_DIR}/scripts/stow-dotfiles.sh"
 }
 
+install_mise_tools() {
+    echo "Installing mise-managed development tools..."
+    (
+        cd "${DOTFILES_DIR}"
+        mise install
+    )
+}
+
+install_herdr_integration() {
+    echo "Installing the Herdr Codex integration..."
+    (
+        cd "${DOTFILES_DIR}"
+        mise exec -- herdr integration install codex
+    )
+}
+
 if [ "${LINK_ONLY}" -eq 1 ]; then
     link_dotfiles
     echo "Link-only installation complete."
@@ -110,6 +126,8 @@ fi
 
 # --- 3. Dotfiles Linking (Stow) ---
 link_dotfiles
+install_mise_tools
+install_herdr_integration
 
 # --- 6. WSL固有設定 ---
 
