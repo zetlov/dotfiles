@@ -48,43 +48,6 @@ function Install-WinGetCommand {
   return $true
 }
 
-function Invoke-Komorebic {
-  param(
-    [Parameter(Mandatory = $true)]
-    [string]$Path,
-
-    [Parameter(Mandatory = $true)]
-    [string[]]$Arguments
-  )
-
-  & $Path @Arguments
-  if ($LASTEXITCODE -ne 0) {
-    throw "komorebic $($Arguments -join ' ') failed with exit code $LASTEXITCODE."
-  }
-}
-
-function Write-KomorebiManifest {
-  param(
-    [Parameter(Mandatory = $true)]
-    [object]$Manifest,
-
-    [Parameter(Mandatory = $true)]
-    [string]$Path
-  )
-
-  $temporaryPath = "$Path.$([guid]::NewGuid().ToString('N')).tmp"
-  try {
-    $Manifest |
-      ConvertTo-Json -Depth 8 |
-      Set-Content -LiteralPath $temporaryPath -Encoding UTF8
-    Move-Item -LiteralPath $temporaryPath -Destination $Path -Force
-  } finally {
-    if (Test-Path -LiteralPath $temporaryPath) {
-      Remove-Item -LiteralPath $temporaryPath -Force
-    }
-  }
-}
-
 function Assert-KomorebiAutostart {
   param(
     [Parameter(Mandatory = $true)]
@@ -243,10 +206,13 @@ $applicationsCreatedNow = $false
 $configSourcePath = Join-Path $PSScriptRoot "komorebi.json"
 $barConfigSourcePath = Join-Path $PSScriptRoot "komorebi.bar.json"
 $audioScriptSourcePath = Join-Path $PSScriptRoot "switch-audio.ps1"
-$audioConfigSourcePath = Join-Path $PSScriptRoot "audio-output.local.json"
-if (-not (Test-Path -LiteralPath $audioConfigSourcePath -PathType Leaf)) {
-  $audioConfigSourcePath = Join-Path $PSScriptRoot "audio-output.json"
-}
+$managedFileSpecs = @(Get-KomorebiManagedFileSpecification `
+  -SourceRoot $PSScriptRoot `
+  -ConfigHome $configHome `
+  -Manifest $previousManifest)
+$audioConfigSourcePath = [string](@(
+  $managedFileSpecs | Where-Object { $_.Name -eq "audio-output.json" }
+) | Select-Object -First 1).SourcePath
 try {
   $komorebiInstalledNow = Install-WinGetCommand `
     -PackageId "LGUG2Z.komorebi" `
@@ -337,43 +303,9 @@ if ([string]::IsNullOrWhiteSpace($oldCreatedAt)) {
   $oldCreatedAt = (Get-Date).ToString("o")
 }
 
-$sourceFiles = @(
-  @{
-    Name = "komorebi.json"
-    SourcePath = $configSourcePath
-  },
-  @{
-    Name = "komorebi.bar.json"
-    SourcePath = $barConfigSourcePath
-  },
-  @{
-    Name = "whkdrc"
-    SourcePath = Join-Path $PSScriptRoot "whkdrc"
-  },
-  @{
-    Name = "switch-audio.ps1"
-    SourcePath = $audioScriptSourcePath
-  },
-  @{
-    Name = "audio-output.json"
-    SourcePath = $audioConfigSourcePath
-  }
-)
 $barConfigPath = Resolve-KomorebiManagedPath `
   -ConfigHome $configHome `
   -Name "komorebi.bar.json"
-$transactionFiles = @()
-foreach ($sourceFile in $sourceFiles) {
-  $transactionFiles += @{
-    SourcePath = $sourceFile.SourcePath
-    DestinationPath = Resolve-KomorebiManagedPath `
-      -ConfigHome $configHome `
-      -Name $sourceFile.Name
-    PreviousSha256 = Get-KomorebiManifestFileSha256 `
-      -Manifest $previousManifest `
-      -Name $sourceFile.Name
-  }
-}
 
 New-Item -ItemType Directory -Force -Path $metadataDirectory | Out-Null
 $rollbackRoot = Join-Path $env:TEMP (
@@ -400,10 +332,10 @@ try {
     param($results)
 
     $managedFiles = @()
-    for ($index = 0; $index -lt $sourceFiles.Count; $index++) {
+    for ($index = 0; $index -lt $managedFileSpecs.Count; $index++) {
       $result = $results[$index]
       $managedFiles += @{
-        name = $sourceFiles[$index].Name
+        name = $managedFileSpecs[$index].Name
         path = $result.DestinationPath
         sha256 = $result.Sha256
       }
@@ -492,7 +424,7 @@ try {
   }
 
   Install-KomorebiManagedFilesTransaction `
-    -Files $transactionFiles `
+    -Files $managedFileSpecs `
     -Force:$ForceConfig `
     -AfterInstall $postInstall | Out-Null
 } catch {

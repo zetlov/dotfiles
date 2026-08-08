@@ -9,43 +9,6 @@ $ErrorActionPreference = "Stop"
 $installerModule = Join-Path $PSScriptRoot "KomorebiInstaller.psm1"
 Import-Module $installerModule -Force -ErrorAction Stop
 
-function Invoke-Komorebic {
-  param(
-    [Parameter(Mandatory = $true)]
-    [string]$Path,
-
-    [Parameter(Mandatory = $true)]
-    [string[]]$Arguments
-  )
-
-  & $Path @Arguments
-  if ($LASTEXITCODE -ne 0) {
-    throw "komorebic $($Arguments -join ' ') failed with exit code $LASTEXITCODE."
-  }
-}
-
-function Write-KomorebiManifest {
-  param(
-    [Parameter(Mandatory = $true)]
-    [object]$Manifest,
-
-    [Parameter(Mandatory = $true)]
-    [string]$Path
-  )
-
-  $temporaryPath = "$Path.$([guid]::NewGuid().ToString('N')).tmp"
-  try {
-    $Manifest |
-      ConvertTo-Json -Depth 8 |
-      Set-Content -LiteralPath $temporaryPath -Encoding UTF8
-    Move-Item -LiteralPath $temporaryPath -Destination $Path -Force
-  } finally {
-    if (Test-Path -LiteralPath $temporaryPath) {
-      Remove-Item -LiteralPath $temporaryPath -Force
-    }
-  }
-}
-
 $metadataPath = Join-Path $env:LOCALAPPDATA "dotfiles\komorebi\install.json"
 $manifest = Get-KomorebiManifest -Path $metadataPath
 if (-not $manifest) {
@@ -101,10 +64,13 @@ $env:WHKD_CONFIG_HOME = $configHome
 $configSourcePath = Join-Path $PSScriptRoot "komorebi.json"
 $barConfigSourcePath = Join-Path $PSScriptRoot "komorebi.bar.json"
 $audioScriptSourcePath = Join-Path $PSScriptRoot "switch-audio.ps1"
-$audioConfigSourcePath = Join-Path $PSScriptRoot "audio-output.local.json"
-if (-not (Test-Path -LiteralPath $audioConfigSourcePath -PathType Leaf)) {
-  $audioConfigSourcePath = Join-Path $PSScriptRoot "audio-output.json"
-}
+$managedFileSpecs = @(Get-KomorebiManagedFileSpecification `
+  -SourceRoot $PSScriptRoot `
+  -ConfigHome $configHome `
+  -Manifest $manifest)
+$audioConfigSourcePath = [string](@(
+  $managedFileSpecs | Where-Object { $_.Name -eq "audio-output.json" }
+) | Select-Object -First 1).SourcePath
 Invoke-Komorebic -Path $komorebicPath -Arguments @(
   "check",
   "--komorebi-config",
@@ -119,28 +85,9 @@ try {
 [void](Get-AudioOutputPatterns -Path $audioConfigSourcePath)
 Install-AudioDeviceModule -RequiredVersion "3.1.0.2" | Out-Null
 
-$names = @(
-  "komorebi.json",
-  "komorebi.bar.json",
-  "whkdrc",
-  "switch-audio.ps1",
-  "audio-output.json"
-)
 $barConfigPath = Resolve-KomorebiManagedPath `
   -ConfigHome $configHome `
   -Name "komorebi.bar.json"
-$transactionFiles = @()
-foreach ($name in $names) {
-  $transactionFiles += @{
-    SourcePath = Join-Path $PSScriptRoot $name
-    DestinationPath = Resolve-KomorebiManagedPath `
-      -ConfigHome $configHome `
-      -Name $name
-    PreviousSha256 = Get-KomorebiManifestFileSha256 `
-      -Manifest $manifest `
-      -Name $name
-  }
-}
 
 $manifestSnapshot = "$metadataPath.$([guid]::NewGuid().ToString('N')).bak"
 Copy-Item -LiteralPath $metadataPath -Destination $manifestSnapshot
@@ -207,10 +154,10 @@ try {
     }
 
     $updatedFiles = @()
-    for ($index = 0; $index -lt $names.Count; $index++) {
+    for ($index = 0; $index -lt $managedFileSpecs.Count; $index++) {
       $result = $results[$index]
       $updatedFiles += @{
-        name = $names[$index]
+        name = $managedFileSpecs[$index].Name
         path = $result.DestinationPath
         sha256 = $result.Sha256
       }
@@ -224,7 +171,7 @@ try {
   }
 
   Install-KomorebiManagedFilesTransaction `
-    -Files $transactionFiles `
+    -Files $managedFileSpecs `
     -Force:$Force `
     -AfterInstall $afterInstall | Out-Null
 } catch {

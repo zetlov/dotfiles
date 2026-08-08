@@ -277,6 +277,66 @@ Context "Resolve-KomorebiManagedPath" {
   }
 }
 
+Context "Get-KomorebiManagedFileSpecification" {
+  It "deploys a selected local audio configuration under the managed name" {
+    $sourceRoot = Join-Path $TestDrive ([guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $sourceRoot | Out-Null
+    $defaultAudioPath = Join-Path $sourceRoot "audio-output.json"
+    $localAudioPath = Join-Path $sourceRoot "audio-output.local.json"
+    [System.IO.File]::WriteAllText($defaultAudioPath, '{"outputs":["default"]}')
+    [System.IO.File]::WriteAllText($localAudioPath, '{"outputs":["local"]}')
+    $previousAudioSha256 = "a" * 64
+    $manifest = [pscustomobject]@{
+      files = @(
+        [pscustomobject]@{
+          name = "audio-output.json"
+          sha256 = $previousAudioSha256
+        }
+      )
+    }
+
+    $files = @(Get-KomorebiManagedFileSpecification `
+      -SourceRoot $sourceRoot `
+      -ConfigHome (Join-Path $env:USERPROFILE ".config\komorebi") `
+      -Manifest $manifest)
+    $audioFile = @($files | Where-Object { $_.Name -eq "audio-output.json" }) |
+      Select-Object -First 1
+    $deployedAudioPath = Join-Path $sourceRoot "deployed\audio-output.json"
+
+    Install-KomorebiManagedFilesTransaction -Files @(
+      @{
+        SourcePath = $audioFile.SourcePath
+        DestinationPath = $deployedAudioPath
+        PreviousSha256 = ""
+      }
+    ) | Out-Null
+
+    Assert-Equal $audioFile.SourcePath $localAudioPath
+    Assert-Equal $audioFile.PreviousSha256 $previousAudioSha256
+    Assert-Equal $audioFile.DestinationPath (
+      Join-Path $env:USERPROFILE ".config\komorebi\audio-output.json"
+    )
+    Assert-Equal (
+      Get-Content -LiteralPath $deployedAudioPath -Raw
+    ) '{"outputs":["local"]}'
+  }
+
+  It "falls back to the checked-in audio configuration" {
+    $sourceRoot = Join-Path $TestDrive ([guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $sourceRoot | Out-Null
+    $defaultAudioPath = Join-Path $sourceRoot "audio-output.json"
+    [System.IO.File]::WriteAllText($defaultAudioPath, '{"outputs":["default"]}')
+
+    $audioFile = @(Get-KomorebiManagedFileSpecification `
+      -SourceRoot $sourceRoot `
+      -ConfigHome (Join-Path $env:USERPROFILE ".config\komorebi") |
+      Where-Object { $_.Name -eq "audio-output.json" }) |
+      Select-Object -First 1
+
+    Assert-Equal $audioFile.SourcePath $defaultAudioPath
+  }
+}
+
 Context "Install-KomorebiManagedFilesTransaction" {
   BeforeEach {
     $caseRoot = Join-Path $TestDrive ([guid]::NewGuid().ToString("N"))
@@ -462,6 +522,20 @@ Context "Installer entrypoint safety contracts" {
     ) $true
   }
 
+  It "centralizes shared deployment operations" {
+    foreach ($script in @($installScript, $updateScript, $uninstallScript)) {
+      Assert-Equal $script.Contains("function Write-KomorebiManifest") $false
+    }
+    foreach ($script in @($installScript, $updateScript)) {
+      Assert-Equal $script.Contains("function Invoke-Komorebic") $false
+      Assert-Equal $script.Contains(
+        "Get-KomorebiManagedFileSpecification"
+      ) $true
+    }
+    Assert-Equal $installerModule.Contains("function Invoke-Komorebic") $true
+    Assert-Equal $installerModule.Contains("function Write-KomorebiManifest") $true
+  }
+
   It "verifies processes and autostart after commands return" {
     Assert-Equal $installScript.Contains("Wait-KomorebiProcessSet") $true
     Assert-Equal $installScript.Contains("Assert-KomorebiAutostart") $true
@@ -474,7 +548,7 @@ Context "Installer entrypoint safety contracts" {
   }
 
   It "deploys the managed bar configuration" {
-    Assert-Equal $installScript.Contains(
+    Assert-Equal $installerModule.Contains(
       'Name = "komorebi.bar.json"'
     ) $true
     Assert-Equal $updateScript.Contains(
@@ -487,8 +561,7 @@ Context "Installer entrypoint safety contracts" {
 
   It "deploys the managed audio switch configuration" {
     foreach ($name in @("switch-audio.ps1", "audio-output.json")) {
-      Assert-Equal $installScript.Contains("Name = `"$name`"") $true
-      Assert-Equal $updateScript.Contains("`"$name`"") $true
+      Assert-Equal $installerModule.Contains("Name = `"$name`"") $true
     }
     Assert-Equal $installScript.Contains(
       'Install-AudioDeviceModule -RequiredVersion "3.1.0.2"'

@@ -1,5 +1,42 @@
 Set-StrictMode -Version Latest
 
+function Invoke-Komorebic {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Path,
+
+    [Parameter(Mandatory = $true)]
+    [string[]]$Arguments
+  )
+
+  & $Path @Arguments
+  if ($LASTEXITCODE -ne 0) {
+    throw "komorebic $($Arguments -join ' ') failed with exit code $LASTEXITCODE."
+  }
+}
+
+function Write-KomorebiManifest {
+  param(
+    [Parameter(Mandatory = $true)]
+    [object]$Manifest,
+
+    [Parameter(Mandatory = $true)]
+    [string]$Path
+  )
+
+  $temporaryPath = "$Path.$([guid]::NewGuid().ToString('N')).tmp"
+  try {
+    $Manifest |
+      ConvertTo-Json -Depth 8 |
+      Set-Content -LiteralPath $temporaryPath -Encoding UTF8
+    Move-Item -LiteralPath $temporaryPath -Destination $Path -Force
+  } finally {
+    if (Test-Path -LiteralPath $temporaryPath) {
+      Remove-Item -LiteralPath $temporaryPath -Force
+    }
+  }
+}
+
 function Get-KomorebiFileSha256 {
   param(
     [Parameter(Mandatory = $true)]
@@ -224,6 +261,58 @@ function Resolve-KomorebiManagedPath {
   return Join-Path $resolvedHome $Name
 }
 
+function Get-KomorebiManagedFileSpecification {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$SourceRoot,
+
+    [Parameter(Mandatory = $true)]
+    [string]$ConfigHome,
+
+    [object]$Manifest
+  )
+
+  $audioConfigSourcePath = Join-Path $SourceRoot "audio-output.local.json"
+  if (-not (Test-Path -LiteralPath $audioConfigSourcePath -PathType Leaf)) {
+    $audioConfigSourcePath = Join-Path $SourceRoot "audio-output.json"
+  }
+  $sources = @(
+    @{
+      Name = "komorebi.json"
+      SourcePath = Join-Path $SourceRoot "komorebi.json"
+    },
+    @{
+      Name = "komorebi.bar.json"
+      SourcePath = Join-Path $SourceRoot "komorebi.bar.json"
+    },
+    @{
+      Name = "whkdrc"
+      SourcePath = Join-Path $SourceRoot "whkdrc"
+    },
+    @{
+      Name = "switch-audio.ps1"
+      SourcePath = Join-Path $SourceRoot "switch-audio.ps1"
+    },
+    @{
+      Name = "audio-output.json"
+      SourcePath = $audioConfigSourcePath
+    }
+  )
+
+  return @($sources | ForEach-Object {
+    [pscustomobject]@{
+      Name = $_.Name
+      SourcePath = $_.SourcePath
+      DestinationPath = Resolve-KomorebiManagedPath `
+        -ConfigHome $ConfigHome `
+        -Name $_.Name
+      PreviousSha256 = Get-KomorebiManifestFileSha256 `
+        -Manifest $Manifest `
+        -Name $_.Name
+    }
+  })
+}
+
 function Install-AudioDeviceModule {
   param(
     [Parameter(Mandatory = $true)]
@@ -437,6 +526,8 @@ function Test-KomorebiShortcutSpec {
 }
 
 Export-ModuleMember -Function `
+  Invoke-Komorebic, `
+  Write-KomorebiManifest, `
   Get-KomorebiFileSha256, `
   Resolve-KomorebiConfigHome, `
   Install-KomorebiManagedFile, `
@@ -444,6 +535,7 @@ Export-ModuleMember -Function `
   Get-KomorebiManifestFileSha256, `
   Test-KomorebiManifestPackageOwned, `
   Resolve-KomorebiManagedPath, `
+  Get-KomorebiManagedFileSpecification, `
   Install-AudioDeviceModule, `
   Install-KomorebiManagedFilesTransaction, `
   Wait-KomorebiProcessSet, `

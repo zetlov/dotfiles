@@ -10,28 +10,6 @@ $ErrorActionPreference = "Stop"
 $installerModule = Join-Path $PSScriptRoot "KomorebiInstaller.psm1"
 Import-Module $installerModule -Force -ErrorAction Stop
 
-function Write-KomorebiManifest {
-  param(
-    [Parameter(Mandatory = $true)]
-    [object]$Manifest,
-
-    [Parameter(Mandatory = $true)]
-    [string]$Path
-  )
-
-  $temporaryPath = "$Path.$([guid]::NewGuid().ToString('N')).tmp"
-  try {
-    $Manifest |
-      ConvertTo-Json -Depth 8 |
-      Set-Content -LiteralPath $temporaryPath -Encoding UTF8
-    Move-Item -LiteralPath $temporaryPath -Destination $Path -Force
-  } finally {
-    if (Test-Path -LiteralPath $temporaryPath) {
-      Remove-Item -LiteralPath $temporaryPath -Force
-    }
-  }
-}
-
 $metadataPath = Join-Path $env:LOCALAPPDATA "dotfiles\komorebi\install.json"
 $manifest = Get-KomorebiManifest -Path $metadataPath
 $komorebicPath = Join-Path $env:ProgramFiles "komorebi\bin\komorebic.exe"
