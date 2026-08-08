@@ -73,19 +73,69 @@ ShellRoot {
         id: pickerState
     }
 
+    Services.ClockService {
+        id: clockState
+    }
+
+    Services.MusicService {
+        id: musicState
+    }
+
+    Services.LyricsService {
+        id: lyricsState
+
+        title: musicState.title
+        artist: musicState.artist
+        album: musicState.album
+        duration: Math.round(musicState.length)
+        position: musicState.position
+    }
+
+    Services.SystemStatsService {
+        id: statsState
+
+        config: dashboardConfig
+    }
+
+    Services.WeatherService {
+        id: weatherState
+
+        config: dashboardConfig
+    }
+
+    Services.DashboardInfoService {
+        id: infoState
+    }
+
     Services.VolumeService {
-        id: osdVolume
+        id: volumeState
     }
 
     Services.BrightnessService {
-        id: osdBrightness
+        id: brightnessState
+    }
+
+    Services.WallpaperService {
+        id: wallpapersState
+    }
+
+    Services.UpdateService {
+        id: updatesState
+    }
+
+    Services.SystemService {
+        id: systemActionsState
+    }
+
+    Services.ImeService {
+        id: imeState
     }
 
     Services.OsdService {
         id: osdState
 
-        volume: osdVolume
-        brightness: osdBrightness
+        volume: volumeState
+        brightness: brightnessState
     }
 
     IpcHandler {
@@ -287,6 +337,12 @@ ShellRoot {
             notificationService: notificationsState
             controlCenterService: controlCenterState
             networkService: networkState
+            clock: clockState
+            stats: statsState
+            volume: volumeState
+            updates: updatesState
+            music: musicState
+            ime: imeState
         }
 
     }
@@ -332,6 +388,17 @@ ShellRoot {
             configService: dashboardConfig
             fileSearchConfigService: fileSearchConfig
             networkService: networkState
+            clock: clockState
+            music: musicState
+            lyrics: lyricsState
+            stats: statsState
+            weather: weatherState
+            info: infoState
+            volume: volumeState
+            brightness: brightnessState
+            wallpapers: wallpapersState
+            updates: updatesState
+            systemActions: systemActionsState
         }
 
     }
@@ -374,6 +441,7 @@ ShellRoot {
             screenNameHint: modelData.name
             targetMonitor: mainMonitorName
             launcherService: wallpaperLauncherState
+            wallpapers: wallpapersState
         }
 
     }

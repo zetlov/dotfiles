@@ -1,5 +1,4 @@
 import "../.." as Shell
-import "../../services" as Services
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -16,6 +15,17 @@ PanelWindow {
     property QtObject dashboardService: null
     property QtObject configService: null
     property QtObject fileSearchConfigService: null
+    required property QtObject clock
+    required property QtObject music
+    required property QtObject lyrics
+    required property QtObject stats
+    required property QtObject weather
+    required property QtObject info
+    required property QtObject volume
+    required property QtObject brightness
+    required property QtObject wallpapers
+    required property QtObject updates
+    required property QtObject systemActions
     readonly property QtObject dashboardTheme: theme
     readonly property QtObject musicService: music
     readonly property QtObject lyricsService: lyrics
@@ -644,60 +654,6 @@ PanelWindow {
 
     Shell.Theme {
         id: theme
-    }
-
-    Services.ClockService {
-        id: clock
-    }
-
-    Services.MusicService {
-        id: music
-    }
-
-    Services.LyricsService {
-        id: lyrics
-
-        title: music.title
-        artist: music.artist
-        album: music.album
-        duration: Math.round(music.length)
-        position: music.position
-    }
-
-    Services.SystemStatsService {
-        id: stats
-
-        config: root.configService
-    }
-
-    Services.WeatherService {
-        id: weather
-
-        config: root.configService
-    }
-
-    Services.DashboardInfoService {
-        id: info
-    }
-
-    Services.VolumeService {
-        id: volume
-    }
-
-    Services.BrightnessService {
-        id: brightness
-    }
-
-    Services.WallpaperService {
-        id: wallpapers
-    }
-
-    Services.UpdateService {
-        id: updates
-    }
-
-    Services.SystemService {
-        id: systemActions
     }
 
     anchors {

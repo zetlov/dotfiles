@@ -1,5 +1,4 @@
 import "../.." as Shell
-import "../../services" as Services
 import Qt5Compat.GraphicalEffects
 import QtQuick
 import QtQuick.Layouts
@@ -17,6 +16,12 @@ PanelWindow {
     property QtObject notificationService: null
     property QtObject controlCenterService: null
     property QtObject networkService: null
+    required property QtObject clock
+    required property QtObject stats
+    required property QtObject volume
+    required property QtObject updates
+    required property QtObject music
+    required property QtObject ime
     readonly property QtObject network: networkService
     readonly property color railTop: theme.railTop
     readonly property color railBottom: theme.railBottom
@@ -91,30 +96,6 @@ PanelWindow {
 
     Shell.Theme {
         id: theme
-    }
-
-    Services.ClockService {
-        id: clock
-    }
-
-    Services.SystemStatsService {
-        id: stats
-    }
-
-    Services.VolumeService {
-        id: volume
-    }
-
-    Services.UpdateService {
-        id: updates
-    }
-
-    Services.MusicService {
-        id: music
-    }
-
-    Services.ImeService {
-        id: ime
     }
 
     Rectangle {

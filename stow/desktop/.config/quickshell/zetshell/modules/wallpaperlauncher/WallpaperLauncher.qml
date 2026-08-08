@@ -3,7 +3,6 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Wayland
 import "../.." as Shell
-import "../../services" as Services
 
 PanelWindow {
     id: root
@@ -11,13 +10,10 @@ PanelWindow {
     property string targetMonitor: ""
     property string screenNameHint: ""
     property QtObject launcherService: null
+    required property QtObject wallpapers
 
     Shell.Theme {
         id: theme
-    }
-
-    Services.WallpaperService {
-        id: wallpapers
     }
 
     color: "transparent"
