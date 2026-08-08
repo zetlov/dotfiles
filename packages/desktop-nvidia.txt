@@ -1,0 +1,7 @@
+# NVIDIA packages for native x86_64 desktops.
+# Install explicitly with ./install.sh --with-nvidia.
+libva-nvidia-driver
+nvidia-open
+nvidia-settings
+nvidia-utils
+ollama-cuda

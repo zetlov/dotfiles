@@ -1,0 +1,32 @@
+{
+  "roots": [
+    "~/Desktop",
+    "~/Documents",
+    "~/Downloads"
+  ],
+  "includeQuicklinkDirectories": true,
+  "exclude": [
+    ".git",
+    ".cache",
+    ".direnv",
+    ".next",
+    ".nuxt",
+    ".pytest_cache",
+    ".mypy_cache",
+    "__pycache__",
+    "node_modules",
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+    "target",
+    "dotfiles",
+    ".config"
+  ],
+  "excludeExtensions": [
+    ".dat",
+    ".log"
+  ],
+  "maxItems": 15000,
+  "rootSearchMinQuery": 2
+}

@@ -1,0 +1,134 @@
+{
+  "$schema": "https://raw.githubusercontent.com/LGUG2Z/komorebi/v0.1.41/schema.json",
+  "app_specific_configuration_path": "$Env:KOMOREBI_CONFIG_HOME/applications.json",
+  "window_hiding_behaviour": "Cloak",
+  "cross_boundary_behaviour": "Monitor",
+  "cross_monitor_move_behaviour": "Insert",
+  "default_container_padding": 8,
+  "default_workspace_padding": 10,
+  "border": true,
+  "border_width": 3,
+  "border_offset": -1,
+  "theme": {
+    "palette": "Catppuccin",
+    "name": "Mocha",
+    "single_border": "Blue",
+    "stack_border": "Green",
+    "monocle_border": "Mauve",
+    "floating_border": "Yellow",
+    "unfocused_border": "Surface0"
+  },
+  "transparency": false,
+  "transparency_alpha": 255,
+  "mouse_follows_focus": false,
+  "animation": {
+    "enabled": {
+      "movement": true
+    },
+    "style": {
+      "movement": "EaseOutQuint"
+    },
+    "fps": 60,
+    "duration": {
+      "movement": 160
+    }
+  },
+  "resize_delta": 50,
+  "monitors": [
+    {
+      "workspaces": [
+        {
+          "name": "1",
+          "layout": "BSP"
+        },
+        {
+          "name": "2",
+          "layout": "BSP",
+          "initial_workspace_rules": [
+            {
+              "kind": "Exe",
+              "id": "Tana.exe",
+              "matching_strategy": "Equals"
+            }
+          ]
+        },
+        {
+          "name": "3",
+          "layout": "BSP",
+          "initial_workspace_rules": [
+            {
+              "kind": "Exe",
+              "id": "Spotify.exe",
+              "matching_strategy": "Equals"
+            }
+          ]
+        },
+        {
+          "name": "4",
+          "layout": "BSP"
+        },
+        {
+          "name": "5",
+          "layout": "BSP"
+        },
+        {
+          "name": "6",
+          "layout": "BSP",
+          "initial_workspace_rules": [
+            {
+              "kind": "Exe",
+              "id": "Discord.exe",
+              "matching_strategy": "Equals"
+            },
+            {
+              "kind": "Exe",
+              "id": "Vesktop.exe",
+              "matching_strategy": "Equals"
+            },
+            {
+              "kind": "Exe",
+              "id": "slack.exe",
+              "matching_strategy": "Equals"
+            }
+          ]
+        },
+        {
+          "name": "7",
+          "layout": "BSP"
+        },
+        {
+          "name": "8",
+          "layout": "BSP"
+        },
+        {
+          "name": "9",
+          "layout": "BSP"
+        },
+        {
+          "name": "10",
+          "layout": "BSP"
+        },
+        {
+          "name": "11",
+          "layout": "BSP",
+          "tile": false,
+          "floating_layer_behaviour": "Float"
+        },
+        {
+          "name": "12",
+          "layout": "BSP",
+          "tile": false,
+          "floating_layer_behaviour": "Float"
+        }
+      ]
+    },
+    {
+      "workspaces": [
+        {
+          "name": "vert",
+          "layout": "Columns"
+        }
+      ]
+    }
+  ]
+}

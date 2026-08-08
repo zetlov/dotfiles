@@ -1,0 +1,49 @@
+# === 基盤 ===
+base-devel
+git
+man-db
+openssh
+stow
+unzip
+wget
+zsh
+zsh-autosuggestions
+zsh-syntax-highlighting
+
+# === エディタ/ターミナル ===
+kitty
+lazygit
+neovim
+tmux
+vim
+
+# === CLI ツール ===
+btop
+fastfetch
+fd
+fzf
+jq
+mise
+curl
+ripgrep
+yazi
+yq
+zoxide
+
+# === Git/Shell ===
+git-delta
+github-cli
+starship
+
+# === コンテナ ===
+docker
+docker-compose
+
+# === その他ユーティリティ ===
+7zip
+imagemagick
+lm_sensors
+pciutils
+psmisc
+rclone
+# socat

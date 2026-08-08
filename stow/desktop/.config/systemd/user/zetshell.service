@@ -1,0 +1,15 @@
+[Unit]
+Description=Zetshell Quickshell desktop shell
+Documentation=https://git.outfoxxed.me/quickshell/quickshell
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/qs -c zetshell
+KillMode=process
+Restart=on-failure
+RestartSec=2s
+
+[Install]
+WantedBy=default.target

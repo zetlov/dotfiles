@@ -1,0 +1,13 @@
+{
+  "apps": {
+    "favorites": [],
+    "aliases": {}
+  },
+  "quicklinks": {
+    "favorites": [
+      "dotfiles",
+      "repos"
+    ],
+    "aliases": {}
+  }
+}

@@ -1,0 +1,18 @@
+return {
+  { "<leader>f", group = "file/find" },
+  { "<leader>s", group = "search" },
+  { "<leader>b", group = "buffer" },
+  { "<leader>w", group = "windows", proxy = "<c-w>" },
+  { "<leader>c", group = "code" },
+  { "<leader>g", group = "git" },
+  { "<leader>x", group = "diagnostics/quickfix" },
+  { "<leader>u", group = "ui" },
+  { "<leader>d", group = "debug" },
+  { "<leader>t", group = "test" },
+  { "<leader><tab>", group = "tabs" },
+  { "<leader>q", group = "quit/session" },
+  { "g", group = "goto" },
+  { "z", group = "fold" },
+  { "[", group = "prev" },
+  { "]", group = "next" },
+}

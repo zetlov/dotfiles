@@ -1,0 +1,24 @@
+[
+  {
+    "id": "dotfiles",
+    "name": "Dotfiles",
+    "url": "~/dotfiles",
+    "alias": "dot",
+    "openWith": "terminal",
+    "tags": ["repo", "config"]
+  },
+  {
+    "id": "downloads",
+    "name": "Downloads",
+    "url": "~/Downloads",
+    "alias": "dl",
+    "tags": ["files"]
+  },
+  {
+    "id": "github-search",
+    "name": "Search GitHub",
+    "url": "https://github.com/search?q={query}",
+    "alias": "gh",
+    "tags": ["web", "search", "code"]
+  }
+]

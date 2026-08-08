@@ -1,0 +1,70 @@
+.shell powershell
+.pause ctrl + alt + shift + p
+
+# Applications
+ctrl + alt + return : Start-Process wezterm -WindowStyle Hidden
+ctrl + alt + b : Start-Process zen
+ctrl + alt + q : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" close
+ctrl + alt + m : & "$Env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$Env:KOMOREBI_CONFIG_HOME\switch-audio.ps1"
+
+# Focus windows
+ctrl + alt + h : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" focus left
+ctrl + alt + j : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" focus down
+ctrl + alt + k : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" focus up
+ctrl + alt + l : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" focus right
+
+# Move windows
+ctrl + alt + shift + h : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" move left
+ctrl + alt + shift + j : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" move down
+ctrl + alt + shift + k : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" move up
+ctrl + alt + shift + l : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" move right
+
+# Window state and layout
+ctrl + alt + f : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" toggle-float
+ctrl + alt + shift + f : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" toggle-monocle
+ctrl + alt + oem_1 : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" cycle-layout next
+ctrl + alt + shift + oem_1 : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" cycle-layout next
+ctrl + alt + shift + return : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" promote
+
+# Monitor navigation
+ctrl + alt + oem_comma : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" cycle-monitor previous
+ctrl + alt + oem_period : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" cycle-monitor next
+ctrl + alt + shift + oem_comma : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" cycle-move-to-monitor previous
+ctrl + alt + shift + oem_period : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" cycle-move-to-monitor next
+ctrl + alt + n : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" cycle-send-to-monitor next
+ctrl + alt + shift + n : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" cycle-send-to-monitor previous
+
+# Workspace navigation
+ctrl + alt + 1 : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" focus-named-workspace 1
+ctrl + alt + 2 : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" focus-named-workspace 2
+ctrl + alt + 3 : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" focus-named-workspace 3
+ctrl + alt + 4 : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" focus-named-workspace 4
+ctrl + alt + 5 : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" focus-named-workspace 5
+ctrl + alt + 6 : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" focus-named-workspace 6
+ctrl + alt + 7 : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" focus-named-workspace 7
+ctrl + alt + 8 : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" focus-named-workspace 8
+ctrl + alt + 9 : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" focus-named-workspace 9
+ctrl + alt + 0 : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" focus-named-workspace 10
+ctrl + alt + oem_minus : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" focus-named-workspace 11
+ctrl + alt + oem_plus : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" focus-named-workspace 12
+
+# Move windows to workspaces
+ctrl + alt + shift + 1 : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" move-to-named-workspace 1
+ctrl + alt + shift + 2 : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" move-to-named-workspace 2
+ctrl + alt + shift + 3 : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" move-to-named-workspace 3
+ctrl + alt + shift + 4 : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" move-to-named-workspace 4
+ctrl + alt + shift + 5 : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" move-to-named-workspace 5
+ctrl + alt + shift + 6 : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" move-to-named-workspace 6
+ctrl + alt + shift + 7 : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" move-to-named-workspace 7
+ctrl + alt + shift + 8 : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" move-to-named-workspace 8
+ctrl + alt + shift + 9 : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" move-to-named-workspace 9
+ctrl + alt + shift + 0 : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" move-to-named-workspace 10
+ctrl + alt + shift + oem_minus : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" move-to-named-workspace 11
+ctrl + alt + shift + oem_plus : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" move-to-named-workspace 12
+
+# Resize and reload
+ctrl + alt + left : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" resize-axis horizontal decrease
+ctrl + alt + right : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" resize-axis horizontal increase
+ctrl + alt + down : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" resize-axis vertical decrease
+ctrl + alt + up : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" resize-axis vertical increase
+ctrl + alt + r : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" replace-configuration "$Env:KOMOREBI_CONFIG_HOME\komorebi.json"

@@ -1,0 +1,12 @@
+{
+  "enabled": true,
+  "showMedia": true,
+  "showPerformance": true,
+  "showWeather": true,
+  "showActions": true,
+  "showLyrics": true,
+  "resourceUpdateInterval": 2000,
+  "detailUpdateInterval": 10000,
+  "weatherUpdateInterval": 900000,
+  "weatherLocation": ""
+}

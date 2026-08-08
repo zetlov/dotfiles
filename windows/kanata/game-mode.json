@@ -1,0 +1,27 @@
+{
+  "poll_interval_ms": 250,
+  "resume_delay_ms": 750,
+  "disable_for_steam_games": true,
+  "disable_only_when_game_foreground": true,
+  "steam_ignore_executables": [
+    "applicationwallpaperinject32.exe",
+    "applicationwallpaperinject64.exe",
+    "edgewallpaper64.exe",
+    "wallpaper32.exe",
+    "wallpaper64.exe",
+    "wallpaperservice32.exe",
+    "wallpaperservice64.exe",
+    "wallpaperui.exe",
+    "webwallpaper32.exe",
+    "webwallpaper64.exe"
+  ],
+  "hard_off_executables": [
+    "StreetFighter6.exe",
+    "FactoryGameSteam.exe",
+    "FactoryGameSteam-Win64-Shipping.exe",
+    "ShadowverseWB.exe",
+    "AimLab_tb.exe",
+    "VALORANT.exe",
+    "VALORANT-Win64-Shipping.exe"
+  ]
+}

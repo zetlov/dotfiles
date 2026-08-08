@@ -1,0 +1,98 @@
+(defcfg
+  process-unmapped-keys yes
+)
+
+(defvar
+  tap  170
+  hold 220
+)
+
+(defalias
+  ;; Space: tap=spc / hold=nav layer
+  spcnav (tap-hold-press $tap $hold spc (layer-while-held nav))
+
+  ;; Physical LAlt (Super keycap): tap=IME Off / hold=Komorebi layer
+  lsuper (tap-hold-press 120 180 f13 (layer-while-held wm))
+
+  ;; RAlt: tap=IME On / hold=Alt
+  imeon (tap-hold-press 120 180 f15 ralt)
+
+  ;; Space+Q: send Escape, then turn IME off.
+  escimeoff (macro esc f13)
+
+  ;; Preserve Hyprland's Super+Shift+workspace move bindings.
+  wm1 (switch ((or (input real lsft) (input real rsft))) C-A-S-1 break () C-A-1 break)
+  wm2 (switch ((or (input real lsft) (input real rsft))) C-A-S-2 break () C-A-2 break)
+  wm3 (switch ((or (input real lsft) (input real rsft))) C-A-S-3 break () C-A-3 break)
+  wm4 (switch ((or (input real lsft) (input real rsft))) C-A-S-4 break () C-A-4 break)
+  wm5 (switch ((or (input real lsft) (input real rsft))) C-A-S-5 break () C-A-5 break)
+  wm6 (switch ((or (input real lsft) (input real rsft))) C-A-S-6 break () C-A-6 break)
+  wm7 (switch ((or (input real lsft) (input real rsft))) C-A-S-7 break () C-A-7 break)
+  wm8 (switch ((or (input real lsft) (input real rsft))) C-A-S-8 break () C-A-8 break)
+  wm9 (switch ((or (input real lsft) (input real rsft))) C-A-S-9 break () C-A-9 break)
+  wm0 (switch ((or (input real lsft) (input real rsft))) C-A-S-0 break () C-A-0 break)
+  wmminus (switch ((or (input real lsft) (input real rsft))) C-A-S-- break () C-A-- break)
+  wmequal (switch ((or (input real lsft) (input real rsft))) C-A-S-= break () C-A-= break)
+
+  ;; Super focuses, Super+Ctrl moves, and Super+Shift+J changes layout.
+  wmh (switch ((or (input real lctl) (input real rctl))) C-A-S-h break ((or (input real lsft) (input real rsft))) XX break () C-A-h break)
+  wmj (switch ((or (input real lctl) (input real rctl))) C-A-S-j break ((or (input real lsft) (input real rsft))) C-A-S-; break () C-A-j break)
+  wmk (switch ((or (input real lctl) (input real rctl))) C-A-S-k break ((or (input real lsft) (input real rsft))) XX break () C-A-k break)
+  wml (switch ((or (input real lctl) (input real rctl))) C-A-S-l break ((or (input real lsft) (input real rsft))) XX break () C-A-l break)
+  wmf (switch ((or (input real lsft) (input real rsft))) C-A-S-f break () C-A-f break)
+  wmcomma (switch ((or (input real lctl) (input real rctl))) C-A-S-, break () C-A-, break)
+  wmperiod (switch ((or (input real lctl) (input real rctl))) C-A-S-. break () C-A-. break)
+
+  ;; Layer switch (persistent)
+  to-us  (layer-switch us)
+  to-jis (layer-switch jis)
+)
+
+(defsrc
+  grv  1    2    3    4    5    6    7    8    9    0    -    =    bspc
+  tab  q    w    e    r    t    y    u    i    o    p    [    ]    \
+  caps a    s    d    f    g    h    j    k    l    ;    '    ret
+  lsft z    x    c    v    b    n    m    ,    .    /    ro   rsft
+  lctl lmet lalt           spc            ralt rmet rctl
+  left down up rght
+)
+
+;; Default layer (first deflayer = initial).
+(deflayer us
+  _    _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    lalt @lsuper         @spcnav        @imeon _    _
+  _    _    _    _
+)
+
+;; JIS physical keyboard compensation layer.
+(deflayer jis
+  _    _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    _    _    _    _    _    _    _    _    _    _    _    _    ret
+  _    _    _    _    _    _    _    _    _    _    _    _    bspc
+  _    _    _    _    _    _    _    _    _    _    _    rsft _
+  _    lalt @lsuper         @spcnav        @imeon _    _
+  _    _    _    _
+)
+
+(deflayer nav
+  _    f1   f2   f3   f4   f5   f6   f7   f8   f9   f10  f11  f12  _
+  _    @escimeoff _ _    _    _    home pgdn pgup end  _    grv  del  _
+  _    _    _    _    _    _    left down up   rght -    =    _
+  _    _    _    _    _    _    @to-us @to-jis _ _  \    _    _
+  _    _    _              _              _    _    _
+  _    _    _    _
+)
+
+;; LSuper shortcut layer. Left Super+Space emits the Windows Alt+Space menu.
+;; Other unbound keys are blocked so Windows never receives a partial Win chord.
+(deflayer wm
+  XX   @wm1 @wm2 @wm3 @wm4 @wm5 @wm6 @wm7 @wm8 @wm9 @wm0 @wmminus @wmequal XX
+  XX   C-A-q XX    XX    XX    XX    XX    XX    XX    XX    pp    XX    XX    XX
+  XX   XX    M-S-s XX    @wmf  XX    @wmh  @wmj  @wmk  @wml  XX    XX    C-A-ret
+  XX   XX    XX    XX    XX    C-A-b XX    C-A-m @wmcomma @wmperiod XX XX    XX
+  _    _     XX                A-spc             _     XX    _
+  C-A-left C-A-down C-A-up C-A-rght
+)

@@ -1,0 +1,21 @@
+# Herdr runs inside WezTerm on WSL and manages its own workspaces and tabs.
+onboarding = false
+
+[theme]
+name = "catppuccin"
+
+[terminal]
+default_shell = "zsh"
+shell_mode = "non_login"
+new_cwd = "follow"
+
+[update]
+channel = "stable"
+
+[ui]
+hide_tab_bar_when_single_tab = true
+tab_bar_position = "bottom"
+
+[ui.toast]
+delivery = "terminal"
+delay_seconds = 1

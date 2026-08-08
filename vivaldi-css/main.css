@@ -1,0 +1,25 @@
+/* Vivaldi UI font */
+:root,
+body,
+.vivaldi,
+button,
+input,
+textarea,
+select,
+.toolbar,
+.toolbar-editor,
+.toolbar-mainbar,
+.toolbar-addressbar,
+.UrlBar,
+.UrlBar-AddressField,
+.tab,
+.tab-header,
+.button-title,
+.panel,
+.panel-group,
+.dialog-content,
+.startpage,
+.bookmark-bar,
+.tree-item {
+  font-family: "JetBrainsMono Nerd Font", "Noto Sans JP", "Segoe UI", sans-serif !important;
+}

@@ -1,0 +1,128 @@
+# === Hyprland/Wayland ===
+cliphist
+gpu-screen-recorder
+grim
+hyprland
+hypridle
+hyprlock
+quickshell
+qt5-wayland
+qt6-5compat
+qt6-imageformats
+qt6-multimedia
+qt6-svg
+qt6-virtualkeyboard
+qt6-wayland
+rofi
+awww
+slurp
+swappy
+wev
+wl-clipboard
+xdg-desktop-portal-gtk
+xdg-desktop-portal-hyprland
+
+# === ディスプレイ/ログイン ===
+brightnessctl
+sddm
+sddm-catppuccin-git
+xorg-xrandr
+
+# === ブラウザ/GUI アプリ ===
+1password
+anki
+brave-bin
+morgen-bin
+obsidian
+p3x-onenote
+slack-desktop
+spotify
+todoist-appimage
+discord
+visual-studio-code-bin
+vivaldi
+zen-browser-bin
+zoom
+
+# === ファイラ/ファイル ===
+ffmpegthumbnailer
+file-roller
+gvfs
+thunar
+thunar-archive-plugin
+
+# === 日本語入力 ===
+fcitx5
+fcitx5-configtool
+fcitx5-gtk
+fcitx5-mozc
+fcitx5-qt
+
+# === フォント ===
+noto-fonts-cjk
+noto-fonts-emoji
+ttf-jetbrains-mono-nerd
+
+# === 音声 ===
+cava
+ncspot
+pamixer
+pavucontrol
+pipewire-pulse
+playerctl
+
+# === ゲーミング ===
+gamemode
+gamescope
+lib32-gamemode
+lib32-mangohud
+mangohud
+steam
+
+# === カーネル ===
+linux
+linux-firmware
+
+# === ブート ===
+efibootmgr
+grub
+os-prober
+systemd-sysvcompat
+
+# === 認証/セキュリティ ===
+gnome-keyring
+keyd
+polkit-gnome
+seahorse
+
+# === ネットワーク ===
+networkmanager
+ntfs-3g
+openvpn
+
+# === ドキュメント ===
+libtexprintf-git
+poppler
+zathura
+zathura-pdf-mupdf
+
+# === Python ライブラリ ===
+python-aiohttp-oauthlib
+python-google-auth-oauthlib
+python-httplib2
+python-pywal
+
+# === その他 ===
+calcurse
+distrobox
+khal
+mpv
+pacman-contrib
+pomodoro-tui
+terminalist
+tk
+tod-bin
+tty-clock
+unimatrix-git
+vdirsyncer
+ytfzf

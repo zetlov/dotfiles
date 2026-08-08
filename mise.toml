@@ -1,0 +1,29 @@
+[tools]
+gitleaks = "8.27.0"
+python = "3.13.7"
+shellcheck = "0.10.0"
+
+[tasks.test]
+description = "Run repository shell tests"
+run = '''
+for test_file in scripts/tests/*.test.sh; do
+  "$test_file"
+done
+'''
+
+[tasks.lint]
+description = "Lint shell scripts"
+run = '''
+find . -type f -name '*.sh' -print0 | xargs -0 shellcheck --severity=error
+'''
+
+[tasks.security]
+description = "Check the public boundary and scan the working tree for secrets"
+run = '''
+scripts/security/check-public-tree.sh
+gitleaks dir --no-banner --redact --exit-code 1 .
+'''
+
+[tasks.check]
+description = "Run tests, lint, and public-repository security checks"
+depends = ["test", "lint", "security"]
