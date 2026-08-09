@@ -711,13 +711,22 @@ Context "Hyprland-compatible static configuration" {
 
   It "routes known Windows applications to their initial workspaces" {
     $main = $config.monitors[0]
+    $workspace1Rules = @($main.workspaces[0].initial_workspace_rules)
     $workspace2Rules = @($main.workspaces[1].initial_workspace_rules)
     $workspace3Rules = @($main.workspaces[2].initial_workspace_rules)
+    $workspace4Rules = @($main.workspaces[3].initial_workspace_rules)
     $workspace6Rules = @($main.workspaces[5].initial_workspace_rules)
 
+    Assert-Equal ($workspace1Rules.id -contains "zen.exe") $true
     Assert-Equal ($workspace2Rules.id -contains "Tana.exe") $true
+    Assert-Equal ($workspace2Rules.id -contains "zotero.exe") $true
+    Assert-Equal ($workspace2Rules.id -contains "Raindrop.io.exe") $true
+    Assert-Equal ($workspace2Rules.id -contains "Todoist.exe") $true
+    Assert-Equal ($workspace2Rules.id -contains "Notion Calendar.exe") $true
     Assert-Equal ($workspace3Rules.id -contains "Spotify.exe") $true
-    Assert-Equal ($workspace6Rules.id -contains "Discord.exe") $true
+    Assert-Equal ($workspace3Rules.id -contains "Discord.exe") $true
+    Assert-Equal ($workspace4Rules.id -contains "Obsidian.exe") $true
+    Assert-Equal ($workspace6Rules.id -contains "Discord.exe") $false
     Assert-Equal ($workspace6Rules.id -contains "slack.exe") $true
   }
 }

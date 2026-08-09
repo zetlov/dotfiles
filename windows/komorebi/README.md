@@ -14,7 +14,7 @@ The configuration mirrors the active Hyprland setup where Windows allows it:
 - keyboard-directed focus without focus-follows-mouse
 - a 42 px Catppuccin bar on the primary monitor
 - 160 ms window movement animations using Hyprland's EaseOutQuint curve
-- initial app routing for Tana, Spotify, Discord, Vesktop, and Slack
+- initial app routing for managed login apps plus Tana, Vesktop, and Slack
 - Catppuccin Mocha borders with opaque windows
 
 Komorebi and whkd permit personal use. Work or other commercial use requires

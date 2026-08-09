@@ -39,7 +39,14 @@
       "workspaces": [
         {
           "name": "1",
-          "layout": "BSP"
+          "layout": "BSP",
+          "initial_workspace_rules": [
+            {
+              "kind": "Exe",
+              "id": "zen.exe",
+              "matching_strategy": "Equals"
+            }
+          ]
         },
         {
           "name": "2",
@@ -48,6 +55,26 @@
             {
               "kind": "Exe",
               "id": "Tana.exe",
+              "matching_strategy": "Equals"
+            },
+            {
+              "kind": "Exe",
+              "id": "zotero.exe",
+              "matching_strategy": "Equals"
+            },
+            {
+              "kind": "Exe",
+              "id": "Raindrop.io.exe",
+              "matching_strategy": "Equals"
+            },
+            {
+              "kind": "Exe",
+              "id": "Todoist.exe",
+              "matching_strategy": "Equals"
+            },
+            {
+              "kind": "Exe",
+              "id": "Notion Calendar.exe",
               "matching_strategy": "Equals"
             }
           ]
@@ -60,12 +87,24 @@
               "kind": "Exe",
               "id": "Spotify.exe",
               "matching_strategy": "Equals"
+            },
+            {
+              "kind": "Exe",
+              "id": "Discord.exe",
+              "matching_strategy": "Equals"
             }
           ]
         },
         {
           "name": "4",
-          "layout": "BSP"
+          "layout": "BSP",
+          "initial_workspace_rules": [
+            {
+              "kind": "Exe",
+              "id": "Obsidian.exe",
+              "matching_strategy": "Equals"
+            }
+          ]
         },
         {
           "name": "5",
@@ -75,11 +114,6 @@
           "name": "6",
           "layout": "BSP",
           "initial_workspace_rules": [
-            {
-              "kind": "Exe",
-              "id": "Discord.exe",
-              "matching_strategy": "Equals"
-            },
             {
               "kind": "Exe",
               "id": "Vesktop.exe",

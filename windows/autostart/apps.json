@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "apps": [
+    {
+      "name": "Zen",
+      "workspace": 1,
+      "launch_type": "executable",
+      "path_candidates": [
+        "%ProgramFiles%\\Zen Browser\\zen.exe"
+      ],
+      "arguments": "",
+      "delay_seconds": 8
+    },
+    {
+      "name": "Zotero",
+      "workspace": 2,
+      "launch_type": "executable",
+      "path_candidates": [
+        "%ProgramFiles%\\Zotero\\zotero.exe"
+      ],
+      "arguments": "",
+      "delay_seconds": 10
+    },
+    {
+      "name": "Raindrop",
+      "workspace": 2,
+      "launch_type": "appx",
+      "app_id": "19059Raindrop.io.Raindrop.io_hghhavmbrcx2t!Raindrop.io.Raindrop.io",
+      "delay_seconds": 12
+    },
+    {
+      "name": "Todoist",
+      "workspace": 2,
+      "launch_type": "executable",
+      "path_candidates": [
+        "%LOCALAPPDATA%\\Programs\\todoist\\Todoist.exe"
+      ],
+      "arguments": "",
+      "delay_seconds": 14
+    },
+    {
+      "name": "Notion Calendar",
+      "workspace": 2,
+      "launch_type": "executable",
+      "path_candidates": [
+        "%LOCALAPPDATA%\\Programs\\notion-calendar-web\\Notion Calendar.exe",
+        "%LOCALAPPDATA%\\Programs\\cron-web\\Notion Calendar.exe"
+      ],
+      "arguments": "",
+      "delay_seconds": 16
+    },
+    {
+      "name": "Spotify",
+      "workspace": 3,
+      "launch_type": "executable",
+      "path_candidates": [
+        "%LOCALAPPDATA%\\Microsoft\\WindowsApps\\Spotify.exe",
+        "%APPDATA%\\Spotify\\Spotify.exe"
+      ],
+      "arguments": "",
+      "delay_seconds": 18
+    },
+    {
+      "name": "Discord",
+      "workspace": 3,
+      "launch_type": "executable",
+      "path_candidates": [
+        "%LOCALAPPDATA%\\Discord\\Update.exe"
+      ],
+      "arguments": "--processStart Discord.exe",
+      "delay_seconds": 20
+    },
+    {
+      "name": "Obsidian",
+      "workspace": 4,
+      "launch_type": "executable",
+      "path_candidates": [
+        "%LOCALAPPDATA%\\Programs\\obsidian\\Obsidian.exe"
+      ],
+      "arguments": "",
+      "delay_seconds": 22
+    }
+  ]
+}

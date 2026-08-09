@@ -129,8 +129,10 @@ Wallpaper assets are local. The default directory is
 ## Windows and WSL
 
 The WSL bootstrap can deploy WezTerm, Kanata, and optionally Komorebi to the
-Windows side. Component-specific installation, update, rollback, and recovery
-instructions live under `windows/<component>/README.md`.
+Windows side. Login applications are managed separately through per-user Task
+Scheduler entries in `windows/autostart`. Component-specific installation,
+update, rollback, and recovery instructions live under
+`windows/<component>/README.md`.
 
 Windows host values can use ignored `*.local.json` files. For example,
 `windows/komorebi/audio-output.local.json` overrides the generic checked-in
