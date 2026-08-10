@@ -251,6 +251,7 @@ function Resolve-KomorebiManagedPath {
       "komorebi.json",
       "komorebi.bar.json",
       "whkdrc",
+      "restart.ps1",
       "switch-audio.ps1",
       "audio-output.json"
     )]
@@ -288,6 +289,10 @@ function Get-KomorebiManagedFileSpecification {
     @{
       Name = "whkdrc"
       SourcePath = Join-Path $SourceRoot "whkdrc"
+    },
+    @{
+      Name = "restart.ps1"
+      SourcePath = Join-Path $SourceRoot "restart.ps1"
     },
     @{
       Name = "switch-audio.ps1"

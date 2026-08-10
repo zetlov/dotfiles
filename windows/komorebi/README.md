@@ -1,5 +1,9 @@
 # Komorebi
 
+> Status: inactive rollback configuration. GlazeWM is the currently managed
+> window manager. Keep this directory only until the public GlazeWM setup has
+> remained stable long enough to remove the fallback safely.
+
 This directory installs and manages Komorebi on the Windows side of WSL. The
 runtime configuration is copied to `%USERPROFILE%\.config\komorebi`; startup
 does not depend on the WSL distribution being available.
@@ -92,6 +96,29 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass \
 
 Use `-Force` only when the deployed config was intentionally edited and should
 be backed up and replaced.
+
+Configuration updates use the guarded restart path because Komorebi's
+`replace-configuration` rebuilds workspace state and can move windows without
+an initial rule back to workspace 1. To restart manually, use the deployed
+script instead of killing `komorebi.exe`:
+
+```bash
+powershell.exe -NoProfile -ExecutionPolicy Bypass \
+  -Command '& "$env:KOMOREBI_CONFIG_HOME\restart.ps1"'
+```
+
+The script snapshots the current Komorebi state, waits for a graceful stop,
+starts without `--clean-state`, and verifies that the saved windows returned to
+their monitor and workspace. A forced process kill can leave a stale state file
+and cause existing windows to be discovered on workspace 1.
+
+New windows use Komorebi's `Create` container behaviour. Komorebi inserts the
+new container after the focused container, which is the closest automatic BSP
+behaviour to Hyprland's dwindle layout. The two layouts are not identical:
+Komorebi recomputes a Fibonacci BSP from container order, while Hyprland keeps a
+recursive split tree. Use `Ctrl+Alt+Shift+Arrow` before opening a window to
+preselect its insertion direction when the automatic BSP placement is not the
+desired split.
 
 ## Recovery and removal
 

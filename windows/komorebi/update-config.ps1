@@ -88,6 +88,10 @@ Install-AudioDeviceModule -RequiredVersion "3.1.0.2" | Out-Null
 $barConfigPath = Resolve-KomorebiManagedPath `
   -ConfigHome $configHome `
   -Name "komorebi.bar.json"
+$restartPath = Resolve-KomorebiManagedPath `
+  -ConfigHome $configHome `
+  -Name "restart.ps1"
+$restartSourcePath = Join-Path $PSScriptRoot "restart.ps1"
 
 $manifestSnapshot = "$metadataPath.$([guid]::NewGuid().ToString('N')).bak"
 Copy-Item -LiteralPath $metadataPath -Destination $manifestSnapshot
@@ -114,18 +118,7 @@ try {
 
     if ($Restart) {
       if (Get-Process -Name "komorebi" -ErrorAction SilentlyContinue) {
-        Invoke-Komorebic `
-          -Path $komorebicPath `
-          -Arguments @("replace-configuration", $configPath)
-        Get-Process -Name "whkd" -ErrorAction SilentlyContinue |
-          Stop-Process -Force
-        Start-Process -FilePath $whkdPath -WindowStyle Hidden | Out-Null
-        Get-Process -Name "komorebi-bar" -ErrorAction SilentlyContinue |
-          Stop-Process -Force
-        Start-Process `
-          -FilePath $barPath `
-          -ArgumentList (Get-KomorebiBarArgumentString -ConfigPath $barConfigPath) `
-          -WindowStyle Hidden | Out-Null
+        & $restartPath
       } else {
         Invoke-Komorebic `
           -Path $komorebicPath `
@@ -197,9 +190,7 @@ try {
         -Arguments @("stop", "--whkd", "--bar", "--masir")
     } elseif ($komorebiWasRunning -and (Test-Path -LiteralPath $configPath)) {
       if (Get-Process -Name "komorebi" -ErrorAction SilentlyContinue) {
-        Invoke-Komorebic `
-          -Path $komorebicPath `
-          -Arguments @("replace-configuration", $configPath)
+        & $restartSourcePath -ConfigHome $configHome
       } else {
         Invoke-Komorebic `
           -Path $komorebicPath `

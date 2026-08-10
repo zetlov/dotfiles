@@ -257,6 +257,7 @@ Context "Resolve-KomorebiManagedPath" {
       "komorebi.json",
       "komorebi.bar.json",
       "whkdrc",
+      "restart.ps1",
       "switch-audio.ps1",
       "audio-output.json"
     )) {
@@ -559,6 +560,23 @@ Context "Installer entrypoint safety contracts" {
     ) $true
   }
 
+  It "deploys and uses the guarded session restart" {
+    Assert-Equal $installerModule.Contains('Name = "restart.ps1"') $true
+    Assert-Equal $updateScript.Contains('Name "restart.ps1"') $true
+    Assert-Equal $updateScript.Contains(
+      '& $restartSourcePath -ConfigHome $configHome'
+    ) $true
+    foreach ($script in @($installScript, $updateScript)) {
+      Assert-Equal $script.Contains('& $restartPath') $true
+      Assert-Equal $script.Contains(
+        '& $restartSourcePath -ConfigHome $configHome'
+      ) $true
+      Assert-Equal $script.Contains(
+        '@("replace-configuration", $configPath)'
+      ) $false
+    }
+  }
+
   It "deploys the managed audio switch configuration" {
     foreach ($name in @("switch-audio.ps1", "audio-output.json")) {
       Assert-Equal $installerModule.Contains("Name = `"$name`"") $true
@@ -729,6 +747,10 @@ Context "Hyprland-compatible static configuration" {
     Assert-Equal ($workspace6Rules.id -contains "Discord.exe") $false
     Assert-Equal ($workspace6Rules.id -contains "slack.exe") $true
   }
+
+  It "creates new containers relative to the focused container" {
+    Assert-Equal $config.window_container_behaviour "Create"
+  }
 }
 
 Context "Hyprland-inspired bar configuration" {
@@ -829,15 +851,52 @@ Context "Hyprland-compatible hotkeys" {
     Assert-Equal $duplicates.Count 0
   }
 
-  It "uses static JSON replacement for reload" {
-    Assert-Equal $whkdrc.Contains("replace-configuration") $true
-    Assert-Equal $whkdrc.Contains("reload-configuration") $false
+  It "uses the guarded restart for configuration changes" {
+    Assert-Equal $whkdrc.Contains("replace-configuration") $false
+    Assert-Equal $whkdrc.Contains(
+      '-File "$Env:KOMOREBI_CONFIG_HOME\restart.ps1"'
+    ) $true
+  }
+
+  It "preselects the next split direction with shifted arrow keys" {
+    foreach ($binding in @(
+      "ctrl + alt + shift + left : & `"`$Env:ProgramFiles\komorebi\bin\komorebic.exe`" preselect-direction left",
+      "ctrl + alt + shift + down : & `"`$Env:ProgramFiles\komorebi\bin\komorebic.exe`" preselect-direction down",
+      "ctrl + alt + shift + up : & `"`$Env:ProgramFiles\komorebi\bin\komorebic.exe`" preselect-direction up",
+      "ctrl + alt + shift + right : & `"`$Env:ProgramFiles\komorebi\bin\komorebic.exe`" preselect-direction right"
+    )) {
+      Assert-Equal $whkdrc.Contains($binding) $true
+    }
   }
 
   It "cycles audio outputs with the Super M transport chord" {
     Assert-Equal $whkdrc.Contains(
       'ctrl + alt + m : & "$Env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$Env:KOMOREBI_CONFIG_HOME\switch-audio.ps1"'
     ) $true
+  }
+}
+
+Context "Safe Komorebi restart" {
+  BeforeAll {
+    $restartPath = Join-Path $PSScriptRoot "..\restart.ps1"
+    $restartSource = Get-Content -LiteralPath $restartPath -Raw
+  }
+
+  It "captures and validates current state before stopping" {
+    Assert-Equal $restartSource.Contains('Invoke-KomorebicJson -Path $komorebicPath -Arguments @("state")') $true
+    Assert-Equal $restartSource.Contains("Save-KomorebiStateSnapshot") $true
+  }
+
+  It "waits for a graceful stop and starts without clean state" {
+    Assert-Equal $restartSource.Contains('Arguments @("stop", "--whkd", "--bar", "--masir")') $true
+    Assert-Equal $restartSource.Contains("Wait-KomorebiProcessExit") $true
+    Assert-Equal $restartSource.Contains('Arguments @("start", "-c", $configPath, "--whkd", "--bar")') $true
+    Assert-Equal $restartSource.Contains("--clean-state") $false
+  }
+
+  It "verifies saved window workspace placements after restart" {
+    Assert-Equal $restartSource.Contains("Get-KomorebiWindowPlacement") $true
+    Assert-Equal $restartSource.Contains("Test-KomorebiWindowPlacementRestored") $true
   }
 }
 
@@ -890,6 +949,20 @@ Context "Windows audio output switching" {
     $devices[0].Default = $false
     $devices[1].Default = $true
     Assert-Equal (Select-NextAudioOutputDevice -Devices $devices).ID "a"
+  }
+
+  It "notifies with the selected audio output name" {
+    $script:notification = $null
+    Show-AudioOutputNotification `
+      -DeviceName "Headphones (USB headset)" `
+      -Notifier {
+        param($title, $message)
+        $script:notification = "$title|$message"
+      }
+
+    Assert-Equal $script:notification (
+      "Audio output|Headphones (USB headset)"
+    )
   }
 
   It "rejects missing and ambiguous device patterns" {

@@ -111,6 +111,40 @@ function Select-NextAudioOutputDevice {
   return $Devices[0]
 }
 
+function Show-AudioOutputNotification {
+  param(
+    [Parameter(Mandatory = $true)]
+    [ValidateNotNullOrEmpty()]
+    [string]$DeviceName,
+
+    [scriptblock]$Notifier
+  )
+
+  $title = "Audio output"
+  if ($null -ne $Notifier) {
+    & $Notifier $title $DeviceName
+    return
+  }
+
+  Add-Type -AssemblyName System.Drawing
+  Add-Type -AssemblyName System.Windows.Forms
+  $notification = New-Object System.Windows.Forms.NotifyIcon
+  try {
+    $notification.Icon = [System.Drawing.SystemIcons]::Information
+    $notification.Visible = $true
+    $notification.ShowBalloonTip(
+      2000,
+      $title,
+      $DeviceName,
+      [System.Windows.Forms.ToolTipIcon]::Info
+    )
+    Start-Sleep -Milliseconds 2000
+  } finally {
+    $notification.Visible = $false
+    $notification.Dispose()
+  }
+}
+
 if ($NoRun) {
   return
 }
@@ -126,3 +160,4 @@ $configuredDevices = @(
 $nextDevice = Select-NextAudioOutputDevice -Devices $configuredDevices
 Set-AudioDevice -ID $nextDevice.ID | Out-Null
 Write-Host "Audio output: $($nextDevice.Name)"
+Show-AudioOutputNotification -DeviceName $nextDevice.Name
