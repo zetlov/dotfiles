@@ -1,0 +1,226 @@
+general:
+  startup_commands:
+    - 'shell-exec --hide-window powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%LOCALAPPDATA%\dotfiles\glazewm\autotile.ps1"'
+    - 'shell-exec --hide-window powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%LOCALAPPDATA%\dotfiles\glazewm\Start-GlazeWorkspaceApps.ps1"'
+    - 'shell-exec zebar start-widget-preset --pack zetshell --widget-name bar --preset primary-monitor'
+  shutdown_commands: []
+  config_reload_commands: []
+  focus_follows_cursor: false
+  toggle_workspace_on_refocus: false
+  cursor_jump:
+    enabled: false
+    trigger: 'monitor_focus'
+  hide_method: 'cloak'
+  show_all_in_taskbar: false
+
+gaps:
+  scale_with_dpi: true
+  inner_gap: '8px'
+  outer_gap:
+    top: '10px'
+    right: '10px'
+    bottom: '10px'
+    left: '10px'
+
+window_effects:
+  focused_window:
+    border:
+      enabled: true
+      color: '#89b4fa'
+    hide_title_bar:
+      enabled: false
+    corner_style:
+      enabled: false
+      style: 'square'
+    transparency:
+      enabled: false
+      opacity: '100%'
+  other_windows:
+    border:
+      enabled: true
+      color: '#313244'
+    hide_title_bar:
+      enabled: false
+    corner_style:
+      enabled: false
+      style: 'square'
+    transparency:
+      enabled: false
+      opacity: '100%'
+
+window_behavior:
+  initial_state: 'tiling'
+  state_defaults:
+    floating:
+      centered: true
+      shown_on_top: false
+    fullscreen:
+      maximized: false
+      shown_on_top: false
+
+workspaces:
+  - name: '1'
+    bind_to_monitor: 0
+  - name: '2'
+    bind_to_monitor: 0
+  - name: '3'
+    bind_to_monitor: 0
+  - name: '4'
+    bind_to_monitor: 0
+  - name: '5'
+    bind_to_monitor: 0
+  - name: '6'
+    bind_to_monitor: 0
+  - name: '7'
+    bind_to_monitor: 0
+  - name: '8'
+    bind_to_monitor: 0
+  - name: '9'
+    bind_to_monitor: 0
+  - name: '10'
+    bind_to_monitor: 0
+  - name: '11'
+    bind_to_monitor: 0
+  - name: '12'
+    bind_to_monitor: 0
+  - name: 'vert'
+    bind_to_monitor: 1
+
+window_rules:
+  - commands: ['move --workspace 1']
+    match:
+      - window_process: { equals: 'zen' }
+  - commands: ['move --workspace 2']
+    match:
+      - window_process: { equals: 'zotero' }
+      - window_process: { equals: 'Raindrop' }
+      - window_process: { equals: 'Todoist' }
+      - window_process: { equals: 'Notion Calendar' }
+  - commands: ['move --workspace 3']
+    match:
+      - window_process: { equals: 'Spotify' }
+      - window_process: { equals: 'Discord' }
+  - commands: ['move --workspace 4']
+    match:
+      - window_process: { equals: 'Obsidian' }
+  - commands: ['ignore']
+    match:
+      - window_process: { equals: 'zebar' }
+      - window_title: { regex: '[Pp]icture.in.[Pp]icture' }
+        window_class: { regex: 'Chrome_WidgetWin_1|MozillaDialogClass' }
+      - window_process: { equals: 'PowerToys' }
+        window_class: { regex: 'HwndWrapper\[PowerToys\.PowerAccent.*?\]' }
+      - window_title: { equals: 'Command Palette' }
+        window_class: { equals: 'WinUIDesktopWin32WindowClass' }
+      - window_process: { equals: 'EXCEL' }
+        window_class: { not_regex: 'XLMAIN' }
+      - window_process: { equals: 'WINWORD' }
+        window_class: { not_regex: 'OpusApp' }
+      - window_process: { equals: 'POWERPNT' }
+        window_class: { not_regex: 'PPTFrameClass' }
+
+binding_modes: []
+
+keybindings:
+  - commands: ['focus --direction left']
+    bindings: ['f16', 'ctrl+alt+h']
+  - commands: ['focus --direction down']
+    bindings: ['f17', 'ctrl+alt+j']
+  - commands: ['focus --direction up']
+    bindings: ['f18', 'ctrl+alt+k']
+  - commands: ['focus --direction right']
+    bindings: ['f19', 'ctrl+alt+l']
+
+  - commands: ['move --direction left']
+    bindings: ['f20', 'ctrl+alt+shift+h']
+  - commands: ['move --direction down']
+    bindings: ['f21', 'ctrl+alt+shift+j']
+  - commands: ['move --direction up']
+    bindings: ['f22', 'ctrl+alt+shift+k']
+  - commands: ['move --direction right']
+    bindings: ['f23', 'ctrl+alt+shift+l']
+
+  - commands: ['resize --width -2%']
+    bindings: ['ctrl+alt+left']
+  - commands: ['resize --height -2%']
+    bindings: ['ctrl+alt+down']
+  - commands: ['resize --height +2%']
+    bindings: ['ctrl+alt+up']
+  - commands: ['resize --width +2%']
+    bindings: ['ctrl+alt+right']
+
+  - commands: ['shell-exec wezterm-gui start']
+    bindings: ['ctrl+alt+t']
+  - commands: ['shell-exec zen']
+    bindings: ['ctrl+alt+b']
+  - commands: ['shell-exec --hide-window powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%LOCALAPPDATA%\dotfiles\glazewm\switch-audio.ps1"']
+    bindings: ['ctrl+alt+m']
+  - commands: ['toggle-floating --centered']
+    bindings: ['ctrl+alt+f']
+  - commands: ['toggle-fullscreen']
+    bindings: ['ctrl+alt+shift+f']
+  - commands: ['close']
+    bindings: ['ctrl+alt+q']
+  - commands: ['wm-reload-config']
+    bindings: ['ctrl+alt+r']
+  - commands: ['wm-toggle-pause']
+    bindings: ['ctrl+alt+shift+p']
+
+  - commands: ['focus --workspace 1']
+    bindings: ['ctrl+alt+1']
+  - commands: ['focus --workspace 2']
+    bindings: ['ctrl+alt+2']
+  - commands: ['focus --workspace 3']
+    bindings: ['ctrl+alt+3']
+  - commands: ['focus --workspace 4']
+    bindings: ['ctrl+alt+4']
+  - commands: ['focus --workspace 5']
+    bindings: ['ctrl+alt+5']
+  - commands: ['focus --workspace 6']
+    bindings: ['ctrl+alt+6']
+  - commands: ['focus --workspace 7']
+    bindings: ['ctrl+alt+7']
+  - commands: ['focus --workspace 8']
+    bindings: ['ctrl+alt+8']
+  - commands: ['focus --workspace 9']
+    bindings: ['ctrl+alt+9']
+  - commands: ['focus --workspace 10']
+    bindings: ['ctrl+alt+0']
+  - commands: ['focus --workspace 11']
+    bindings: ['ctrl+alt+-']
+  - commands: ['focus --workspace 12']
+    bindings: ['ctrl+alt+=']
+
+  - commands: ['move --workspace 1', 'focus --workspace 1']
+    bindings: ['ctrl+alt+shift+1']
+  - commands: ['move --workspace 2', 'focus --workspace 2']
+    bindings: ['ctrl+alt+shift+2']
+  - commands: ['move --workspace 3', 'focus --workspace 3']
+    bindings: ['ctrl+alt+shift+3']
+  - commands: ['move --workspace 4', 'focus --workspace 4']
+    bindings: ['ctrl+alt+shift+4']
+  - commands: ['move --workspace 5', 'focus --workspace 5']
+    bindings: ['ctrl+alt+shift+5']
+  - commands: ['move --workspace 6', 'focus --workspace 6']
+    bindings: ['ctrl+alt+shift+6']
+  - commands: ['move --workspace 7', 'focus --workspace 7']
+    bindings: ['ctrl+alt+shift+7']
+  - commands: ['move --workspace 8', 'focus --workspace 8']
+    bindings: ['ctrl+alt+shift+8']
+  - commands: ['move --workspace 9', 'focus --workspace 9']
+    bindings: ['ctrl+alt+shift+9']
+  - commands: ['move --workspace 10', 'focus --workspace 10']
+    bindings: ['ctrl+alt+shift+0']
+  - commands: ['move --workspace 11', 'focus --workspace 11']
+    bindings: ['ctrl+alt+shift+-']
+  - commands: ['move --workspace 12', 'focus --workspace 12']
+    bindings: ['ctrl+alt+shift+=']
+
+  - commands: ['focus --monitor 0']
+    bindings: ['ctrl+alt+,']
+  - commands: ['focus --monitor 1']
+    bindings: ['ctrl+alt+.']
+  - commands: ['move-workspace --direction left']
+    bindings: ['ctrl+alt+shift+,']
+  - commands: ['move-workspace --direction right']
+    bindings: ['ctrl+alt+shift+.']

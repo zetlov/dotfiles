@@ -21,6 +21,7 @@ and reviewing `yay` separately:
 ./install.sh
 ./install.sh --with-tex
 ./install.sh --with-komorebi
+./install.sh --with-glazewm
 ./install.sh --with-nvidia
 ```
 
@@ -133,11 +134,13 @@ Wallpaper assets are local. The default directory is
 
 ## Windows and WSL
 
-The WSL bootstrap can deploy WezTerm, Kanata, and optionally Komorebi to the
-Windows side. Login applications are managed separately through per-user Task
-Scheduler entries in `windows/autostart`. Component-specific installation,
-update, rollback, and recovery instructions live under
-`windows/<component>/README.md`.
+The WSL bootstrap can deploy WezTerm, Kanata, and one explicitly selected
+Windows window manager. GlazeWM is the active configuration; Komorebi is kept
+temporarily as rollback material while the GlazeWM setup proves stable. Do not
+select both window-manager flags in one run. Login applications are managed
+through the active component or the per-user Task Scheduler entries in
+`windows/autostart`. Component-specific installation, update, rollback, and
+recovery instructions live under `windows/<component>/README.md`.
 
 Windows host values can use ignored `*.local.json` files. For example,
 `windows/komorebi/audio-output.local.json` overrides the generic checked-in

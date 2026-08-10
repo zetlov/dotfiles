@@ -32,5 +32,20 @@ if ! rg -q -- '--with-nvidia' "${REPO_ROOT}/install.sh"; then
     echo "FAIL: NVIDIA packages should require an explicit install flag" >&2
     exit 1
 fi
+if ! rg -q -- '--with-glazewm' "${REPO_ROOT}/install.sh"; then
+    echo "FAIL: GlazeWM should require an explicit install flag" >&2
+    exit 1
+fi
+if ! rg -q 'Choose only one Windows window manager' "${REPO_ROOT}/install.sh"; then
+    echo "FAIL: the installer should reject selecting both window managers" >&2
+    exit 1
+fi
+
+for component in glazewm zebar; do
+    if [ ! -d "${REPO_ROOT}/windows/${component}" ]; then
+        echo "FAIL: ${component} must be managed by the public repository" >&2
+        exit 1
+    fi
+done
 
 echo "install profile tests passed"

@@ -12,6 +12,7 @@ WIN32YANK_SHA256="247c9a05b94387a884b49d3db13f806b1677dfc38020f955f719be6902260c
 WITH_TEX=0
 MINIMAL=0
 WITH_KOMOREBI=0
+WITH_GLAZEWM=0
 WITH_NVIDIA=0
 LINK_ONLY=0
 for arg in "$@"; do
@@ -19,11 +20,17 @@ for arg in "$@"; do
         --with-tex) WITH_TEX=1 ;;
         --minimal) MINIMAL=1 ;;
         --with-komorebi) WITH_KOMOREBI=1 ;;
+        --with-glazewm) WITH_GLAZEWM=1 ;;
         --with-nvidia) WITH_NVIDIA=1 ;;
         --link-only) LINK_ONLY=1 ;;
         *) echo "Unknown option: $arg" >&2; exit 1 ;;
     esac
 done
+
+if [ "${WITH_KOMOREBI}" -eq 1 ] && [ "${WITH_GLAZEWM}" -eq 1 ]; then
+    echo "Choose only one Windows window manager." >&2
+    exit 1
+fi
 
 link_dotfiles() {
     echo "Initializing local configuration..."
@@ -199,6 +206,23 @@ if [ "${ENV}" = "wsl" ]; then
             exit 1
         fi
         WIN_PS="$("${WSLPATH_BIN}" -w "${KOMOREBI_INSTALLER}")"
+        "${WINDOWS_POWERSHELL}" -NoProfile -ExecutionPolicy Bypass -File "$WIN_PS"
+    fi
+
+    # install GlazeWM only when explicitly requested
+    if [ "${WITH_GLAZEWM}" -eq 1 ]; then
+        GLAZEWM_INSTALLER="${DOTFILES_DIR}/windows/glazewm/install.ps1"
+        if [ ! -f "${GLAZEWM_INSTALLER}" ]; then
+            echo "GlazeWM installer not found: ${GLAZEWM_INSTALLER}" >&2
+            exit 1
+        fi
+        WSLPATH_BIN="/usr/bin/wslpath"
+        WINDOWS_POWERSHELL="/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
+        if [ ! -x "${WSLPATH_BIN}" ] || [ ! -f "${WINDOWS_POWERSHELL}" ]; then
+            echo "Trusted WSL/PowerShell bridge not found." >&2
+            exit 1
+        fi
+        WIN_PS="$("${WSLPATH_BIN}" -w "${GLAZEWM_INSTALLER}")"
         "${WINDOWS_POWERSHELL}" -NoProfile -ExecutionPolicy Bypass -File "$WIN_PS"
     fi
 fi

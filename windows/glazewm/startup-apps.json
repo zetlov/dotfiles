@@ -1,0 +1,58 @@
+{
+  "managerWaitSeconds": 90,
+  "launchIntervalMilliseconds": 1500,
+  "workspaceGridWaitSeconds": 60,
+  "workspaceGrids": [
+    {
+      "workspaceName": "2",
+      "processNames": [
+        "Zotero",
+        "Raindrop",
+        "Todoist",
+        "Notion Calendar"
+      ]
+    }
+  ],
+  "applications": [
+    {
+      "name": "Zen Browser",
+      "processName": "zen",
+      "startAppName": "Zen"
+    },
+    {
+      "name": "Zotero",
+      "processName": "zotero",
+      "startAppName": "Zotero"
+    },
+    {
+      "name": "Raindrop.io",
+      "processName": "Raindrop.io",
+      "startAppName": "Raindrop.io"
+    },
+    {
+      "name": "Todoist",
+      "processName": "Todoist",
+      "startAppName": "Todoist"
+    },
+    {
+      "name": "Notion Calendar",
+      "processName": "Notion Calendar",
+      "startAppName": "Notion Calendar"
+    },
+    {
+      "name": "Spotify",
+      "processName": "Spotify",
+      "startAppName": "Spotify"
+    },
+    {
+      "name": "Discord",
+      "processName": "Discord",
+      "startAppName": "Discord"
+    },
+    {
+      "name": "Obsidian",
+      "processName": "Obsidian",
+      "startAppName": "Obsidian"
+    }
+  ]
+}

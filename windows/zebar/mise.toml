@@ -1,0 +1,14 @@
+[tools]
+node = "26.7.0"
+
+[tasks.test]
+run = "npm test"
+
+[tasks.typecheck]
+run = "npm run typecheck"
+
+[tasks.build]
+run = "npm run build"
+
+[tasks.check]
+depends = ["test", "typecheck", "build"]
