@@ -694,9 +694,13 @@ Context "Hyprland-compatible static configuration" {
   It "keeps workspaces 11 and 12 untiled for games" {
     $main = $config.monitors[0]
     foreach ($index in 0..9) {
-      Assert-Equal ($null -eq $main.workspaces[$index].tile) $true
       Assert-Equal (
-        $null -eq $main.workspaces[$index].floating_layer_behaviour
+        $null -eq $main.workspaces[$index].PSObject.Properties["tile"]
+      ) $true
+      Assert-Equal (
+        $null -eq $main.workspaces[$index].PSObject.Properties[
+          "floating_layer_behaviour"
+        ]
       ) $true
     }
 

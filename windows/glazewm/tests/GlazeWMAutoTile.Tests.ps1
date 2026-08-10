@@ -1,53 +1,55 @@
-$modulePath = Join-Path $PSScriptRoot "..\GlazeWMAutoTile.psm1"
-Import-Module $modulePath -Force -ErrorAction Stop
+Describe "GlazeWM automatic tiling" {
+  BeforeAll {
+    $modulePath = Join-Path $PSScriptRoot "..\GlazeWMAutoTile.psm1"
+    Import-Module $modulePath -Force -ErrorAction Stop
 
-function New-WorkspaceGridResponse {
-  param(
-    [bool]$Balanced,
-    [bool]$Displayed = $false
-  )
+    function New-WorkspaceGridResponse {
+      param(
+        [bool]$Balanced,
+        [bool]$Displayed = $false
+      )
 
-  $left = if ($Balanced) { 10 } else { 1286 }
-  $width = if ($Balanced) { 1906 } else { 1268 }
-  $right = if ($Balanced) { 1924 } else { 2562 }
-  return @{
-    success = $true
-    data = @{
-      workspaces = @(
-        @{
-          type = "workspace"
-          name = "2"
-          x = 10
-          y = 52
-          width = 3820
-          height = 2098
-          isDisplayed = $Displayed
-          children = @(
-            @{ type = "window"; id = "a"; processName = "Zotero"; x = $left; y = 52; width = $width; height = 1045; state = @{ type = "tiling" }; children = @() },
-            @{ type = "window"; id = "b"; processName = "Raindrop"; x = $left; y = 1105; width = $width; height = 1045; state = @{ type = "tiling" }; children = @() },
-            @{ type = "window"; id = "c"; processName = "Todoist"; x = $right; y = 52; width = $width; height = 1045; state = @{ type = "tiling" }; children = @() },
-            @{ type = "window"; id = "d"; processName = "Notion Calendar"; x = $right; y = 1105; width = $width; height = 1045; state = @{ type = "tiling" }; children = @() }
+      $left = if ($Balanced) { 10 } else { 1286 }
+      $width = if ($Balanced) { 1906 } else { 1268 }
+      $right = if ($Balanced) { 1924 } else { 2562 }
+      return @{
+        success = $true
+        data = @{
+          workspaces = @(
+            @{
+              type = "workspace"
+              name = "2"
+              x = 10
+              y = 52
+              width = 3820
+              height = 2098
+              isDisplayed = $Displayed
+              children = @(
+                @{ type = "window"; id = "a"; processName = "Zotero"; x = $left; y = 52; width = $width; height = 1045; state = @{ type = "tiling" }; children = @() },
+                @{ type = "window"; id = "b"; processName = "Raindrop"; x = $left; y = 1105; width = $width; height = 1045; state = @{ type = "tiling" }; children = @() },
+                @{ type = "window"; id = "c"; processName = "Todoist"; x = $right; y = 52; width = $width; height = 1045; state = @{ type = "tiling" }; children = @() },
+                @{ type = "window"; id = "d"; processName = "Notion Calendar"; x = $right; y = 1105; width = $width; height = 1045; state = @{ type = "tiling" }; children = @() }
+              )
+            }
           )
         }
-      )
+      } | ConvertTo-Json -Depth 8 -Compress
     }
-  } | ConvertTo-Json -Depth 8 -Compress
-}
+  }
 
-Describe "GlazeWM automatic tiling" {
   It "uses the horizontal direction for a wider focused window" {
     Get-GlazeTilingDirection -Width 900 -Height 600 |
-      Should Be "horizontal"
+      Should -Be "horizontal"
   }
 
   It "uses the vertical direction for a taller focused window" {
     Get-GlazeTilingDirection -Width 600 -Height 900 |
-      Should Be "vertical"
+      Should -Be "vertical"
   }
 
   It "does not change direction for a square window" {
     Get-GlazeTilingDirection -Width 600 -Height 600 |
-      Should BeNullOrEmpty
+      Should -BeNullOrEmpty
   }
 
   It "finds a focused window nested inside a split container" {
@@ -80,9 +82,9 @@ Describe "GlazeWM automatic tiling" {
 
     $focused = Find-GlazeFocusedWindow -Container $container
 
-    $focused.type | Should Be "window"
-    $focused.width | Should Be 400
-    $focused.height | Should Be 700
+    $focused.type | Should -Be "window"
+    $focused.width | Should -Be 400
+    $focused.height | Should -Be 700
   }
 
   It "extracts the focused window from supported event payloads" {
@@ -121,9 +123,9 @@ Describe "GlazeWM automatic tiling" {
     } | ConvertTo-Json -Depth 8
 
     (Get-GlazeFocusedWindowFromEvent -Json $focusEvent).width |
-      Should Be 1000
+      Should -Be 1000
     (Get-GlazeFocusedWindowFromEvent -Json $moveEvent).height |
-      Should Be 700
+      Should -Be 700
   }
 
   It "accepts the GlazeWM 3.10 subscription envelope" {
@@ -145,20 +147,20 @@ Describe "GlazeWM automatic tiling" {
 
     $focused = Get-GlazeFocusedWindowFromEvent -Json $event
 
-    $focused.width | Should Be 758
-    $focused.height | Should Be 2140
+    $focused.width | Should -Be 758
+    $focused.height | Should -Be 2140
   }
 
   It "ignores client responses and unrelated events" {
     Get-GlazeFocusedWindowFromEvent -Json '{"messageType":"client_response"}' |
-      Should BeNullOrEmpty
+      Should -BeNullOrEmpty
     Get-GlazeFocusedWindowFromEvent -Json '{"messageType":"event_subscription","data":{"eventType":"workspace_updated"}}' |
-      Should BeNullOrEmpty
+      Should -BeNullOrEmpty
   }
 
   It "rejects malformed IPC JSON without terminating the daemon" {
     { Get-GlazeFocusedWindowFromEvent -Json 'not json' } |
-      Should Not Throw
+      Should -Not -Throw
   }
 
   It "finds the workspace that contains a nested window" {
@@ -186,7 +188,7 @@ Describe "GlazeWM automatic tiling" {
     Find-GlazeWorkspaceNameForContainer `
       -Workspaces $workspaces `
       -ContainerId "game-window" |
-      Should Be "11"
+      Should -Be "11"
   }
 
   It "floats tiling windows on the managed game workspaces" {
@@ -200,7 +202,7 @@ Describe "GlazeWM automatic tiling" {
       -Window $window `
       -WorkspaceName "11" `
       -GameWorkspaceNames @("11", "12") |
-      Should Be $true
+      Should -Be $true
   }
 
   It "leaves floating and ordinary workspace windows unchanged" {
@@ -219,12 +221,12 @@ Describe "GlazeWM automatic tiling" {
       -Window $floating `
       -WorkspaceName "11" `
       -GameWorkspaceNames @("11", "12") |
-      Should Be $false
+      Should -Be $false
     Test-GlazeWindowRequiresGameFloating `
       -Window $tiling `
       -WorkspaceName "4" `
       -GameWorkspaceNames @("11", "12") |
-      Should Be $false
+      Should -Be $false
   }
 
   It "finds every tiling window in game workspaces without requiring focus" {
@@ -274,14 +276,14 @@ Describe "GlazeWM automatic tiling" {
         -GameWorkspaceNames @("11", "12")
     )
 
-    $windows.Count | Should Be 1
-    $windows[0].id | Should Be "unfocused-game"
+    $windows.Count | Should -Be 1
+    $windows[0].id | Should -Be "unfocused-game"
   }
 
   It "reconciles game workspaces before waiting for subscription events" {
     $module = Get-Content -LiteralPath $modulePath -Raw
 
-    $module | Should Match '(?s)try \{\r?\n\s+Invoke-GlazeGameWorkspaceReconcile.+?& \$GlazeWMPath sub -e'
+    $module | Should -Match '(?s)try \{\r?\n\s+Invoke-GlazeGameWorkspaceReconcile.+?& \$GlazeWMPath sub -e'
   }
 
   It "pairs the two leftmost windows from a four-column layout" {
@@ -297,7 +299,7 @@ Describe "GlazeWM automatic tiling" {
       -ProcessNames @("Zotero", "Raindrop", "Todoist", "Notion Calendar"))
 
     @($plan | ForEach-Object { "$($_.ContainerId):$($_.Command)" }) -join "|" |
-      Should Be "a:set-tiling-direction vertical|b:move --direction left"
+      Should -Be "a:set-tiling-direction vertical|b:move --direction left"
   }
 
   It "pairs the remaining adjacent single windows from a three-column layout" {
@@ -313,7 +315,7 @@ Describe "GlazeWM automatic tiling" {
       -ProcessNames @("Zotero", "Raindrop", "Todoist", "Notion Calendar"))
 
     @($plan | ForEach-Object { "$($_.ContainerId):$($_.Command)" }) -join "|" |
-      Should Be "d:set-tiling-direction vertical|c:move --direction right"
+      Should -Be "d:set-tiling-direction vertical|c:move --direction right"
   }
 
   It "splits a center pair toward the adjacent left single window" {
@@ -329,7 +331,7 @@ Describe "GlazeWM automatic tiling" {
       -ProcessNames @("Zotero", "Raindrop", "Todoist", "Notion Calendar"))
 
     @($plan | ForEach-Object { "$($_.ContainerId):$($_.Command)" }) -join "|" |
-      Should Be "a:set-tiling-direction vertical|b:move --direction left"
+      Should -Be "a:set-tiling-direction vertical|b:move --direction left"
   }
 
   It "does not rearrange incomplete, duplicate, complete, or unsafe layouts" {
@@ -342,23 +344,23 @@ Describe "GlazeWM automatic tiling" {
     $names = @("Zotero", "Raindrop", "Todoist", "Notion Calendar")
 
     @(Get-GlazeWorkspaceGridPlan -Windows $base[0..2] -ProcessNames $names).Count |
-      Should Be 0
+      Should -Be 0
     $duplicate = @($base) + @($base[0])
     @(Get-GlazeWorkspaceGridPlan -Windows $duplicate -ProcessNames $names).Count |
-      Should Be 0
+      Should -Be 0
     $grid = @($base | ForEach-Object { $_.PSObject.Copy() })
     $grid[1].x = 0
     $grid[1].y = 500
     $grid[3].x = 1000
     $grid[3].y = 500
     @(Get-GlazeWorkspaceGridPlan -Windows $grid -ProcessNames $names).Count |
-      Should Be 0
+      Should -Be 0
 
     $unknown = @($base) + @(
       [pscustomobject]@{ id = "other"; x = 2000; y = 0; processName = "Other"; state = [pscustomobject]@{ type = "tiling" } }
     )
     @(Get-GlazeWorkspaceGridPlan -Windows $unknown -ProcessNames $names).Count |
-      Should Be 0
+      Should -Be 0
   }
 
   It "accepts only an equal two-by-two grid that fills the workspace" {
@@ -380,7 +382,7 @@ Describe "GlazeWM automatic tiling" {
       -Workspace $workspace `
       -Windows $grid `
       -ProcessNames $names |
-      Should Be $true
+      Should -Be $true
 
     $shifted = @($grid | ForEach-Object { $_.PSObject.Copy() })
     foreach ($window in $shifted) {
@@ -391,7 +393,7 @@ Describe "GlazeWM automatic tiling" {
       -Workspace $workspace `
       -Windows $shifted `
       -ProcessNames $names |
-      Should Be $false
+      Should -Be $false
   }
 
   It "rebuilds only the four managed windows when a hidden grid is unbalanced" {
@@ -408,7 +410,7 @@ Describe "GlazeWM automatic tiling" {
       -ProcessNames @("Zotero", "Raindrop", "Todoist", "Notion Calendar"))
 
     @($plan | ForEach-Object { "$($_.ContainerId):$($_.Command)" }) -join "|" |
-      Should Be (
+      Should -Be (
         "a:set-floating --centered=false|" +
         "b:set-floating --centered=false|" +
         "c:set-floating --centered=false|" +
@@ -428,7 +430,7 @@ Describe "GlazeWM automatic tiling" {
     @(Get-GlazeWorkspaceGridRebuildPlan `
       -Windows $windows `
       -ProcessNames @("Zotero", "Raindrop", "Todoist", "Notion Calendar")
-    ).Count | Should Be 0
+    ).Count | Should -Be 0
   }
 
   It "returns without commands when the workspace is already balanced" {
@@ -450,8 +452,8 @@ Describe "GlazeWM automatic tiling" {
       -WaitSeconds 1 `
       -CommandInvoker $invoker
 
-    $script:gridInvocations.Count | Should Be 1
-    $script:gridInvocations[0] -join " " | Should Be "query workspaces"
+    $script:gridInvocations.Count | Should -Be 1
+    $script:gridInvocations[0] -join " " | Should -Be "query workspaces"
   }
 
   It "rebuilds a hidden unbalanced grid in a guarded eight-command sequence" {
@@ -480,7 +482,7 @@ Describe "GlazeWM automatic tiling" {
       -CommandInvoker $invoker
 
     @($script:gridInvocations[1..8] | ForEach-Object { $_ -join " " }) -join "|" |
-      Should Be (
+      Should -Be (
         "command --id a set-floating --centered=false|" +
         "command --id b set-floating --centered=false|" +
         "command --id c set-floating --centered=false|" +
@@ -488,7 +490,7 @@ Describe "GlazeWM automatic tiling" {
         "command --id a set-tiling|command --id b set-tiling|" +
         "command --id c set-tiling|command --id d set-tiling"
       )
-    $script:gridInvocations[9] -join " " | Should Be "query workspaces"
+    $script:gridInvocations[9] -join " " | Should -Be "query workspaces"
   }
 
   It "does not rebuild an unbalanced grid while it is displayed" {
@@ -511,9 +513,9 @@ Describe "GlazeWM automatic tiling" {
       -ProcessNames @("Zotero", "Raindrop", "Todoist", "Notion Calendar") `
       -WaitSeconds 1 `
       -CommandInvoker $invoker
-    } | Should Throw "did not reach the managed two-by-two layout"
+    } | Should -Throw "*did not reach the managed two-by-two layout*"
     @($script:gridInvocations | Where-Object { $_[0] -eq "command" }).Count |
-      Should Be 0
+      Should -Be 0
   }
 
   It "stops immediately when a workspace command fails" {
@@ -537,7 +539,7 @@ Describe "GlazeWM automatic tiling" {
       -ProcessNames @("Zotero", "Raindrop", "Todoist", "Notion Calendar") `
       -WaitSeconds 5 `
       -CommandInvoker $invoker
-    } | Should Throw "could not arrange workspace 2"
-    $script:gridInvocations.Count | Should Be 2
+    } | Should -Throw "*could not arrange workspace 2*"
+    $script:gridInvocations.Count | Should -Be 2
   }
 }
