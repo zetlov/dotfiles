@@ -54,10 +54,8 @@ jobs:
       matrix:
         include:
           - runtime: PowerShell 7
-            shell: pwsh
             task: check:windows
           - runtime: Windows PowerShell 5.1
-            shell: powershell
             task: check:windows-compat
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -69,8 +67,9 @@ jobs:
           sha256: 66585ac496c10bf6fbf13272e3e550c1813aed0e1cb780b9bb73c1751de49289
           install: false
           cache: false
-      - name: Install Pester
-        shell: ${{ matrix.shell }}
+      - name: Install Pester for PowerShell 7
+        if: matrix.runtime == 'PowerShell 7'
+        shell: pwsh
         run: |
           $installArgs = @{
             Name = "Pester"
@@ -78,10 +77,6 @@ jobs:
             Scope = "CurrentUser"
             Repository = "PSGallery"
             Force = $true
-          }
-          if ("${{ matrix.shell }}" -eq "powershell") {
-            # Windows PowerShell ships Pester 3.4 under a different publisher.
-            $installArgs.SkipPublisherCheck = $true
           }
           $originalInstallationPolicy =
             (Get-PSRepository -Name PSGallery).InstallationPolicy
@@ -92,8 +87,27 @@ jobs:
             Set-PSRepository PSGallery `
               -InstallationPolicy $originalInstallationPolicy
           }
+      - name: Install Pester for Windows PowerShell 5.1
+        if: matrix.runtime == 'Windows PowerShell 5.1'
+        shell: powershell
+        run: |
+          $originalInstallationPolicy =
+            (Get-PSRepository -Name PSGallery).InstallationPolicy
+          try {
+            Set-PSRepository PSGallery -InstallationPolicy Trusted
+            # The inbox Pester 3.4 uses a different publisher.
+            Install-Module Pester `
+              -RequiredVersion 5.7.1 `
+              -Scope CurrentUser `
+              -Repository PSGallery `
+              -Force `
+              -SkipPublisherCheck
+          } finally {
+            Set-PSRepository PSGallery `
+              -InstallationPolicy $originalInstallationPolicy
+          }
       - name: Run PowerShell tests
-        shell: ${{ matrix.shell }}
+        shell: powershell
         run: mise run --skip-tools ${{ matrix.task }}
 
   zebar:

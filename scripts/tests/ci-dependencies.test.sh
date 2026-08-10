@@ -64,8 +64,12 @@ fi
 if ! rg -q '\bpowershell\b' "${WORKFLOW}"; then
     fail "Windows Pester tests should retain Windows PowerShell 5.1 compatibility"
 fi
-if ! rg -q 'shell:[[:space:]]*\$\{\{[[:space:]]*matrix\.' "${WORKFLOW}"; then
-    fail "Windows Pester test shell should be selected by the runtime matrix"
+if rg -q 'shell:[[:space:]]*\$\{\{[[:space:]]*matrix\.' "${WORKFLOW}"; then
+    fail "GitHub Actions does not allow the matrix context in step shell"
+fi
+runtime_conditions=$(rg -c 'if:[[:space:]]*matrix\.runtime' "${WORKFLOW}")
+if [ "${runtime_conditions}" -lt 2 ]; then
+    fail "PowerShell editions should use conditional steps with static shells"
 fi
 if ! rg -q 'SkipPublisherCheck' "${WORKFLOW}"; then
     fail "Windows PowerShell 5.1 should handle the built-in Pester publisher mismatch"
