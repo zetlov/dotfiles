@@ -4,6 +4,7 @@
 
 !/.github/
 !/.github/**
+!/.gitattributes
 !/.gitignore
 !/AGENTS.md
 !/CLAUDE.md

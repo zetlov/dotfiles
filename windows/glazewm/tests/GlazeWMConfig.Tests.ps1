@@ -9,9 +9,9 @@ Describe "GlazeWM managed configuration" {
     $config = Get-Content -LiteralPath $configPath -Raw
 
     foreach ($workspace in 1..12) {
-      $config | Should -Match "(?m)^  - name: '$workspace'$"
+      $config | Should -Match "(?m)^  - name: '$workspace'\r?$"
     }
-    $config | Should -Match "(?ms)^  - name: 'vert'\r?\n    bind_to_monitor: 1$"
+    $config | Should -Match "(?ms)^  - name: 'vert'\r?\n    bind_to_monitor: 1\r?$"
   }
 
   It "uses the existing Kanata Ctrl Alt chords for core navigation" {
@@ -58,7 +58,7 @@ Describe "GlazeWM managed configuration" {
 
   It "keeps focus follows cursor disabled" {
     Get-Content -LiteralPath $configPath -Raw |
-      Should -Match "(?m)^  focus_follows_cursor: false$"
+      Should -Match "(?m)^  focus_follows_cursor: false\r?$"
   }
 
   It "installs only the managed GlazeWM and helper processes" {

@@ -5,6 +5,7 @@ set -euo pipefail
 SCRIPT_DIR=$(CDPATH= cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(CDPATH= cd "${SCRIPT_DIR}/../.." && pwd)
 WORKFLOW="${REPO_ROOT}/.github/workflows/check.yaml"
+GIT_ATTRIBUTES="${REPO_ROOT}/.gitattributes"
 MISE_CONFIG="${REPO_ROOT}/mise.toml"
 PESTER_RUNNER="${REPO_ROOT}/windows/tests/Invoke-PesterSuite.ps1"
 PESTER_MANIFEST="${REPO_ROOT}/windows/tests/pester-suites.txt"
@@ -43,6 +44,11 @@ check_job_mise_hash() {
 
 if ! rg -q 'apt-get install -y .*\bzsh\b' "${WORKFLOW}"; then
     fail "Ubuntu test job should install zsh explicitly"
+fi
+if [ ! -f "${GIT_ATTRIBUTES}" ] \
+    || ! rg -q '^\* text=auto eol=lf$' "${GIT_ATTRIBUTES}" \
+    || ! rg -q '^!/\.gitattributes$' "${REPO_ROOT}/.gitignore"; then
+    fail "the repository should enforce LF text checkouts across platforms"
 fi
 
 arch_install_lines=$(rg 'pacman -Syu --noconfirm --needed' "${WORKFLOW}")
