@@ -325,13 +325,25 @@ Context "Windows font installation" {
     $rootInstallScript = Get-Content -LiteralPath (
       Join-Path $repoRoot "install.sh"
     ) -Raw
+    $windowsHelper = Get-Content -LiteralPath (
+      Join-Path $repoRoot "scripts\install\windows-components.sh"
+    ) -Raw
+    $components = Get-Content -LiteralPath (
+      Join-Path $repoRoot "windows\components.json"
+    ) -Raw | ConvertFrom-Json
+    $weztermComponent = $components.components |
+      Where-Object { $_.name -eq "wezterm" }
 
     Assert-Matches $fontInstallScript "Get-WezTermFontPackages"
     Assert-Matches $installScript ([regex]::Escape("install-fonts.ps1"))
     Assert-Matches $installScript ([regex]::Escape("update-config.ps1"))
     Assert-Matches $rootInstallScript (
-      [regex]::Escape("windows/wezterm/install.ps1")
+      'source\s+"\$\{DOTFILES_DIR\}/scripts/install/windows-components\.sh"'
     )
+    Assert-Matches $rootInstallScript "apply_windows_components"
+    Assert-Matches $windowsHelper ([regex]::Escape("windows/install.ps1"))
+    Assert-Equal $weztermComponent.entrypoints.install "wezterm/install.ps1"
+    Assert-Equal $weztermComponent.entrypoints.update "wezterm/update-config.ps1"
   }
 }
 }

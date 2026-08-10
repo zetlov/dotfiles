@@ -5,9 +5,15 @@ param(
 
   [string[]]$Component,
 
+  [string]$ComponentCsv,
+
+  [string]$AdditionalComponentCsv,
+
   [switch]$AllowRollbackOnly = $false,
 
   [switch]$PlanOnly = $false,
+
+  [switch]$Preflight = $false,
 
   [switch]$AddKanataDefenderExclusion = $false
 )
@@ -20,4 +26,64 @@ $modulePath = Join-Path `
   "orchestrator\WindowsOrchestrator.psm1"
 
 Import-Module $modulePath -Force -ErrorAction Stop
-Invoke-WindowsComponentSelection @PSBoundParameters
+
+if (
+  $PSBoundParameters.ContainsKey("AdditionalComponentCsv") -and
+  (
+    $PSBoundParameters.ContainsKey("Component") -or
+    $PSBoundParameters.ContainsKey("ComponentCsv")
+  )
+) {
+  throw (
+    "-AdditionalComponentCsv cannot be used with -Component or " +
+    "-ComponentCsv."
+  )
+}
+if (
+  $PSBoundParameters.ContainsKey("ComponentCsv") -and
+  $PSBoundParameters.ContainsKey("Component")
+) {
+  throw "-Component and -ComponentCsv cannot be used together."
+}
+foreach ($csvParameter in @(
+  @{ Name = "ComponentCsv"; Value = $ComponentCsv },
+  @{ Name = "AdditionalComponentCsv"; Value = $AdditionalComponentCsv }
+)) {
+  if (-not $PSBoundParameters.ContainsKey($csvParameter.Name)) {
+    continue
+  }
+  if (
+    [string]::IsNullOrWhiteSpace($csvParameter.Value) -or
+    $csvParameter.Value -cnotmatch `
+      '^[a-z][a-z0-9-]*(,[a-z][a-z0-9-]*)*$'
+  ) {
+    throw (
+      "-$($csvParameter.Name) must contain exact comma-separated lower-case " +
+      "component names."
+    )
+  }
+}
+
+$resolvedComponent = if ($PSBoundParameters.ContainsKey("ComponentCsv")) {
+  @($ComponentCsv.Split([char]","))
+} else {
+  $Component
+}
+$resolvedAdditionalComponent = if (
+  $PSBoundParameters.ContainsKey("AdditionalComponentCsv")
+) {
+  @($AdditionalComponentCsv.Split([char]","))
+} else {
+  $null
+}
+$invokeParameters = @{
+  Mode = $Mode
+  Component = $resolvedComponent
+  AdditionalComponent = $resolvedAdditionalComponent
+  AllowRollbackOnly = $AllowRollbackOnly
+  PlanOnly = $PlanOnly
+  Preflight = $Preflight
+  AddKanataDefenderExclusion = $AddKanataDefenderExclusion
+}
+
+Invoke-WindowsComponentSelection @invokeParameters

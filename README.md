@@ -199,6 +199,29 @@ existing component installers sequentially. Its default plan contains only
 the required WezTerm and Kanata components; select GlazeWM explicitly when a
 window-manager deployment is intended.
 
+The WSL bootstrap resolves that selection once and applies it through a single
+PowerShell 7 orchestrator invocation. It uses scalar CSV parameters because
+native `pwsh -File` callers cannot bind an array-valued script parameter. The
+wrapper validates and converts the comma-separated lower-case names before
+calling the orchestrator module. Windows PowerShell 5.1 remains a supported
+compatibility and component-runtime target.
+
+PowerShell 7 is therefore a WSL bootstrap prerequisite. Install it on the
+Windows host with WinGet before running the full bootstrap:
+
+```powershell
+winget install --id Microsoft.PowerShell --source winget --installer-type wix
+```
+
+After dry-run planning, the bootstrap performs an early Windows `-Preflight`
+before container validation, package upgrades, or other mutations.
+Unlike pure `-PlanOnly`, `-Preflight` also checks the Windows host, selection
+policy, running processes, startup registrations, and scheduled-task probes
+without invoking component entrypoints.
+The later apply remains a separate single orchestrator invocation. Required
+components and their order are read from `windows/components.json`; the Bash
+bridge passes only the optional window-manager addition.
+
 From a PowerShell prompt at the repository root, inspect a plan before applying
 it:
 

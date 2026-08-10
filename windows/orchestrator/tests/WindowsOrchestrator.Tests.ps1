@@ -70,6 +70,7 @@ Describe "Windows component orchestrator" {
         "Assert-WindowsSelectionPolicy"
       )
       "Runtime.ps1" = @(
+        "Get-WindowsProcessMatches",
         "Test-WindowsRunValue",
         "Test-KomorebiStartupShortcut",
         "Get-RollbackAutostartTasks",
@@ -77,6 +78,7 @@ Describe "Windows component orchestrator" {
       )
       "Execution.ps1" = @(
         "Invoke-WindowsComponentEntrypoint",
+        "Assert-WindowsComponentExecutionPreflight",
         "Invoke-WindowsComponentPlan",
         "Invoke-WindowsComponentSelection"
       )
@@ -435,9 +437,7 @@ Describe "Windows component orchestrator" {
   It "blocks rollback execution while GlazeWM is running" {
     Mock Get-Process {
       [pscustomobject]@{ Id = 1234; ProcessName = "glazewm" }
-    } -ModuleName WindowsOrchestrator -ParameterFilter {
-      $Name -contains "glazewm"
-    }
+    } -ModuleName WindowsOrchestrator
     Mock Invoke-WindowsComponentEntrypoint {} `
       -ModuleName WindowsOrchestrator
 
@@ -453,9 +453,7 @@ Describe "Windows component orchestrator" {
   }
 
   It "blocks rollback execution while GlazeWM autostart is enabled" {
-    Mock Get-Process { @() } `
-      -ModuleName WindowsOrchestrator `
-      -ParameterFilter { $Name -contains "glazewm" }
+    Mock Get-Process { @() } -ModuleName WindowsOrchestrator
     Mock Get-ItemProperty {
       [pscustomobject]@{ GlazeWM = '"C:\Program Files\GlazeWM.exe"' }
     } -ModuleName WindowsOrchestrator
@@ -474,9 +472,7 @@ Describe "Windows component orchestrator" {
   }
 
   It "fails closed when GlazeWM autostart cannot be inspected" {
-    Mock Get-Process { @() } `
-      -ModuleName WindowsOrchestrator `
-      -ParameterFilter { $Name -contains "glazewm" }
+    Mock Get-Process { @() } -ModuleName WindowsOrchestrator
     Mock Get-ItemProperty {
       throw [UnauthorizedAccessException]::new("denied")
     } -ModuleName WindowsOrchestrator
@@ -497,9 +493,7 @@ Describe "Windows component orchestrator" {
   It "blocks GlazeWM while Komorebi processes are running" {
     Mock Get-Process {
       [pscustomobject]@{ Id = 5678; ProcessName = "komorebi" }
-    } -ModuleName WindowsOrchestrator -ParameterFilter {
-      $Name -contains "komorebi"
-    }
+    } -ModuleName WindowsOrchestrator
     Mock Invoke-WindowsComponentEntrypoint {} `
       -ModuleName WindowsOrchestrator
 
@@ -569,6 +563,65 @@ Describe "Windows component orchestrator" {
       -Times 0
   }
 
+  It "runs runtime compatibility checks in Preflight without entrypoints" {
+    Mock Get-Process {
+      [pscustomobject]@{ Id = 1234; ProcessName = "glazewm" }
+    } -ModuleName WindowsOrchestrator
+    Mock Invoke-WindowsComponentEntrypoint {} `
+      -ModuleName WindowsOrchestrator
+
+    {
+      Invoke-WindowsComponentSelection `
+        -Mode Install `
+        -Component "komorebi" `
+        -AllowRollbackOnly `
+        -Preflight
+    } | Should -Throw "*GlazeWM*running*"
+    Should -Invoke Invoke-WindowsComponentEntrypoint `
+      -ModuleName WindowsOrchestrator `
+      -Times 0
+  }
+
+  It "fails closed when process inspection fails in Preflight" {
+    Mock Get-Process { throw [UnauthorizedAccessException]::new("denied") } `
+      -ModuleName WindowsOrchestrator
+    Mock Invoke-WindowsComponentEntrypoint {} `
+      -ModuleName WindowsOrchestrator
+
+    {
+      Invoke-WindowsComponentSelection `
+        -Mode Install `
+        -Component "glazewm" `
+        -Preflight
+    } | Should -Throw "*Unable to inspect Windows processes*"
+    Should -Invoke Invoke-WindowsComponentEntrypoint `
+      -ModuleName WindowsOrchestrator `
+      -Times 0
+  }
+
+  It "keeps PlanOnly free of runtime probes" {
+    Mock Assert-WindowsRuntimeCompatibility { throw "runtime probe called" } `
+      -ModuleName WindowsOrchestrator
+
+    $plan = @(
+      Invoke-WindowsComponentSelection `
+        -Mode Install `
+        -Component "glazewm" `
+        -PlanOnly
+    )
+
+    @($plan.Name) | Should -Be @("glazewm")
+    Should -Invoke Assert-WindowsRuntimeCompatibility `
+      -ModuleName WindowsOrchestrator `
+      -Times 0
+  }
+
+  It "rejects PlanOnly and Preflight together" {
+    {
+      Invoke-WindowsComponentSelection -PlanOnly -Preflight
+    } | Should -Throw "*PlanOnly*Preflight*"
+  }
+
   It "runs sequentially and stops on the first component failure" {
     Mock Invoke-WindowsComponentEntrypoint {
       if ($Component.Name -eq "kanata") {
@@ -609,6 +662,64 @@ Describe "Windows component orchestrator" {
     $plan[0].Entrypoint | Should -Be "glazewm/install.ps1"
   }
 
+  It "accepts a scalar component CSV from native File callers" {
+    $plan = @(
+      & $rootInstallerPath `
+        -Mode Install `
+        -ComponentCsv "glazewm,kanata,wezterm" `
+        -PlanOnly
+    )
+
+    @($plan.Name) | Should -Be @("wezterm", "kanata", "glazewm")
+  }
+
+  It "adds optional components to catalog-required defaults" {
+    $plan = @(
+      & $rootInstallerPath `
+        -Mode Install `
+        -AdditionalComponentCsv "glazewm" `
+        -PlanOnly
+    )
+
+    @($plan.Name) | Should -Be @("wezterm", "kanata", "glazewm")
+  }
+
+  It "rejects explicit and additional component selections together" {
+    {
+      & $rootInstallerPath `
+        -ComponentCsv "wezterm,kanata" `
+        -AdditionalComponentCsv "glazewm" `
+        -PlanOnly
+    } | Should -Throw "*AdditionalComponentCsv*"
+  }
+
+  It "rejects malformed component CSV values" {
+    foreach ($componentCsv in @(
+      "",
+      "wezterm, kanata",
+      "wezterm,,kanata",
+      "WEZTERM,kanata",
+      "wezterm,kanata,"
+    )) {
+      {
+        & $rootInstallerPath `
+          -Mode Install `
+          -ComponentCsv $componentCsv `
+          -PlanOnly
+      } | Should -Throw "*ComponentCsv*"
+    }
+  }
+
+  It "rejects Component and ComponentCsv together" {
+    {
+      & $rootInstallerPath `
+        -Mode Install `
+        -Component "wezterm" `
+        -ComponentCsv "wezterm,kanata" `
+        -PlanOnly
+    } | Should -Throw "*Component*ComponentCsv*"
+  }
+
   It "rejects an ineffective Defender exclusion in PlanOnly mode" {
     {
       & $rootInstallerPath `
@@ -623,7 +734,7 @@ Describe "Windows component orchestrator" {
     $installerSource = Get-Content -LiteralPath $rootInstallerPath -Raw
 
     $installerSource | Should -Match (
-      'Invoke-WindowsComponentSelection\s+@PSBoundParameters'
+      'Invoke-WindowsComponentSelection\s+@invokeParameters'
     )
   }
 }

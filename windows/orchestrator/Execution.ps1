@@ -20,6 +20,28 @@ function Invoke-WindowsComponentEntrypoint {
   & $Component.EntrypointPath @parameters
 }
 
+function Assert-WindowsComponentExecutionPreflight {
+  param(
+    [Parameter(Mandatory = $true)][object[]]$Plan,
+    [Parameter(Mandatory = $true)][object[]]$Catalog,
+    [Parameter(Mandatory = $true)][string]$WindowsRoot,
+    [switch]$AllowRollbackOnly = $false
+  )
+
+  if ($env:OS -ne "Windows_NT") {
+    throw "Windows component installation must run on Windows."
+  }
+  Assert-WindowsComponentPlan `
+    -Plan $Plan `
+    -Catalog $Catalog `
+    -WindowsRoot $WindowsRoot
+  Assert-WindowsSelectionPolicy `
+    -Plan $Plan `
+    -Catalog $Catalog `
+    -AllowRollbackOnly:$AllowRollbackOnly
+  Assert-WindowsRuntimeCompatibility -Plan $Plan -Catalog $Catalog
+}
+
 function Invoke-WindowsComponentPlan {
   [CmdletBinding()]
   param(
@@ -37,18 +59,11 @@ function Invoke-WindowsComponentPlan {
     [switch]$AddKanataDefenderExclusion = $false
   )
 
-  if ($env:OS -ne "Windows_NT") {
-    throw "Windows component installation must run on Windows."
-  }
-  Assert-WindowsComponentPlan `
+  Assert-WindowsComponentExecutionPreflight `
     -Plan $Plan `
     -Catalog $Catalog `
-    -WindowsRoot $WindowsRoot
-  Assert-WindowsSelectionPolicy `
-    -Plan $Plan `
-    -Catalog $Catalog `
+    -WindowsRoot $WindowsRoot `
     -AllowRollbackOnly:$AllowRollbackOnly
-  Assert-WindowsRuntimeCompatibility -Plan $Plan -Catalog $Catalog
 
   foreach ($component in $Plan) {
     try {
@@ -86,25 +101,53 @@ function Invoke-WindowsComponentSelection {
 
     [string[]]$Component,
 
+    [string[]]$AdditionalComponent,
+
     [switch]$AllowRollbackOnly = $false,
 
     [switch]$PlanOnly = $false,
+
+    [switch]$Preflight = $false,
 
     [switch]$AddKanataDefenderExclusion = $false
   )
 
   $windowsRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
+  if ($PlanOnly -and $Preflight) {
+    throw "-PlanOnly and -Preflight cannot be used together."
+  }
   $manifestPath = Join-Path $windowsRoot "components.json"
   $catalog = @(
     Import-WindowsComponentCatalog `
       -Path $manifestPath `
       -WindowsRoot $windowsRoot
   )
+  if (
+    $null -ne $Component -and
+    $Component.Count -gt 0 -and
+    $null -ne $AdditionalComponent -and
+    $AdditionalComponent.Count -gt 0
+  ) {
+    throw "-Component and -AdditionalComponent cannot be used together."
+  }
+  $resolvedComponent = if (
+    $null -ne $AdditionalComponent -and
+    $AdditionalComponent.Count -gt 0
+  ) {
+    @(
+      $catalog |
+        Where-Object { $_.SelectionPolicy -eq "required" } |
+        Sort-Object Order, Name |
+        ForEach-Object { $_.Name }
+    ) + @($AdditionalComponent)
+  } else {
+    $Component
+  }
   $plan = @(
     Resolve-WindowsComponentPlan `
       -Catalog $catalog `
       -Mode $Mode `
-      -Component $Component `
+      -Component $resolvedComponent `
       -AllowRollbackOnly:$AllowRollbackOnly `
       -WindowsRoot $windowsRoot
   )
@@ -125,8 +168,13 @@ function Invoke-WindowsComponentSelection {
   if ($PlanOnly) {
     return $plan
   }
-  if ($env:OS -ne "Windows_NT") {
-    throw "Windows component installation must run on Windows."
+  if ($Preflight) {
+    Assert-WindowsComponentExecutionPreflight `
+      -Plan $plan `
+      -Catalog $catalog `
+      -WindowsRoot $windowsRoot `
+      -AllowRollbackOnly:$AllowRollbackOnly
+    return $plan
   }
 
   Invoke-WindowsComponentPlan `

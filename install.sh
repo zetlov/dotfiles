@@ -7,6 +7,10 @@ DOTFILES_DIR="${SCRIPT_DIR}"
 WIN32YANK_VERSION="0.1.1"
 WIN32YANK_SHA256="247c9a05b94387a884b49d3db13f806b1677dfc38020f955f719be6902260cd6"
 
+# shellcheck source=scripts/install/windows-components.sh
+# shellcheck disable=SC1091
+source "${DOTFILES_DIR}/scripts/install/windows-components.sh"
+
 # --- 0. 引数パース ---
 
 WITH_TEX=0
@@ -120,6 +124,12 @@ if [ "${STOW_PROFILE}" = "auto" ]; then
     STOW_PROFILE="${ENV}"
 fi
 
+WINDOWS_ADDITIONAL_COMPONENT=""
+if [ "${ENV}" = "wsl" ]; then
+    WINDOWS_ADDITIONAL_COMPONENT=$(resolve_windows_components \
+        "${WITH_GLAZEWM}" "${WITH_KOMOREBI}")
+fi
+
 echo "Detected environment: ${PRETTY_NAME:-Arch Linux} (${ENV})"
 
 ARCHITECTURE=$(uname -m)
@@ -152,9 +162,18 @@ if [ "${DRY_RUN}" -eq 1 ]; then
     echo "System upgrade: yes"
     echo "Dotfile profile: ${STOW_PROFILE}"
     if [ "${ENV}" = "wsl" ]; then
-        echo "Windows integration: wezterm kanata"
+        echo "Windows integration: required catalog components"
+        if [ -n "${WINDOWS_ADDITIONAL_COMPONENT}" ]; then
+            echo "Additional Windows component: ${WINDOWS_ADDITIONAL_COMPONENT}"
+        fi
     fi
     exit 0
+fi
+
+if [ "${ENV}" = "wsl" ]; then
+    preflight_windows_components \
+        "${DOTFILES_DIR}" \
+        "${WINDOWS_ADDITIONAL_COMPONENT}"
 fi
 
 "${DOTFILES_DIR}/scripts/validate-container-backend.sh" \
@@ -202,12 +221,10 @@ install_herdr_integration
 if [ "${ENV}" = "wsl" ]; then
     echo "Applying WSL specific settings..."
 
-    # install Windows-side terminal fonts and deploy the managed WezTerm config
-    WEZTERM_INSTALLER="${DOTFILES_DIR}/windows/wezterm/install.ps1"
-    if [ -f "${WEZTERM_INSTALLER}" ]; then
-        WIN_PS="$(wslpath -w "${WEZTERM_INSTALLER}")"
-        powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$WIN_PS"
-    fi
+    apply_windows_components \
+        "${DOTFILES_DIR}" \
+        "${WINDOWS_ADDITIONAL_COMPONENT}" \
+        "${KANATA_ADD_DEFENDER_EXCLUSION:-0}"
 
     # install win32yank to home/bin (clipboard bridge for neovim)
     if [ ! -f "${HOME}/bin/win32yank.exe" ]; then
@@ -226,11 +243,12 @@ if [ "${ENV}" = "wsl" ]; then
     # SumatraPDF (vimtex viewer)
     if ! command -v SumatraPDF.exe &>/dev/null; then
         echo "installing SumatraPDF via winget..."
-        powershell.exe -NoProfile -Command \
+        "${WINDOWS_PWSH_BIN}" -NoProfile -Command \
             "winget install --id SumatraPDF.SumatraPDF -e --silent --accept-source-agreements --accept-package-agreements" \
             || echo "winget install failed (maybe already installed)"
 
-        WIN_LOCALAPPDATA="$(powershell.exe -NoProfile -Command 'Write-Output $Env:LOCALAPPDATA' | tr -d '\r')"
+        WIN_LOCALAPPDATA="$("${WINDOWS_PWSH_BIN}" -NoProfile \
+            -Command 'Write-Output $Env:LOCALAPPDATA' | tr -d '\r')"
         LOCALAPPDATA_WSL="$(wslpath "$WIN_LOCALAPPDATA")"
         SUMATRA_EXE="${LOCALAPPDATA_WSL}/Programs/SumatraPDF/SumatraPDF.exe"
 
@@ -243,49 +261,6 @@ if [ "${ENV}" = "wsl" ]; then
         fi
     fi
 
-    # install kanata (keyboard remapper on the Windows side)
-    if [ -f "${DOTFILES_DIR}/windows/kanata/install.ps1" ]; then
-        WIN_PS="$(wslpath -w "${DOTFILES_DIR}/windows/kanata/install.ps1")"
-        KANATA_ARGS=()
-        if [ "${KANATA_ADD_DEFENDER_EXCLUSION:-0}" = "1" ]; then
-            KANATA_ARGS+=("-AddDefenderExclusion")
-        fi
-        powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$WIN_PS" "${KANATA_ARGS[@]}"
-    fi
-
-    # install Komorebi only when explicitly requested
-    if [ "${WITH_KOMOREBI}" -eq 1 ]; then
-        KOMOREBI_INSTALLER="${DOTFILES_DIR}/windows/komorebi/install.ps1"
-        if [ ! -f "${KOMOREBI_INSTALLER}" ]; then
-            echo "Komorebi installer not found: ${KOMOREBI_INSTALLER}" >&2
-            exit 1
-        fi
-        WSLPATH_BIN="/usr/bin/wslpath"
-        WINDOWS_POWERSHELL="/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
-        if [ ! -x "${WSLPATH_BIN}" ] || [ ! -f "${WINDOWS_POWERSHELL}" ]; then
-            echo "Trusted WSL/PowerShell bridge not found." >&2
-            exit 1
-        fi
-        WIN_PS="$("${WSLPATH_BIN}" -w "${KOMOREBI_INSTALLER}")"
-        "${WINDOWS_POWERSHELL}" -NoProfile -ExecutionPolicy Bypass -File "$WIN_PS"
-    fi
-
-    # install GlazeWM only when explicitly requested
-    if [ "${WITH_GLAZEWM}" -eq 1 ]; then
-        GLAZEWM_INSTALLER="${DOTFILES_DIR}/windows/glazewm/install.ps1"
-        if [ ! -f "${GLAZEWM_INSTALLER}" ]; then
-            echo "GlazeWM installer not found: ${GLAZEWM_INSTALLER}" >&2
-            exit 1
-        fi
-        WSLPATH_BIN="/usr/bin/wslpath"
-        WINDOWS_POWERSHELL="/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
-        if [ ! -x "${WSLPATH_BIN}" ] || [ ! -f "${WINDOWS_POWERSHELL}" ]; then
-            echo "Trusted WSL/PowerShell bridge not found." >&2
-            exit 1
-        fi
-        WIN_PS="$("${WSLPATH_BIN}" -w "${GLAZEWM_INSTALLER}")"
-        "${WINDOWS_POWERSHELL}" -NoProfile -ExecutionPolicy Bypass -File "$WIN_PS"
-    fi
 fi
 
 echo "Installation Complete!"

@@ -1,3 +1,16 @@
+function Get-WindowsProcessMatches {
+  param([Parameter(Mandatory = $true)][string[]]$Name)
+
+  try {
+    $processes = @(Get-Process -ErrorAction Stop)
+  } catch {
+    throw "Unable to inspect Windows processes: $($_.Exception.Message)"
+  }
+  return @(
+    $processes | Where-Object { $Name -contains $_.ProcessName }
+  )
+}
+
 function Test-WindowsRunValue {
   param([Parameter(Mandatory = $true)][string]$Name)
 
@@ -49,9 +62,7 @@ function Assert-WindowsRuntimeCompatibility {
       Where-Object { $catalogByName[[string]$_].Lifecycle -eq "rollback-only" }
   ).Count -gt 0
   if ($selectsRollback) {
-    $glazeProcesses = @(
-      Get-Process -Name "glazewm" -ErrorAction SilentlyContinue
-    )
+    $glazeProcesses = @(Get-WindowsProcessMatches -Name @("glazewm"))
     if ($glazeProcesses.Count -gt 0) {
       throw "GlazeWM is running; stop it before applying rollback components."
     }
@@ -64,11 +75,8 @@ function Assert-WindowsRuntimeCompatibility {
   }
 
   if ($selectedNames -contains "glazewm") {
-    $komorebiProcesses = @(
-      Get-Process `
-        -Name @("komorebi", "whkd", "komorebi-bar", "masir") `
-        -ErrorAction SilentlyContinue
-    )
+    $komorebiProcesses = @(Get-WindowsProcessMatches `
+      -Name @("komorebi", "whkd", "komorebi-bar", "masir"))
     if ($komorebiProcesses.Count -gt 0) {
       throw "Komorebi rollback processes are running; stop them first."
     }
