@@ -9,6 +9,10 @@ $ErrorActionPreference = "Stop"
 
 $installerModule = Join-Path $PSScriptRoot "KomorebiInstaller.psm1"
 Import-Module $installerModule -Force -ErrorAction Stop
+$audioInstallerModule = Join-Path `
+  $PSScriptRoot `
+  "..\audio\AudioOutputInstaller.psm1"
+Import-Module $audioInstallerModule -Force -ErrorAction Stop
 
 function Install-WinGetCommand {
   param(

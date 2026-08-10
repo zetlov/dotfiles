@@ -8,6 +8,10 @@ $ErrorActionPreference = "Stop"
 
 $installerModule = Join-Path $PSScriptRoot "KomorebiInstaller.psm1"
 Import-Module $installerModule -Force -ErrorAction Stop
+$audioInstallerModule = Join-Path `
+  $PSScriptRoot `
+  "..\audio\AudioOutputInstaller.psm1"
+Import-Module $audioInstallerModule -Force -ErrorAction Stop
 
 $metadataPath = Join-Path $env:LOCALAPPDATA "dotfiles\komorebi\install.json"
 $manifest = Get-KomorebiManifest -Path $metadataPath

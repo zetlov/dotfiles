@@ -1,4 +1,5 @@
 windows/autostart/tests/AppAutostart.Tests.ps1
+windows/audio/tests/AudioOutputInstaller.Tests.ps1
 windows/glazewm/tests/GlazeWMAutoTile.Tests.ps1
 windows/glazewm/tests/GlazeWMConfig.Tests.ps1
 windows/glazewm/tests/GlazeWMStartupApps.Tests.ps1

@@ -32,6 +32,14 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+$sourceAudioInstaller = Join-Path `
+  $PSScriptRoot `
+  "..\audio\AudioOutputInstaller.psm1"
+if (-not (Test-Path -LiteralPath $sourceAudioInstaller -PathType Leaf)) {
+  throw "Required audio installer module not found: $sourceAudioInstaller"
+}
+Import-Module $sourceAudioInstaller -Force -ErrorAction Stop
+
 if ($env:OS -ne "Windows_NT") {
   throw "This script must run on Windows."
 }
@@ -183,7 +191,6 @@ $sourceStartupScript = Join-Path $PSScriptRoot "Start-GlazeWorkspaceApps.ps1"
 $sourceStartupConfig = Join-Path $PSScriptRoot "startup-apps.json"
 $sourceZebarInstaller = Join-Path $PSScriptRoot "..\zebar\install.ps1"
 $komorebiSourceRoot = Join-Path $PSScriptRoot "..\komorebi"
-$sourceKomorebiModule = Join-Path $komorebiSourceRoot "KomorebiInstaller.psm1"
 $sourceAudioScript = Join-Path $komorebiSourceRoot "switch-audio.ps1"
 $localAudioConfig = Join-Path $komorebiSourceRoot "audio-output.local.json"
 $defaultAudioConfig = Join-Path $komorebiSourceRoot "audio-output.json"
@@ -202,15 +209,13 @@ foreach ($sourcePath in @(
   $sourceStartupConfig,
   $sourceZebarInstaller,
   $sourceAudioScript,
-  $sourceAudioConfig,
-  $sourceKomorebiModule
+  $sourceAudioConfig
 )) {
   if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) {
     throw "Required GlazeWM file not found: $sourcePath"
   }
 }
 
-Import-Module $sourceKomorebiModule -Force -ErrorAction Stop
 [void](Install-AudioDeviceModule -RequiredVersion "3.1.0.2")
 
 New-Item -ItemType Directory -Path $ConfigRoot -Force | Out-Null

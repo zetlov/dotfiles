@@ -592,7 +592,27 @@ Context "Installer entrypoint safety contracts" {
     }
     Assert-Equal $installerModule.Contains(
       'Install-PackageProvider -Name "NuGet" -Scope "CurrentUser" -Force'
-    ) $true
+    ) $false
+  }
+
+  It "imports the shared audio dependency installer" {
+    foreach ($script in @($installScript, $updateScript)) {
+      Assert-Equal $script.Contains(
+        'AudioOutputInstaller.psm1'
+      ) $true
+      Assert-Equal $script.Contains(
+        'Import-Module $audioInstallerModule -Force -ErrorAction Stop'
+      ) $true
+    }
+  }
+
+  It "leaves audio dependency installation out of the Komorebi module" {
+    Assert-Equal $installerModule.Contains(
+      "function Install-AudioDeviceModule"
+    ) $false
+    Assert-Equal $installerModule.Contains(
+      '  Install-AudioDeviceModule, `'
+    ) $false
   }
 
   It "installs and owns the official masir package" {

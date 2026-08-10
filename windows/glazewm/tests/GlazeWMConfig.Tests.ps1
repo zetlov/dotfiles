@@ -70,6 +70,17 @@ Describe "GlazeWM managed configuration" {
     $script | Should -Not -Match "(?i)seelen"
   }
 
+  It "uses the shared audio dependency installer" {
+    $script = Get-Content -LiteralPath $startPath -Raw
+
+    $script | Should -Match 'audio\\AudioOutputInstaller\.psm1'
+    $script | Should -Match 'Import-Module \$sourceAudioInstaller'
+    $script | Should -Not -Match 'KomorebiInstaller\.psm1'
+    $script | Should -Match (
+      'Install-AudioDeviceModule -RequiredVersion "3\.1\.0\.2"'
+    )
+  }
+
   It "keeps the elevated manager separate from the dedicated IPC client" {
     $script = Get-Content -LiteralPath $startPath -Raw
 
