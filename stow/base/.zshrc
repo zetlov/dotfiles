@@ -7,12 +7,38 @@ export PATH="$HOME/.local/bin:$PATH"
 export CDPATH=".:$HOME:$HOME/links"
 
 # -----------------------
-# Shell plugins
+# Oh My Zsh
 # -----------------------
-[[ ! -r /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh ]] \
-  || source /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh
-[[ ! -r /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]] \
-  || source /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+export ZSH="$HOME/.oh-my-zsh"
+
+# Starship renders the prompt, so Oh My Zsh does not need a theme.
+ZSH_THEME=""
+plugins=(git)
+_zsh_system_plugin_root="${ZSH_SYSTEM_PLUGIN_ROOT:-/usr/share/zsh/plugins}"
+_zsh_system_plugin_files=()
+
+if [[ -r "$ZSH/oh-my-zsh.sh" ]]; then
+  for _zsh_plugin in zsh-autosuggestions zsh-syntax-highlighting; do
+    _zsh_plugin_file="${ZSH_CUSTOM:-$ZSH/custom}/plugins/$_zsh_plugin/$_zsh_plugin.plugin.zsh"
+    if [[ -r "$_zsh_plugin_file" ]]; then
+      plugins+=("$_zsh_plugin")
+    else
+      _zsh_plugin_file="$_zsh_system_plugin_root/$_zsh_plugin/$_zsh_plugin.zsh"
+      [[ ! -r "$_zsh_plugin_file" ]] || _zsh_system_plugin_files+=("$_zsh_plugin_file")
+    fi
+  done
+  source "$ZSH/oh-my-zsh.sh"
+else
+  # Keep fresh and server installs usable before Oh My Zsh is installed.
+  for _zsh_plugin in zsh-autosuggestions zsh-syntax-highlighting; do
+    _zsh_plugin_file="$_zsh_system_plugin_root/$_zsh_plugin/$_zsh_plugin.zsh"
+    [[ ! -r "$_zsh_plugin_file" ]] || _zsh_system_plugin_files+=("$_zsh_plugin_file")
+  done
+fi
+for _zsh_plugin_file in "${_zsh_system_plugin_files[@]}"; do
+  source "$_zsh_plugin_file"
+done
+unset _zsh_plugin _zsh_plugin_file _zsh_system_plugin_files _zsh_system_plugin_root
 
 # -----------------------
 # General

@@ -85,6 +85,11 @@ Empty monitor names use the compositor's preferred automatic layout.
 Secrets belong in `~/.zsh_secrets`; machine-only shell configuration belongs
 in `~/.zshrc.local`. Neither file is tracked.
 
+The managed Zsh configuration loads Oh My Zsh from `~/.oh-my-zsh` when it is
+installed, with the Git, autosuggestions, and syntax-highlighting plugins.
+Starship remains the prompt renderer. Portable installs without Oh My Zsh fall
+back to the system Arch plugin scripts when available.
+
 ## Development tools
 
 Tool ownership follows the runtime boundary:
