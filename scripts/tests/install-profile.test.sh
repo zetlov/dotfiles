@@ -127,15 +127,24 @@ assert_contains '^wsl.txt$' "${TEST_ROOT}/wsl-plan" \
 assert_not_contains 'container-native.txt' "${TEST_ROOT}/wsl-plan" \
     "WSL Docker Desktop mode must not install a Linux Docker daemon"
 
-dry_run_home="${TEST_ROOT}/dry-run-home"
-mkdir -p "${dry_run_home}"
-HOME="${dry_run_home}" "${REPO_ROOT}/install.sh" \
-    --dry-run --container-backend=none >"${TEST_ROOT}/dry-run-plan"
-assert_contains '^Container backend: none$' "${TEST_ROOT}/dry-run-plan" \
-    "dry-run should report an explicit container opt-out"
-if find "${dry_run_home}" -mindepth 1 -print -quit | rg -q .; then
-    echo "FAIL: install --dry-run must not mutate HOME" >&2
-    exit 1
+# The full installer intentionally rejects non-Arch hosts. Pure resolution is
+# tested above; run the integration path only where the installer is supported.
+if (
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    [[ "${ID:-}" = "arch" || "${ID:-}" = "archarm" \
+        || "${ID_LIKE:-}" = *"arch"* ]]
+); then
+    dry_run_home="${TEST_ROOT}/dry-run-home"
+    mkdir -p "${dry_run_home}"
+    HOME="${dry_run_home}" "${REPO_ROOT}/install.sh" \
+        --dry-run --container-backend=none >"${TEST_ROOT}/dry-run-plan"
+    assert_contains '^Container backend: none$' "${TEST_ROOT}/dry-run-plan" \
+        "dry-run should report an explicit container opt-out"
+    if find "${dry_run_home}" -mindepth 1 -print -quit | rg -q .; then
+        echo "FAIL: install --dry-run must not mutate HOME" >&2
+        exit 1
+    fi
 fi
 
 link_home="${TEST_ROOT}/link-home"
@@ -148,6 +157,22 @@ if find "${link_home}" -mindepth 1 -print -quit | rg -q .; then
     echo "FAIL: link-only dry-run must not mutate HOME" >&2
     exit 1
 fi
+
+HOME="${link_home}" "${REPO_ROOT}/install.sh" \
+    --link-only --dry-run --profile=wsl >"${TEST_ROOT}/link-wsl-plan"
+assert_contains '^Dotfile profile: wsl$' "${TEST_ROOT}/link-wsl-plan" \
+    "link-only should support an explicit WSL Stow profile"
+
+if HOME="${link_home}" "${REPO_ROOT}/install.sh" \
+    --link-only --dry-run --profile=invalid \
+    >"${TEST_ROOT}/invalid-profile-stdout" \
+    2>"${TEST_ROOT}/invalid-profile-stderr"; then
+    echo "FAIL: install should reject unknown Stow profiles" >&2
+    exit 1
+fi
+assert_contains 'Stow profile must be auto, desktop, or wsl' \
+    "${TEST_ROOT}/invalid-profile-stderr" \
+    "invalid Stow profiles should fail with a clear message"
 
 assert_profile_plan wsl native "${TEST_ROOT}/wsl-native-plan"
 assert_contains '^container-native.txt$' "${TEST_ROOT}/wsl-native-plan" \

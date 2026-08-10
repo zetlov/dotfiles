@@ -152,6 +152,10 @@ jobs:
               builder_home=$(getent passwd builder | cut -d: -f6)
               cp -a /work "${builder_home}/dotfiles"
               chown -R builder:builder "${builder_home}/dotfiles"
+              install_plan=$(sudo -u builder -H bash "${builder_home}/dotfiles/install.sh" --dry-run --container-backend=none)
+              printf "%s\n" "${install_plan}" | grep -qx "Environment: desktop"
+              printf "%s\n" "${install_plan}" | grep -qx "Dotfile profile: desktop"
+              printf "%s\n" "${install_plan}" | grep -qx "Package profile: desktop.txt"
               sudo -u builder -H script -qefc "bash ${builder_home}/dotfiles/install.sh --link-only" /dev/null
             '
 

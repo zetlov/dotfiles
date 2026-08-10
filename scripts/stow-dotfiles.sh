@@ -4,7 +4,35 @@ set -eu
 
 SCRIPT_DIR=$(CDPATH= cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 DOTFILES_DIR="${DOTFILES_DIR:-$(CDPATH= cd "${SCRIPT_DIR}/.." && pwd)}"
-readonly STOW_PACKAGES=(base desktop assistant)
+STOW_PROFILE=desktop
+PREFLIGHT_ONLY=0
+
+for arg in "$@"; do
+    case "${arg}" in
+        --profile=desktop) STOW_PROFILE=desktop ;;
+        --profile=wsl) STOW_PROFILE=wsl ;;
+        --preflight) PREFLIGHT_ONLY=1 ;;
+        --profile=*)
+            echo "Stow profile must be desktop or wsl." >&2
+            exit 2
+            ;;
+        *) echo "Unknown option: ${arg}" >&2; exit 2 ;;
+    esac
+done
+
+case "${STOW_PROFILE}" in
+    desktop)
+        STOW_PACKAGES=(base desktop assistant)
+        INACTIVE_STOW_PACKAGES=()
+        ;;
+    wsl)
+        STOW_PACKAGES=(base assistant)
+        INACTIVE_STOW_PACKAGES=(desktop)
+        ;;
+esac
+readonly STOW_PROFILE
+readonly STOW_PACKAGES
+readonly INACTIVE_STOW_PACKAGES
 
 resolve_root_path() {
     local name="$1"
@@ -49,6 +77,11 @@ declare -a legacy_sources=()
 declare -a legacy_targets=()
 declare -a removed_legacy_sources=()
 declare -a removed_legacy_targets=()
+declare -a inactive_sources=()
+declare -a inactive_targets=()
+declare -a inactive_link_values=()
+declare -a removed_inactive_targets=()
+declare -a removed_inactive_link_values=()
 
 collect_managed_files() {
     local package
@@ -74,6 +107,61 @@ collect_managed_files() {
             managed_targets+=("${target_path}")
         done < <(find "${package_root}" -mindepth 1 \
             \( -type f -o -type l \) -print0)
+    done
+}
+
+collect_inactive_links() {
+    local package
+    local package_root
+    local relative_path
+    local source_path
+    local target_path
+
+    for package in "${INACTIVE_STOW_PACKAGES[@]}"; do
+        package_root="${STOW_ROOT}/${package}"
+        if [ ! -d "${package_root}" ]; then
+            continue
+        fi
+        while IFS= read -r -d '' source_path; do
+            relative_path="${source_path#"${package_root}/"}"
+            target_path="${HOME}/${relative_path}"
+            validate_target_parents "${target_path}" || return 1
+            if [[ -v "source_by_target[${target_path}]" ]] \
+                || [ ! -L "${target_path}" ]; then
+                continue
+            fi
+            if [ "$(resolve_link_target "${target_path}")" = \
+                "$(realpath -m -- "${source_path}")" ]; then
+                inactive_sources+=("${source_path}")
+                inactive_targets+=("${target_path}")
+                inactive_link_values+=("$(readlink -- "${target_path}")")
+            fi
+        done < <(find "${package_root}" -mindepth 1 \
+            \( -type f -o -type l \) -print0)
+    done
+}
+
+revalidate_inactive_link() {
+    local index="$1"
+    local target_path
+
+    target_path="${inactive_targets[${index}]}"
+    validate_target_parents "${target_path}" || return 1
+    if [ ! -L "${target_path}" ] \
+        || [ "$(readlink -- "${target_path}")" != \
+            "${inactive_link_values[${index}]}" ] \
+        || [ "$(resolve_link_target "${target_path}")" != \
+            "$(realpath -m -- "${inactive_sources[${index}]}")" ]; then
+        echo "Inactive profile link changed during preflight: ${target_path}" >&2
+        return 1
+    fi
+}
+
+revalidate_inactive_links() {
+    local index
+
+    for index in "${!inactive_targets[@]}"; do
+        revalidate_inactive_link "${index}" || return 1
     done
 }
 
@@ -207,6 +295,22 @@ restore_managed_link() {
     fi
 }
 
+restore_original_link() {
+    local link_value="$1"
+    local target_path="$2"
+
+    if [ -e "${target_path}" ] || [ -L "${target_path}" ]; then
+        echo "Could not restore inactive link; target is already present: ${target_path}" >&2
+        return
+    fi
+    mkdir -p -- "$(dirname -- "${target_path}")"
+    if ln -s -- "${link_value}" "${target_path}"; then
+        echo "Restored inactive profile link after Stow failed: ${target_path}"
+    else
+        echo "Failed to restore inactive profile link: ${target_path}" >&2
+    fi
+}
+
 rollback() {
     local exit_status=$?
     local index
@@ -221,6 +325,11 @@ rollback() {
         restore_managed_link \
             "${removed_legacy_sources[${index}]}" \
             "${removed_legacy_targets[${index}]}"
+    done
+    for index in "${!removed_inactive_targets[@]}"; do
+        restore_original_link \
+            "${removed_inactive_link_values[${index}]}" \
+            "${removed_inactive_targets[${index}]}"
     done
     if [ -n "${zshrc_backup}" ] && [ -e "${zshrc_backup}" ]; then
         echo "Zsh config backup retained at ${zshrc_backup}" >&2
@@ -242,6 +351,14 @@ ensure_backup_root() {
 
 collect_managed_files
 preflight_managed_files
+collect_inactive_links
+revalidate_inactive_links
+
+if [ "${PREFLIGHT_ONLY}" -eq 1 ]; then
+    transaction_complete=1
+    echo "Stow preflight passed for profile: ${STOW_PROFILE}"
+    exit 0
+fi
 
 zshrc_source="${STOW_ROOT}/base/.zshrc"
 zshrc_target="${HOME}/.zshrc"
@@ -258,6 +375,14 @@ for index in "${!legacy_targets[@]}"; do
     removed_legacy_sources+=("${legacy_sources[${index}]}")
     removed_legacy_targets+=("${legacy_targets[${index}]}")
     echo "Migrating legacy dotfiles link: ${legacy_targets[${index}]}"
+done
+
+for index in "${!inactive_targets[@]}"; do
+    revalidate_inactive_link "${index}"
+    removed_inactive_targets+=("${inactive_targets[${index}]}")
+    removed_inactive_link_values+=("${inactive_link_values[${index}]}")
+    rm -- "${inactive_targets[${index}]}"
+    echo "Removing inactive profile link: ${inactive_targets[${index}]}"
 done
 
 if ! stow \

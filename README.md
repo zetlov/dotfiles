@@ -69,8 +69,16 @@ stow/
 The wrapper always uses `--no-folding`, so directories such as `~/.config`,
 `~/.claude`, and `~/.codex` remain real directories.
 
+The `desktop` Stow profile links `base`, `desktop`, and `assistant`; the `wsl`
+profile links only `base` and `assistant`. A full bootstrap selects the profile
+from kernel-backed environment detection. Standalone and `--link-only` runs
+retain the `desktop` default for compatibility, with an explicit WSL override:
+
 ```bash
 ./scripts/stow-dotfiles.sh
+./scripts/stow-dotfiles.sh --profile=wsl
+./scripts/stow-dotfiles.sh --profile=wsl --preflight
+./install.sh --link-only --profile=wsl
 stow --restow --dir "$PWD/stow" --target "$HOME" --no-folding base desktop assistant
 stow --delete --dir "$PWD/stow" --target "$HOME" base desktop assistant
 ```
@@ -90,11 +98,16 @@ are not managed by Stow:
 - `~/.config/switch-audio/config.env`
 - `~/.config/zetshell/*`
 
+The WSL profile initializes only Codex, Claude, Git, and AtCoder CLI local
+files. Hyprland, switch-audio, and Zetshell local files belong to the desktop
+profile. All source and target parents are validated before any file is copied.
+
 Initialize missing files without replacing existing values:
 
 ```bash
 ./scripts/init-local-config.sh
 ./scripts/init-local-config.sh --dry-run
+./scripts/init-local-config.sh --profile=wsl
 ```
 
 The Git example uses the public GitHub noreply address for `zetlov`. Edit

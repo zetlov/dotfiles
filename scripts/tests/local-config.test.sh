@@ -16,6 +16,44 @@ if find "${test_home}" -type f | grep -q .; then
     exit 1
 fi
 
+wsl_home="${TEST_ROOT}/wsl-home"
+mkdir -p "${wsl_home}"
+HOME="${wsl_home}" "${INIT_SCRIPT}" --profile=wsl
+for expected in \
+    .codex/config.toml \
+    .claude/settings.json \
+    .gitconfig.local \
+    .config/atcoder-cli-nodejs/config.json; do
+    if [ ! -f "${wsl_home}/${expected}" ]; then
+        echo "FAIL: WSL profile should initialize ${expected}" >&2
+        exit 1
+    fi
+done
+for desktop_only in \
+    .config/hypr/settings.local.lua \
+    .config/switch-audio/config.env \
+    .config/zetshell/dashboard.json; do
+    if [ -e "${wsl_home}/${desktop_only}" ]; then
+        echo "FAIL: WSL profile must not initialize ${desktop_only}" >&2
+        exit 1
+    fi
+done
+
+symlink_home="${TEST_ROOT}/symlink-home"
+external_config="${TEST_ROOT}/external-config"
+mkdir -p "${symlink_home}" "${external_config}"
+ln -s "${external_config}" "${symlink_home}/.config"
+if HOME="${symlink_home}" "${INIT_SCRIPT}" --profile=desktop \
+    >"${TEST_ROOT}/symlink-stdout" 2>"${TEST_ROOT}/symlink-stderr"; then
+    echo "FAIL: local config should reject symlinked target parents" >&2
+    exit 1
+fi
+if find "${external_config}" -mindepth 1 -print -quit | grep -q . \
+    || find "${symlink_home}" -type f -print -quit | grep -q .; then
+    echo "FAIL: local config preflight should fail before creating any file" >&2
+    exit 1
+fi
+
 HOME="${test_home}" "${INIT_SCRIPT}"
 for expected in \
     .codex/config.toml \

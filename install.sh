@@ -17,6 +17,7 @@ WITH_NVIDIA=0
 LINK_ONLY=0
 DRY_RUN=0
 CONTAINER_BACKEND=auto
+STOW_PROFILE=auto
 for arg in "$@"; do
     case "$arg" in
         --with-tex) WITH_TEX=1 ;;
@@ -30,6 +31,13 @@ for arg in "$@"; do
         --container-backend=desktop) CONTAINER_BACKEND=desktop ;;
         --container-backend=native) CONTAINER_BACKEND=native ;;
         --container-backend=none) CONTAINER_BACKEND=none ;;
+        --profile=auto) STOW_PROFILE=auto ;;
+        --profile=desktop) STOW_PROFILE=desktop ;;
+        --profile=wsl) STOW_PROFILE=wsl ;;
+        --profile=*)
+            echo "Stow profile must be auto, desktop, or wsl." >&2
+            exit 1
+            ;;
         --container-backend=*)
             echo "Container backend must be auto, desktop, native, or none." >&2
             exit 1
@@ -44,10 +52,16 @@ if [ "${WITH_KOMOREBI}" -eq 1 ] && [ "${WITH_GLAZEWM}" -eq 1 ]; then
 fi
 
 link_dotfiles() {
+    echo "Validating local configuration and Stow targets..."
+    HOME="${HOME}" "${DOTFILES_DIR}/scripts/init-local-config.sh" \
+        --dry-run "--profile=${STOW_PROFILE}" >/dev/null
+    DOTFILES_DIR="${DOTFILES_DIR}" "${DOTFILES_DIR}/scripts/stow-dotfiles.sh" \
+        "--profile=${STOW_PROFILE}" --preflight >/dev/null
     echo "Initializing local configuration..."
-    "${DOTFILES_DIR}/scripts/init-local-config.sh"
+    "${DOTFILES_DIR}/scripts/init-local-config.sh" "--profile=${STOW_PROFILE}"
     echo "Linking dotfiles with Stow..."
-    DOTFILES_DIR="${DOTFILES_DIR}" "${DOTFILES_DIR}/scripts/stow-dotfiles.sh"
+    DOTFILES_DIR="${DOTFILES_DIR}" "${DOTFILES_DIR}/scripts/stow-dotfiles.sh" \
+        "--profile=${STOW_PROFILE}"
 }
 
 install_mise_tools() {
@@ -66,10 +80,14 @@ install_herdr_integration() {
     )
 }
 
+if [ "${LINK_ONLY}" -eq 1 ] && [ "${STOW_PROFILE}" = "auto" ]; then
+    STOW_PROFILE=desktop
+fi
+
 if [ "${LINK_ONLY}" -eq 1 ] && [ "${DRY_RUN}" -eq 1 ]; then
     echo "Install plan"
     echo "Mode: link-only"
-    echo "Dotfile linking: base desktop assistant"
+    echo "Dotfile profile: ${STOW_PROFILE}"
     echo "Local configuration: initialize missing files"
     exit 0
 fi
@@ -98,6 +116,9 @@ fi
 
 # Environment variables are not trusted as platform evidence.
 ENV=$("${DOTFILES_DIR}/scripts/detect-install-environment.sh")
+if [ "${STOW_PROFILE}" = "auto" ]; then
+    STOW_PROFILE="${ENV}"
+fi
 
 echo "Detected environment: ${PRETTY_NAME:-Arch Linux} (${ENV})"
 
@@ -129,7 +150,7 @@ if [ "${DRY_RUN}" -eq 1 ]; then
         echo "Package profile: ${profile}"
     done
     echo "System upgrade: yes"
-    echo "Dotfile linking: base desktop assistant"
+    echo "Dotfile profile: ${STOW_PROFILE}"
     if [ "${ENV}" = "wsl" ]; then
         echo "Windows integration: wezterm kanata"
     fi

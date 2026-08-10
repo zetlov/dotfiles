@@ -4,6 +4,8 @@ set -euo pipefail
 
 SCRIPT_DIR=$(CDPATH= cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 INSTALL_SCRIPT="${SCRIPT_DIR}/../../install.sh"
+TEST_ROOT=$(mktemp -d)
+trap 'rm -rf "${TEST_ROOT}"' EXIT
 
 if rg -q 'releases/latest|curl[^\n]*\|\s*(sh|bash)|wget[^\n]*-O\s*-|git clone' "${INSTALL_SCRIPT}"; then
     echo "FAIL: install.sh must not execute mutable or unverified remote content" >&2
@@ -65,6 +67,20 @@ fi
 if ! rg -q 'run:\s*mise run test' \
     "${SCRIPT_DIR}/../../.github/workflows/check.yaml"; then
     echo "FAIL: CI should run the complete test task so new tests are not skipped" >&2
+    exit 1
+fi
+
+conflict_home="${TEST_ROOT}/conflict-home"
+mkdir -p "${conflict_home}"
+printf 'user git config\n' >"${conflict_home}/.gitconfig"
+if HOME="${conflict_home}" "${INSTALL_SCRIPT}" --link-only \
+    >"${TEST_ROOT}/conflict-stdout" 2>"${TEST_ROOT}/conflict-stderr"; then
+    echo "FAIL: link-only install should reject Stow conflicts" >&2
+    exit 1
+fi
+if [ -e "${conflict_home}/.codex/config.toml" ] \
+    || [ -e "${conflict_home}/.gitconfig.local" ]; then
+    echo "FAIL: all link preflights must finish before local config mutation" >&2
     exit 1
 fi
 

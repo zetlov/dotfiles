@@ -5,19 +5,92 @@ set -euo pipefail
 SCRIPT_DIR=$(CDPATH= cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(CDPATH= cd "${SCRIPT_DIR}/.." && pwd)
 DRY_RUN=0
+PROFILE=desktop
 
-if [ "${1:-}" = "--dry-run" ]; then
-    DRY_RUN=1
-    shift
-fi
-if [ "$#" -ne 0 ]; then
-    echo "Usage: $0 [--dry-run]" >&2
-    exit 1
-fi
+for arg in "$@"; do
+    case "${arg}" in
+        --dry-run) DRY_RUN=1 ;;
+        --profile=desktop) PROFILE=desktop ;;
+        --profile=wsl) PROFILE=wsl ;;
+        --profile=*) echo "Local config profile must be desktop or wsl." >&2; exit 2 ;;
+        *) echo "Unknown option: ${arg}" >&2; exit 2 ;;
+    esac
+done
 if [ -z "${HOME:-}" ] || [[ "${HOME}" != /* ]] || [ ! -d "${HOME}" ]; then
     echo "HOME must be an existing absolute directory." >&2
     exit 1
 fi
+HOME=$(readlink -f -- "${HOME}")
+if [ "${HOME}" = "/" ]; then
+    echo "HOME must be a non-root absolute directory." >&2
+    exit 1
+fi
+
+declare -a local_sources=(
+    "codex/config.toml"
+    "claude/settings.json"
+    "gitconfig.local"
+    "atcoder-cli-nodejs/config.json"
+)
+declare -a local_targets=(
+    ".codex/config.toml"
+    ".claude/settings.json"
+    ".gitconfig.local"
+    ".config/atcoder-cli-nodejs/config.json"
+)
+
+if [ "${PROFILE}" = "desktop" ]; then
+    local_sources+=(
+        "hypr/settings.local.lua"
+        "switch-audio/config.env"
+        "zetshell/dashboard.json"
+        "zetshell/file_search.json"
+        "zetshell/launcher.json"
+        "zetshell/quicklinks.json"
+        "zetshell/settings.env"
+    )
+    local_targets+=(
+        ".config/hypr/settings.local.lua"
+        ".config/switch-audio/config.env"
+        ".config/zetshell/dashboard.json"
+        ".config/zetshell/file_search.json"
+        ".config/zetshell/launcher.json"
+        ".config/zetshell/quicklinks.json"
+        ".config/zetshell/settings.env"
+    )
+fi
+
+validate_target_parent() {
+    local target_path="$1"
+    local parent_path
+
+    parent_path=$(dirname -- "${target_path}")
+    while [ "${parent_path}" != "${HOME}" ]; do
+        if [[ "${parent_path}" != "${HOME}/"* ]]; then
+            echo "Local config target escapes HOME: ${target_path}" >&2
+            return 1
+        fi
+        if [ -L "${parent_path}" ]; then
+            echo "Local config target parent must not be a symlink: ${parent_path}" >&2
+            return 1
+        fi
+        if [ -e "${parent_path}" ] && [ ! -d "${parent_path}" ]; then
+            echo "Local config target parent is not a directory: ${parent_path}" >&2
+            return 1
+        fi
+        parent_path=$(dirname -- "${parent_path}")
+    done
+}
+
+for index in "${!local_sources[@]}"; do
+    source_path="${REPO_ROOT}/examples/local/${local_sources[${index}]}"
+    target_path="${HOME}/${local_targets[${index}]}"
+    if [ ! -f "${source_path}" ]; then
+        echo "Missing local configuration example: ${source_path}" >&2
+        exit 1
+    fi
+    validate_target_parent "${target_path}"
+done
 
 copy_if_missing() {
     local relative_source="$1"
@@ -42,14 +115,8 @@ copy_if_missing() {
     printf 'created %s\n' "${target_path}"
 }
 
-copy_if_missing "codex/config.toml" ".codex/config.toml"
-copy_if_missing "claude/settings.json" ".claude/settings.json"
-copy_if_missing "gitconfig.local" ".gitconfig.local"
-copy_if_missing "hypr/settings.local.lua" ".config/hypr/settings.local.lua"
-copy_if_missing "atcoder-cli-nodejs/config.json" ".config/atcoder-cli-nodejs/config.json"
-copy_if_missing "switch-audio/config.env" ".config/switch-audio/config.env"
-copy_if_missing "zetshell/dashboard.json" ".config/zetshell/dashboard.json"
-copy_if_missing "zetshell/file_search.json" ".config/zetshell/file_search.json"
-copy_if_missing "zetshell/launcher.json" ".config/zetshell/launcher.json"
-copy_if_missing "zetshell/quicklinks.json" ".config/zetshell/quicklinks.json"
-copy_if_missing "zetshell/settings.env" ".config/zetshell/settings.env"
+for index in "${!local_sources[@]}"; do
+    copy_if_missing \
+        "${local_sources[${index}]}" \
+        "${local_targets[${index}]}"
+done

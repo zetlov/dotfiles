@@ -96,6 +96,190 @@ test_links_exact_package_set() {
         "Local assistant state should remain unchanged"
 }
 
+test_links_wsl_profile_without_desktop_files() {
+    local fixture_root="${TEST_ROOT}/wsl-profile"
+    local paths
+    local repo
+    local home
+    paths=$(create_fixture "${fixture_root}")
+    repo=$(printf '%s\n' "${paths}" | sed -n '1p')
+    home=$(printf '%s\n' "${paths}" | sed -n '2p')
+
+    # An inactive package must not participate in ownership validation.
+    printf 'desktop duplicate\n' >"${repo}/stow/desktop/.zshrc"
+
+    HOME="${home}" DOTFILES_DIR="${repo}" \
+        "${STOW_SCRIPT}" --profile=wsl
+
+    assert_equal \
+        "$(readlink -f "${home}/.zshrc")" \
+        "${repo}/stow/base/.zshrc" \
+        "The WSL profile should link the base package"
+    assert_equal \
+        "$(readlink -f "${home}/.codex/AGENTS.md")" \
+        "${repo}/stow/assistant/.codex/AGENTS.md" \
+        "The WSL profile should link the assistant package"
+    assert_equal \
+        "$(test -e "${home}/.config/hypr/hyprland.lua" && printf present || printf absent)" \
+        "absent" \
+        "The WSL profile should not link desktop configuration"
+}
+
+test_rejects_unknown_profile_before_mutation() {
+    local fixture_root="${TEST_ROOT}/invalid-profile"
+    local paths
+    local repo
+    local home
+    paths=$(create_fixture "${fixture_root}")
+    repo=$(printf '%s\n' "${paths}" | sed -n '1p')
+    home=$(printf '%s\n' "${paths}" | sed -n '2p')
+
+    if HOME="${home}" DOTFILES_DIR="${repo}" \
+        "${STOW_SCRIPT}" --profile=invalid >/dev/null 2>&1; then
+        echo "FAIL: Unknown Stow profiles should be rejected" >&2
+        exit 1
+    fi
+
+    assert_equal \
+        "$(find "${home}" -type l | awk 'END { print NR }')" \
+        "0" \
+        "Unknown profiles should fail before linking files"
+}
+
+test_preflight_does_not_link_files() {
+    local fixture_root="${TEST_ROOT}/preflight-only"
+    local paths
+    local repo
+    local home
+    paths=$(create_fixture "${fixture_root}")
+    repo=$(printf '%s\n' "${paths}" | sed -n '1p')
+    home=$(printf '%s\n' "${paths}" | sed -n '2p')
+
+    HOME="${home}" DOTFILES_DIR="${repo}" \
+        "${STOW_SCRIPT}" --profile=wsl --preflight
+
+    assert_equal \
+        "$(find "${home}" -type l | awk 'END { print NR }')" \
+        "0" \
+        "Stow preflight should not create links"
+}
+
+test_removes_inactive_profile_links() {
+    local fixture_root="${TEST_ROOT}/profile-transition"
+    local paths
+    local repo
+    local home
+    paths=$(create_fixture "${fixture_root}")
+    repo=$(printf '%s\n' "${paths}" | sed -n '1p')
+    home=$(printf '%s\n' "${paths}" | sed -n '2p')
+
+    HOME="${home}" DOTFILES_DIR="${repo}" \
+        "${STOW_SCRIPT}" --profile=desktop
+    if [ ! -L "${home}/.config/hypr/hyprland.lua" ]; then
+        echo "FAIL: Desktop fixture should start with a managed desktop link" >&2
+        exit 1
+    fi
+
+    HOME="${home}" DOTFILES_DIR="${repo}" \
+        "${STOW_SCRIPT}" --profile=wsl
+
+    assert_equal \
+        "$(test -e "${home}/.config/hypr/hyprland.lua" && printf present || printf absent)" \
+        "absent" \
+        "Switching to the WSL profile should remove managed desktop links"
+    assert_equal \
+        "$(readlink -f "${home}/.zshrc")" \
+        "${repo}/stow/base/.zshrc" \
+        "Switching profiles should preserve active package links"
+}
+
+test_restores_inactive_links_when_stow_fails() {
+    local fixture_root="${TEST_ROOT}/profile-rollback"
+    local paths
+    local repo
+    local home
+    local fake_bin="${fixture_root}/bin"
+    local original_link
+    paths=$(create_fixture "${fixture_root}")
+    repo=$(printf '%s\n' "${paths}" | sed -n '1p')
+    home=$(printf '%s\n' "${paths}" | sed -n '2p')
+
+    HOME="${home}" DOTFILES_DIR="${repo}" \
+        "${STOW_SCRIPT}" --profile=desktop
+    original_link=$(readlink "${home}/.config/hypr/hyprland.lua")
+    mkdir -p "${fake_bin}"
+    printf '#!/usr/bin/env bash\nexit 1\n' >"${fake_bin}/stow"
+    chmod +x "${fake_bin}/stow"
+
+    if PATH="${fake_bin}:${PATH}" HOME="${home}" DOTFILES_DIR="${repo}" \
+        "${STOW_SCRIPT}" --profile=wsl >/dev/null 2>&1; then
+        echo "FAIL: Injected profile transition failure should fail" >&2
+        exit 1
+    fi
+
+    assert_equal \
+        "$(readlink "${home}/.config/hypr/hyprland.lua")" \
+        "${original_link}" \
+        "Failed profile transitions should restore the original link value"
+}
+
+test_restores_inactive_link_when_unlink_reports_failure() {
+    local fixture_root="${TEST_ROOT}/unlink-rollback"
+    local paths
+    local repo
+    local home
+    local fake_bin="${fixture_root}/bin"
+    local original_link
+    paths=$(create_fixture "${fixture_root}")
+    repo=$(printf '%s\n' "${paths}" | sed -n '1p')
+    home=$(printf '%s\n' "${paths}" | sed -n '2p')
+
+    HOME="${home}" DOTFILES_DIR="${repo}" \
+        "${STOW_SCRIPT}" --profile=desktop
+    original_link=$(readlink "${home}/.config/hypr/hyprland.lua")
+    mkdir -p "${fake_bin}"
+    printf '#!/usr/bin/env bash\n/bin/rm "$@"\nexit 1\n' >"${fake_bin}/rm"
+    chmod +x "${fake_bin}/rm"
+
+    if PATH="${fake_bin}:${PATH}" HOME="${home}" DOTFILES_DIR="${repo}" \
+        "${STOW_SCRIPT}" --profile=wsl >/dev/null 2>&1; then
+        echo "FAIL: Injected unlink failure should fail the transition" >&2
+        exit 1
+    fi
+
+    assert_equal \
+        "$(readlink "${home}/.config/hypr/hyprland.lua")" \
+        "${original_link}" \
+        "Rollback journal should restore links removed before rm reports failure"
+}
+
+test_rejects_inactive_targets_below_symlinked_parents() {
+    local fixture_root="${TEST_ROOT}/inactive-parent"
+    local paths
+    local repo
+    local home
+    local external="${fixture_root}/external"
+    paths=$(create_fixture "${fixture_root}")
+    repo=$(printf '%s\n' "${paths}" | sed -n '1p')
+    home=$(printf '%s\n' "${paths}" | sed -n '2p')
+
+    mkdir -p "${repo}/stow/desktop/.local/bin" "${external}/bin"
+    printf 'desktop tool\n' >"${repo}/stow/desktop/.local/bin/tool"
+    ln -s "${repo}/stow/desktop/.local/bin/tool" "${external}/bin/tool"
+    ln -s "${external}" "${home}/.local"
+
+    if HOME="${home}" DOTFILES_DIR="${repo}" \
+        "${STOW_SCRIPT}" --profile=wsl >/dev/null 2>&1; then
+        echo "FAIL: Inactive targets below symlinked parents should be rejected" >&2
+        exit 1
+    fi
+
+    assert_equal \
+        "$(readlink "${external}/bin/tool")" \
+        "${repo}/stow/desktop/.local/bin/tool" \
+        "Rejected inactive targets must not remove links outside HOME"
+}
+
 test_migrates_legacy_absolute_links() {
     local fixture_root="${TEST_ROOT}/migration"
     local paths
@@ -311,6 +495,13 @@ test_rejects_root_equivalent_home_paths() {
 }
 
 test_links_exact_package_set
+test_links_wsl_profile_without_desktop_files
+test_rejects_unknown_profile_before_mutation
+test_preflight_does_not_link_files
+test_removes_inactive_profile_links
+test_restores_inactive_links_when_stow_fails
+test_restores_inactive_link_when_unlink_reports_failure
+test_rejects_inactive_targets_below_symlinked_parents
 test_migrates_legacy_absolute_links
 test_preserves_every_target_when_preflight_fails
 test_restores_valid_links_when_stow_fails
