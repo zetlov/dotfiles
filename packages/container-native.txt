@@ -1,0 +1,4 @@
+# Native Linux container runtime.
+# WSL defaults to Docker Desktop integration and does not install this profile.
+docker
+docker-compose

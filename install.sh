@@ -15,6 +15,8 @@ WITH_KOMOREBI=0
 WITH_GLAZEWM=0
 WITH_NVIDIA=0
 LINK_ONLY=0
+DRY_RUN=0
+CONTAINER_BACKEND=auto
 for arg in "$@"; do
     case "$arg" in
         --with-tex) WITH_TEX=1 ;;
@@ -23,6 +25,15 @@ for arg in "$@"; do
         --with-glazewm) WITH_GLAZEWM=1 ;;
         --with-nvidia) WITH_NVIDIA=1 ;;
         --link-only) LINK_ONLY=1 ;;
+        --dry-run) DRY_RUN=1 ;;
+        --container-backend=auto) CONTAINER_BACKEND=auto ;;
+        --container-backend=desktop) CONTAINER_BACKEND=desktop ;;
+        --container-backend=native) CONTAINER_BACKEND=native ;;
+        --container-backend=none) CONTAINER_BACKEND=none ;;
+        --container-backend=*)
+            echo "Container backend must be auto, desktop, native, or none." >&2
+            exit 1
+            ;;
         *) echo "Unknown option: $arg" >&2; exit 1 ;;
     esac
 done
@@ -55,6 +66,14 @@ install_herdr_integration() {
     )
 }
 
+if [ "${LINK_ONLY}" -eq 1 ] && [ "${DRY_RUN}" -eq 1 ]; then
+    echo "Install plan"
+    echo "Mode: link-only"
+    echo "Dotfile linking: base desktop assistant"
+    echo "Local configuration: initialize missing files"
+    exit 0
+fi
+
 if [ "${LINK_ONLY}" -eq 1 ]; then
     link_dotfiles
     echo "Link-only installation complete."
@@ -77,19 +96,48 @@ if [[ "${ID:-}" != "arch" && "${ID:-}" != "archarm" && "${ID_LIKE:-}" != *"arch"
   exit 1
 fi
 
-# WSL判定（優先度順）
-if [[ -n "${WSL_INTEROP:-}" || -n "${WSL_DISTRO_NAME:-}" ]] \
-   || grep -qiE '(microsoft|wsl)' /proc/sys/kernel/osrelease 2>/dev/null; then
-  ENV="wsl"
-else
-  ENV="desktop"
-fi
+# Environment variables are not trusted as platform evidence.
+ENV=$("${DOTFILES_DIR}/scripts/detect-install-environment.sh")
 
 echo "Detected environment: ${PRETTY_NAME:-Arch Linux} (${ENV})"
 
 ARCHITECTURE=$(uname -m)
 "${DOTFILES_DIR}/scripts/validate-install-target.sh" \
     "${ENV}" "${ARCHITECTURE}" "${WITH_NVIDIA}" "${MINIMAL}"
+
+CONTAINER_BACKEND=$("${DOTFILES_DIR}/scripts/resolve-container-backend.sh" \
+    "${ENV}" "${CONTAINER_BACKEND}")
+
+profile_output=$("${DOTFILES_DIR}/scripts/resolve-package-profiles.sh" \
+    "${ENV}" "${MINIMAL}" "${CONTAINER_BACKEND}" \
+    "${WITH_NVIDIA}" "${WITH_TEX}")
+mapfile -t PACKAGE_PROFILES <<<"${profile_output}"
+
+for profile in "${PACKAGE_PROFILES[@]}"; do
+    if [ ! -f "${DOTFILES_DIR}/packages/${profile}" ]; then
+        echo "Required package profile is missing: ${DOTFILES_DIR}/packages/${profile}" >&2
+        exit 1
+    fi
+done
+
+if [ "${DRY_RUN}" -eq 1 ]; then
+    echo "Install plan"
+    echo "Environment: ${ENV}"
+    echo "Architecture: ${ARCHITECTURE}"
+    echo "Container backend: ${CONTAINER_BACKEND}"
+    for profile in "${PACKAGE_PROFILES[@]}"; do
+        echo "Package profile: ${profile}"
+    done
+    echo "System upgrade: yes"
+    echo "Dotfile linking: base desktop assistant"
+    if [ "${ENV}" = "wsl" ]; then
+        echo "Windows integration: wezterm kanata"
+    fi
+    exit 0
+fi
+
+"${DOTFILES_DIR}/scripts/validate-container-backend.sh" \
+    "${ENV}" "${CONTAINER_BACKEND}"
 
 # --- 2. パッケージインストール (common + 環境固有) ---
 
@@ -116,20 +164,12 @@ install_packages() {
 
 yay -Syu
 
-install_packages "${DOTFILES_DIR}/packages/common.txt"
-if [ "${MINIMAL}" -eq 1 ]; then
-    echo "Minimal mode: skipping ${ENV}.txt"
-else
-    install_packages "${DOTFILES_DIR}/packages/${ENV}.txt"
-fi
-if [ "${WITH_NVIDIA}" -eq 1 ]; then
-    install_packages "${DOTFILES_DIR}/packages/desktop-nvidia.txt"
-fi
-
-if [ "${WITH_TEX}" -eq 1 ]; then
-    echo "Installing TeX Live packages..."
-    install_packages "${DOTFILES_DIR}/packages/tex.txt"
-fi
+for profile in "${PACKAGE_PROFILES[@]}"; do
+    if [ "${profile}" = "tex.txt" ]; then
+        echo "Installing TeX Live packages..."
+    fi
+    install_packages "${DOTFILES_DIR}/packages/${profile}"
+done
 
 # --- 3. Dotfiles Linking (Stow) ---
 link_dotfiles

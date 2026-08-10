@@ -36,10 +36,6 @@ git-delta
 github-cli
 starship
 
-# === コンテナ ===
-docker
-docker-compose
-
 # === その他ユーティリティ ===
 7zip
 imagemagick

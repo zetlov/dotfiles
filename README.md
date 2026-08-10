@@ -18,6 +18,7 @@ On an Arch-based system, the full bootstrap remains available after installing
 and reviewing `yay` separately:
 
 ```bash
+./install.sh --dry-run
 ./install.sh
 ./install.sh --with-tex
 ./install.sh --with-komorebi
@@ -29,6 +30,27 @@ The full bootstrap upgrades packages and installs official/AUR packages. It
 does not bootstrap an AUR helper or execute remote installer scripts. Review
 the AUR packages in `packages/` before running it. Use `--link-only` when
 preparing an existing machine or reviewing a clone.
+
+`--dry-run` validates the target and prints the detected environment,
+container backend, and package profiles without changing the system or HOME.
+Native Linux desktops use the `native` container backend by default. WSL uses
+Docker Desktop integration by default and does not install a second Docker
+daemon inside the distribution. Override this explicitly when needed:
+
+```bash
+./install.sh --dry-run --container-backend=native
+./install.sh --container-backend=none
+```
+
+Accepted container backends are `auto`, `desktop`, `native`, and `none`.
+`desktop` is valid only under WSL; `native` installs the reviewed packages in
+`packages/container-native.txt`. Before a full WSL bootstrap uses `desktop`,
+Docker Desktop must be running with integration enabled for that distribution;
+the installer verifies the Docker client/server connection before upgrading or
+installing Linux packages. Following Docker's WSL guidance, distro-managed
+Docker Engine, Docker-compatible CLI providers, and `docker-compose` must be
+removed before using this backend; the preflight rejects them instead of
+silently using a native daemon.
 
 Native ARM systems support `--link-only`; the full desktop bootstrap is
 limited to x86_64. NVIDIA packages are isolated in an explicit
