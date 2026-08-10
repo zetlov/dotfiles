@@ -32,6 +32,13 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+$rollbackSafetyModule = Join-Path $PSScriptRoot "..\rollback\RollbackSafety.psm1"
+Import-Module $rollbackSafetyModule -Force -ErrorAction Stop
+Assert-KomorebiInactive
+
+$processModule = Join-Path $PSScriptRoot "GlazeWMProcess.psm1"
+Import-Module $processModule -Force -ErrorAction Stop
+
 $sourceAudioInstaller = Join-Path `
   $PSScriptRoot `
   "..\audio\AudioOutputInstaller.psm1"
@@ -347,10 +354,7 @@ try {
   $existingStartupHelper = Get-GlazeHelperProcess `
     -ScriptPath $deployedStartupScript
   if ($null -ne $existingStartupHelper) {
-    Stop-Process `
-      -Id $existingStartupHelper.ProcessId `
-      -Force `
-      -ErrorAction Stop
+    Stop-GlazeProcessTree -ProcessId $existingStartupHelper.ProcessId
     Wait-GlazeHelperExit `
       -ProcessId $existingStartupHelper.ProcessId `
       -TimeoutSeconds $StartupTimeoutSeconds
@@ -359,10 +363,7 @@ try {
   $existingDaemon = Get-GlazeHelperProcess -ScriptPath $deployedDaemon
   $daemonWasRunning = $null -ne $existingDaemon
   if ($daemonWasRunning) {
-    Stop-Process `
-      -Id $existingDaemon.ProcessId `
-      -Force `
-      -ErrorAction Stop
+    Stop-GlazeProcessTree -ProcessId $existingDaemon.ProcessId
     Wait-GlazeHelperExit `
       -ProcessId $existingDaemon.ProcessId `
       -TimeoutSeconds $StartupTimeoutSeconds
@@ -564,10 +565,7 @@ try {
       -not $startedDaemonProcess.HasExited
     ) {
       try {
-        Stop-Process `
-          -Id $startedDaemonProcess.Id `
-          -Force `
-          -ErrorAction Stop
+      Stop-GlazeProcessTree -ProcessId $startedDaemonProcess.Id
         Wait-GlazeHelperExit `
           -ProcessId $startedDaemonProcess.Id `
           -TimeoutSeconds $StartupTimeoutSeconds
@@ -585,7 +583,11 @@ try {
         $daemon.ProcessId -ne $startedDaemonProcess.Id
       )
     ) {
-      Stop-Process -Id $daemon.ProcessId -Force -ErrorAction SilentlyContinue
+      try {
+        Stop-GlazeProcessTree -ProcessId $daemon.ProcessId
+      } catch {
+        # The rollback error below reports the complete recovery failure.
+      }
     }
     if ($null -ne $backupPath) {
       Copy-Item -LiteralPath $backupPath -Destination $liveConfig -Force

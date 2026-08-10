@@ -13,10 +13,21 @@ From WSL:
 ./install.sh --with-glazewm
 ```
 
-Or run the Windows installer directly:
+Or run only the Windows setup through the root orchestrator:
 
 ```bash
-powershell.exe -NoProfile -ExecutionPolicy Bypass \
+pwsh.exe -NoProfile -ExecutionPolicy Bypass \
+  -File "$(wslpath -w ~/dotfiles/windows/install.ps1)" \
+  -Mode Install -Component glazewm
+```
+
+Directly running `windows/glazewm/install.ps1` is an internal/advanced
+entrypoint. It enforces the same guard as the root orchestrator and refuses to
+make changes while Komorebi, whkd, Komorebi Bar, or masir is running, the
+Komorebi Startup shortcut exists, or rollback app scheduled tasks remain.
+
+```bash
+pwsh.exe -NoProfile -ExecutionPolicy Bypass \
   -File "$(wslpath -w ~/dotfiles/windows/glazewm/install.ps1)"
 ```
 

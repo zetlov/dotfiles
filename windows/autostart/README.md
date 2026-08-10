@@ -17,9 +17,17 @@ preferences outside that prefix.
 Install the listed applications first, then run from WSL:
 
 ```bash
-powershell.exe -NoProfile -ExecutionPolicy Bypass \
-  -File "$(wslpath -w ~/dotfiles/windows/autostart/install.ps1)"
+pwsh.exe -NoProfile -ExecutionPolicy Bypass \
+  -File "$(wslpath -w ~/dotfiles/windows/install.ps1)" \
+  -Mode Install -ComponentCsv "komorebi,autostart" -AllowRollbackOnly
 ```
+
+The rollback-only autostart component must be selected together with its
+Komorebi companion. The root Windows installer requires explicit component
+selection and `-AllowRollbackOnly`, and refuses to proceed while GlazeWM is
+running or registered for automatic startup. Directly running
+`windows/autostart/install.ps1` is an internal/advanced entrypoint; it enforces
+the same GlazeWM inactivity guard before changing scheduled tasks.
 
 The installer fails if a configured executable is missing. Store applications
 use their AppUserModelID. Logon actions run only in the interactive user

@@ -906,6 +906,84 @@ Context "Safe Komorebi restart" {
     $restartSource = Get-Content -LiteralPath $restartPath -Raw
   }
 
+  It "checks rollback safety before defining or invoking Komorebi operations" {
+    $guardCallIndex = $restartSource.IndexOf(
+      "`nAssert-KomorebiRollbackRestartSafe`n"
+    )
+    $invokeFunctionIndex = $restartSource.IndexOf("function Invoke-Komorebic")
+    $firstMutationIndex = $restartSource.IndexOf('$komorebicPath =')
+
+    $guardCallIndex | Should -BeGreaterThan -1
+    $invokeFunctionIndex | Should -BeGreaterThan $guardCallIndex
+    $firstMutationIndex | Should -BeGreaterThan $guardCallIndex
+  }
+
+  It "blocks restart while GlazeWM is running" {
+    Mock Get-Process {
+      [pscustomobject]@{ Id = 1234; ProcessName = "glazewm" }
+    }
+    Mock Get-ItemProperty { [pscustomobject]@{} }
+    Mock Test-Path { $false }
+
+    {
+      & $restartPath -ConfigHome (Join-Path $TestDrive "komorebi")
+    } | Should -Throw "*GlazeWM*running*"
+    Should -Invoke Get-ItemProperty -Times 0
+    Should -Invoke Test-Path -Times 0
+  }
+
+  It "blocks restart while GlazeWM automatic startup is enabled" {
+    Mock Get-Process { @() }
+    Mock Get-ItemProperty {
+      [pscustomobject]@{ GlazeWM = '"C:\Program Files\GlazeWM.exe"' }
+    }
+    Mock Test-Path { $false }
+
+    {
+      & $restartPath -ConfigHome (Join-Path $TestDrive "komorebi")
+    } | Should -Throw "*automatic startup*"
+    Should -Invoke Test-Path -Times 0
+  }
+
+  It "treats a missing Windows Run key as safe" {
+    Mock Get-Process { @() }
+    Mock Get-ItemProperty {
+      throw [System.Management.Automation.ItemNotFoundException]::new(
+        "Run key missing"
+      )
+    }
+    Mock Test-Path { $false }
+
+    {
+      & $restartPath -ConfigHome (Join-Path $TestDrive "komorebi")
+    } | Should -Throw "*official Komorebi executable is missing*"
+  }
+
+  It "fails closed when GlazeWM process inspection fails" {
+    Mock Get-Process {
+      throw [System.UnauthorizedAccessException]::new("denied")
+    }
+    Mock Test-Path { $false }
+
+    {
+      & $restartPath -ConfigHome (Join-Path $TestDrive "komorebi")
+    } | Should -Throw "*Unable to inspect GlazeWM processes*denied*"
+    Should -Invoke Test-Path -Times 0
+  }
+
+  It "fails closed when GlazeWM Run registration inspection fails" {
+    Mock Get-Process { @() }
+    Mock Get-ItemProperty {
+      throw [System.UnauthorizedAccessException]::new("denied")
+    }
+    Mock Test-Path { $false }
+
+    {
+      & $restartPath -ConfigHome (Join-Path $TestDrive "komorebi")
+    } | Should -Throw "*Unable to inspect Windows Run registrations*denied*"
+    Should -Invoke Test-Path -Times 0
+  }
+
   It "captures and validates current state before stopping" {
     Assert-Equal $restartSource.Contains('Invoke-KomorebicJson -Path $komorebicPath -Arguments @("state")') $true
     Assert-Equal $restartSource.Contains("Save-KomorebiStateSnapshot") $true

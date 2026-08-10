@@ -5,6 +5,43 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+function Assert-KomorebiRollbackRestartSafe {
+  [CmdletBinding()]
+  param()
+
+  try {
+    $glazeProcesses = @(
+      Get-Process -ErrorAction Stop |
+        Where-Object { $_.ProcessName -ieq "glazewm" }
+    )
+  } catch {
+    throw "Unable to inspect GlazeWM processes: $($_.Exception.Message)"
+  }
+  if ($glazeProcesses.Count -gt 0) {
+    throw "GlazeWM is running; stop it before restarting Komorebi."
+  }
+
+  $runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+  try {
+    $runState = Get-ItemProperty -LiteralPath $runKey -ErrorAction Stop
+    $hasGlazeWMRunRegistration = (
+      $null -ne $runState.PSObject.Properties["GlazeWM"]
+    )
+  } catch [System.Management.Automation.ItemNotFoundException] {
+    return
+  } catch {
+    throw "Unable to inspect Windows Run registrations: $($_.Exception.Message)"
+  }
+  if ($hasGlazeWMRunRegistration) {
+    throw (
+      "GlazeWM automatic startup is enabled; disable it before restarting " +
+      "Komorebi."
+    )
+  }
+}
+
+Assert-KomorebiRollbackRestartSafe
+
 function Invoke-Komorebic {
   param(
     [Parameter(Mandatory = $true)]

@@ -32,12 +32,19 @@ From WSL:
 ./install.sh --with-komorebi
 ```
 
-Or run only the Windows setup:
+Or run only the Windows setup through the root orchestrator:
 
 ```bash
-powershell.exe -NoProfile -ExecutionPolicy Bypass \
-  -File "$(wslpath -w ~/dotfiles/windows/komorebi/install.ps1)"
+pwsh.exe -NoProfile -ExecutionPolicy Bypass \
+  -File "$(wslpath -w ~/dotfiles/windows/install.ps1)" \
+  -Mode Install -Component komorebi -AllowRollbackOnly
 ```
+
+The root Windows installer requires both the explicit `komorebi` component
+selection and `-AllowRollbackOnly`. It refuses to activate this rollback path
+while GlazeWM is running or registered for automatic startup. Directly running
+`windows/komorebi/install.ps1` is an internal/advanced entrypoint; it enforces
+the same GlazeWM inactivity guard before making any component changes.
 
 The installer uses the official WinGet packages `LGUG2Z.komorebi`,
 `LGUG2Z.whkd`, and `LGUG2Z.masir`. It also installs the pinned
@@ -90,27 +97,38 @@ Window transparency is disabled on every workspace.
 ## Update
 
 ```bash
-powershell.exe -NoProfile -ExecutionPolicy Bypass \
-  -File "$(wslpath -w ~/dotfiles/windows/komorebi/update-config.ps1)"
+pwsh.exe -NoProfile -ExecutionPolicy Bypass \
+  -File "$(wslpath -w ~/dotfiles/windows/install.ps1)" \
+  -Mode Update -Component komorebi -AllowRollbackOnly
 ```
 
-Use `-Force` only when the deployed config was intentionally edited and should
-be backed up and replaced.
+The normal update uses the root orchestrator and is permitted only when GlazeWM
+is inactive and has no automatic startup registration. To preserve an
+intentionally edited deployed config by backing it up before replacement, the
+internal/advanced direct entrypoint still accepts `-Force` and enforces the
+same guard:
+
+```bash
+pwsh.exe -NoProfile -ExecutionPolicy Bypass \
+  -File "$(wslpath -w ~/dotfiles/windows/komorebi/update-config.ps1)" -Force
+```
 
 Configuration updates use the guarded restart path because Komorebi's
 `replace-configuration` rebuilds workspace state and can move windows without
-an initial rule back to workspace 1. To restart manually, use the deployed
-script instead of killing `komorebi.exe`:
+an initial rule back to workspace 1. Manual restart is also a guarded
+rollback-only operation: use the deployed script only after disabling GlazeWM
+and its automatic startup registration, instead of killing `komorebi.exe`:
 
 ```bash
-powershell.exe -NoProfile -ExecutionPolicy Bypass \
+pwsh.exe -NoProfile -ExecutionPolicy Bypass \
   -Command '& "$env:KOMOREBI_CONFIG_HOME\restart.ps1"'
 ```
 
-The script snapshots the current Komorebi state, waits for a graceful stop,
-starts without `--clean-state`, and verifies that the saved windows returned to
-their monitor and workspace. A forced process kill can leave a stale state file
-and cause existing windows to be discovered on workspace 1.
+The deployed script fails closed if it cannot verify that GlazeWM is inactive,
+then snapshots the current Komorebi state, waits for a graceful stop, starts
+without `--clean-state`, and verifies that the saved windows returned to their
+monitor and workspace. A forced process kill can leave a stale state file and
+cause existing windows to be discovered on workspace 1.
 
 New windows use Komorebi's `Create` container behaviour. Komorebi inserts the
 new container after the focused container, which is the closest automatic BSP

@@ -6,6 +6,10 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+$rollbackSafetyModule = Join-Path $PSScriptRoot "..\rollback\RollbackSafety.psm1"
+Import-Module $rollbackSafetyModule -Force -ErrorAction Stop
+Assert-GlazeWMInactive
+
 $installerModule = Join-Path $PSScriptRoot "KomorebiInstaller.psm1"
 Import-Module $installerModule -Force -ErrorAction Stop
 $audioInstallerModule = Join-Path `

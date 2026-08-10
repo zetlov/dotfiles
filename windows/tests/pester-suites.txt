@@ -2,10 +2,12 @@ windows/autostart/tests/AppAutostart.Tests.ps1
 windows/audio/tests/AudioOutputInstaller.Tests.ps1
 windows/glazewm/tests/GlazeWMAutoTile.Tests.ps1
 windows/glazewm/tests/GlazeWMConfig.Tests.ps1
+windows/glazewm/tests/GlazeWMProcess.Tests.ps1
 windows/glazewm/tests/GlazeWMStartupApps.Tests.ps1
 windows/kanata/tests/KanataGameMode.Tests.ps1
 windows/kanata/tests/KanataInstaller.Tests.ps1
 windows/komorebi/tests/KomorebiInstaller.Tests.ps1
 windows/orchestrator/tests/WindowsOrchestrator.Tests.ps1
+windows/rollback/tests/RollbackSafety.Tests.ps1
 windows/wezterm/tests/WezTermConfig.Tests.ps1
 windows/zebar/tests/ZebarConfig.Tests.ps1

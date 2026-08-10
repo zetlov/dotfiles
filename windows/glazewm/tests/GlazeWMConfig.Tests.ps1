@@ -161,6 +161,10 @@ Describe "GlazeWM managed configuration" {
     $script = Get-Content -LiteralPath $startPath -Raw
 
     $script | Should -Match 'Wait-GlazeHelperExit'
+    $script | Should -Match 'Import-Module \$processModule'
+    $script | Should -Match (
+      'Stop-GlazeProcessTree -ProcessId \$existingDaemon\.ProcessId'
+    )
     $script | Should -Match '\$existingStartupHelper'
     $script | Should -Match '\$startupAppsProcess'
     $script | Should -Match '\$daemon\.ProcessId -ne \$startedDaemonProcess\.Id'
@@ -186,7 +190,7 @@ Describe "GlazeWM managed configuration" {
     $script | Should -Match 'previousRunValue'
     $script | Should -Match 'Remove-ItemProperty'
     $script | Should -Match 'elseif \(-not \$installationSucceeded\)'
-    $script | Should -Match 'Stop-Process -Id \$daemon\.ProcessId'
+    $script | Should -Match 'Stop-GlazeProcessTree -ProcessId \$daemon\.ProcessId'
     $script | Should -Match 'Start-Process `?[\s\S]*-FilePath \$zebarState\.ZebarPath'
     $script | Should -Match 'Rollback could not reload the previous GlazeWM config'
     $script | Should -Match 'Rollback could not restart the automatic tiling helper'
