@@ -144,7 +144,7 @@ Describe "Zetshell Zebar configuration" {
     $mise | Assert-Match 'npm run build'
     $workflow | Assert-Match 'jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654'
     $workflow | Assert-Match 'version:\s*2026\.8\.3'
-    $workflow | Assert-Match 'sha256:\s*66585ac496c10bf6fbf13272e3e550c1813aed0e1cb780b9bb73c1751de49289'
+    $workflow | Assert-Match '(?s)zebar:.+?sha256:\s*b09bfe160ffa33236f03547e6e0ef2bd937fcd7556b1feb5c2d227c174ef2a22'
     $workflow | Assert-Match 'working_directory:\s*windows/zebar'
     $workflow | Assert-Match 'mise run check'
     $workflow | Assert-Match 'git diff --exit-code -- dist'

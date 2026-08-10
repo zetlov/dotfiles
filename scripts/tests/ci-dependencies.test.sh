@@ -8,12 +8,37 @@ WORKFLOW="${REPO_ROOT}/.github/workflows/check.yaml"
 MISE_CONFIG="${REPO_ROOT}/mise.toml"
 PESTER_RUNNER="${REPO_ROOT}/windows/tests/Invoke-PesterSuite.ps1"
 PESTER_MANIFEST="${REPO_ROOT}/windows/tests/pester-suites.txt"
+LINUX_MISE_SHA256="66585ac496c10bf6fbf13272e3e550c1813aed0e1cb780b9bb73c1751de49289"
+WINDOWS_MISE_SHA256="b09bfe160ffa33236f03547e6e0ef2bd937fcd7556b1feb5c2d227c174ef2a22"
 
 failures=0
 
 fail() {
     echo "FAIL: $1" >&2
     failures=$((failures + 1))
+}
+
+get_job_block() {
+    local job_name=$1
+    awk -v job_name="${job_name}" '
+        $0 == "  " job_name ":" { in_job = 1 }
+        in_job && $0 ~ /^  [a-zA-Z0-9_-]+:$/ && $0 != "  " job_name ":" {
+            exit
+        }
+        in_job { print }
+    ' "${WORKFLOW}"
+}
+
+check_job_mise_hash() {
+    local job_name=$1
+    local expected_hash=$2
+    local unexpected_hash=$3
+    local job_block
+    job_block=$(get_job_block "${job_name}")
+    if ! printf '%s\n' "${job_block}" | rg -q "sha256: ${expected_hash}" \
+        || printf '%s\n' "${job_block}" | rg -q "sha256: ${unexpected_hash}"; then
+        fail "${job_name} should use the correct platform-specific mise checksum"
+    fi
 }
 
 if ! rg -q 'apt-get install -y .*\bzsh\b' "${WORKFLOW}"; then
@@ -86,6 +111,10 @@ fi
 if ! rg -q 'mise run check:configs' "${WORKFLOW}"; then
     fail "CI configuration validation should call the root check:configs mise task"
 fi
+check_job_mise_hash lint "${LINUX_MISE_SHA256}" "${WINDOWS_MISE_SHA256}"
+check_job_mise_hash test "${LINUX_MISE_SHA256}" "${WINDOWS_MISE_SHA256}"
+check_job_mise_hash windows "${WINDOWS_MISE_SHA256}" "${LINUX_MISE_SHA256}"
+check_job_mise_hash zebar "${WINDOWS_MISE_SHA256}" "${LINUX_MISE_SHA256}"
 if rg -q 'find (examples|stow|windows).*\.(lua|json)' "${WORKFLOW}"; then
     fail "CI configuration validation should not duplicate Lua or JSON checks"
 fi
