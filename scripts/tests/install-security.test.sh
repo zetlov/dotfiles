@@ -35,8 +35,11 @@ if rg -q 'runs-on:\s*(ubuntu|windows)-latest' \
     echo "FAIL: CI runner versions must use explicit labels" >&2
     exit 1
 fi
+workflow_path="${SCRIPT_DIR}/../../.github/workflows/check.yaml"
 if ! rg -q 'Install-Module Pester -RequiredVersion [0-9]+\.[0-9]+\.[0-9]+' \
-    "${SCRIPT_DIR}/../../.github/workflows/check.yaml"; then
+    "${workflow_path}" \
+    && ! rg -U -q 'Name\s*=\s*"Pester".*\n\s*RequiredVersion\s*=\s*"[0-9]+\.[0-9]+\.[0-9]+"' \
+        "${workflow_path}"; then
     echo "FAIL: Pester must use an exact version" >&2
     exit 1
 fi

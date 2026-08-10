@@ -36,31 +36,73 @@ jobs:
           version: 2026.8.3
           sha256: 66585ac496c10bf6fbf13272e3e550c1813aed0e1cb780b9bb73c1751de49289
       - name: Install test tools
-        run: sudo apt-get update && sudo apt-get install -y jq lua5.4 ripgrep stow zsh
+        run: sudo apt-get update && sudo apt-get install -y jq ripgrep stow zsh
       - name: Run repository tests
         run: mise run test
+      - name: Validate configuration syntax
+        run: mise run check:configs
       - name: Scan for secrets
         uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Validate configuration syntax
-        run: |
-          find stow -type f -name "*.lua" -print0 | xargs -0 -n1 luac -p
-          find examples stow windows -type f -name "*.json" -print0 | xargs -0 -n1 jq empty
 
   windows:
-    name: Test Windows configuration
+    name: Test Windows configuration (${{ matrix.runtime }})
+    runs-on: windows-2025
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runtime: PowerShell 7
+            shell: pwsh
+            task: check:windows
+          - runtime: Windows PowerShell 5.1
+            shell: powershell
+            task: check:windows-compat
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4
+        with:
+          version: 2026.8.3
+          sha256: 66585ac496c10bf6fbf13272e3e550c1813aed0e1cb780b9bb73c1751de49289
+          install: false
+          cache: false
+      - name: Install Pester
+        shell: ${{ matrix.shell }}
+        run: |
+          $installArgs = @{
+            Name = "Pester"
+            RequiredVersion = "5.7.1"
+            Scope = "CurrentUser"
+            Repository = "PSGallery"
+            Force = $true
+          }
+          if ("${{ matrix.shell }}" -eq "powershell") {
+            # Windows PowerShell ships Pester 3.4 under a different publisher.
+            $installArgs.SkipPublisherCheck = $true
+          }
+          $originalInstallationPolicy =
+            (Get-PSRepository -Name PSGallery).InstallationPolicy
+          try {
+            Set-PSRepository PSGallery -InstallationPolicy Trusted
+            Install-Module @installArgs
+          } finally {
+            Set-PSRepository PSGallery `
+              -InstallationPolicy $originalInstallationPolicy
+          }
+      - name: Run PowerShell tests
+        shell: ${{ matrix.shell }}
+        run: mise run --skip-tools ${{ matrix.task }}
+
+  zebar:
+    name: Test and build Zebar
     runs-on: windows-2025
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
-      - name: Run PowerShell tests
-        shell: powershell
-        run: |
-          Set-PSRepository PSGallery -InstallationPolicy Trusted
-          Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser -Force
-          Invoke-Pester -Path windows/kanata/tests,windows/komorebi/tests,windows/wezterm/tests,windows/glazewm/tests,windows/zebar/tests
       - name: Set up mise for Zebar
         uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4
         with:

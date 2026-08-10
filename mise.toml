@@ -14,8 +14,29 @@ done
 [tasks.lint]
 description = "Lint shell scripts"
 run = '''
-find . -type f -name '*.sh' -print0 | xargs -0 shellcheck --severity=error
+git ls-files -z -- '*.sh' | xargs -0 -r shellcheck --severity=error
 '''
+
+[tasks."check:configs"]
+description = "Validate tracked Lua and JSON configuration syntax"
+tools.lua = "5.4.8"
+run = '''
+git ls-files -z -- '*.lua' | xargs -0 -r -n1 luac -p
+git ls-files -z -- '*.json' | xargs -0 -r -n1 jq empty
+'''
+
+[tasks."check:zebar"]
+description = "Run Zebar tests, type checks, and build"
+dir = "windows/zebar"
+run = "mise run check"
+
+[tasks."check:windows"]
+description = "Run Windows tests with PowerShell 7"
+run = "pwsh.exe -NoProfile -ExecutionPolicy Bypass -File windows/tests/Invoke-PesterSuite.ps1"
+
+[tasks."check:windows-compat"]
+description = "Run Windows compatibility tests with Windows PowerShell 5.1"
+run = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File windows/tests/Invoke-PesterSuite.ps1"
 
 [tasks.security]
 description = "Check the public boundary and scan the working tree for secrets"
@@ -24,6 +45,10 @@ scripts/security/check-public-tree.sh
 gitleaks dir --no-banner --redact --exit-code 1 .
 '''
 
+[tasks."check:fast"]
+description = "Run portable tests, lint, config validation, and security checks"
+depends = ["test", "lint", "check:configs", "security"]
+
 [tasks.check]
-description = "Run tests, lint, and public-repository security checks"
-depends = ["test", "lint", "security"]
+description = "Run the default portable repository checks"
+depends = ["check:fast"]

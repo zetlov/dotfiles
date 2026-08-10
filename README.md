@@ -150,11 +150,17 @@ audio device patterns during install and update.
 
 ```bash
 mise run check
+mise run check:zebar
 
 # Or run the repository tests without mise-managed audit tools:
 for test_file in scripts/tests/*.test.sh; do "$test_file"; done
 scripts/security/check-public-tree.sh
 ```
+
+PowerShell 7 is the primary Windows validation runtime. Run the Windows suite
+with `mise run check:windows`; use `mise run check:windows-compat` to retain
+Windows PowerShell 5.1 compatibility. Both tasks require Pester 5.7.1 so that
+local and CI behavior remains consistent.
 
 The public boundary check rejects credential filenames, private assistant
 state, personal home paths, common personal email addresses, and symlinks that
