@@ -33,13 +33,78 @@ Describe "Windows component orchestrator" {
     }
   }
 
-  It "exports only the fixed-root execution boundary" {
+  It "loads the fixed implementation files in dependency order" {
+    $expectedFiles = @(
+      "Catalog.ps1",
+      "Planning.ps1",
+      "Runtime.ps1",
+      "Execution.ps1"
+    )
+    $moduleRoot = Split-Path -Parent $modulePath
+    foreach ($fileName in $expectedFiles) {
+      Test-Path -LiteralPath (Join-Path $moduleRoot $fileName) -PathType Leaf |
+        Should -BeTrue
+    }
+
+    $moduleSource = Get-Content -LiteralPath $modulePath -Raw
+    $lastIndex = -1
+    foreach ($fileName in $expectedFiles) {
+      $sourceExpression = '. (Join-Path $PSScriptRoot "' + $fileName + '")'
+      $sourceIndex = $moduleSource.IndexOf($sourceExpression)
+      $sourceIndex | Should -BeGreaterThan $lastIndex
+      $lastIndex = $sourceIndex
+    }
+  }
+
+  It "keeps each implementation file focused on its assigned functions" {
+    $expectedFunctions = [ordered]@{
+      "Catalog.ps1" = @(
+        "Test-WindowsEntrypointPath",
+        "Assert-WindowsTrustedEntrypoint",
+        "Get-RequiredProperty",
+        "Import-WindowsComponentCatalog"
+      )
+      "Planning.ps1" = @(
+        "Resolve-WindowsComponentPlan",
+        "Assert-WindowsComponentPlan",
+        "Assert-WindowsSelectionPolicy"
+      )
+      "Runtime.ps1" = @(
+        "Test-WindowsRunValue",
+        "Test-KomorebiStartupShortcut",
+        "Get-RollbackAutostartTasks",
+        "Assert-WindowsRuntimeCompatibility"
+      )
+      "Execution.ps1" = @(
+        "Invoke-WindowsComponentEntrypoint",
+        "Invoke-WindowsComponentPlan",
+        "Invoke-WindowsComponentSelection"
+      )
+    }
+    $moduleRoot = Split-Path -Parent $modulePath
+    foreach ($entry in $expectedFunctions.GetEnumerator()) {
+      $implementationPath = Join-Path $moduleRoot $entry.Key
+      if (-not (Test-Path -LiteralPath $implementationPath -PathType Leaf)) {
+        continue
+      }
+      $source = Get-Content -LiteralPath $implementationPath -Raw
+      $actualFunctions = @(
+        [regex]::Matches($source, '(?m)^function ([A-Za-z0-9-]+)') |
+          ForEach-Object { $_.Groups[1].Value }
+      )
+      $actualFunctions | Should -Be $entry.Value
+    }
+  }
+
+  It "exports exactly the supported public functions" {
     $module = Get-Module -Name "WindowsOrchestrator"
 
-    $module.ExportedFunctions.Keys |
-      Should -Contain "Invoke-WindowsComponentSelection"
-    $module.ExportedFunctions.Keys |
-      Should -Not -Contain "Invoke-WindowsComponentPlan"
+    @($module.ExportedFunctions.Keys | Sort-Object) | Should -Be @(
+      "Assert-WindowsComponentPlan",
+      "Import-WindowsComponentCatalog",
+      "Invoke-WindowsComponentSelection",
+      "Resolve-WindowsComponentPlan"
+    )
   }
 
   It "selects required components in deterministic order by default" {
