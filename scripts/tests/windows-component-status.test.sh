@@ -33,4 +33,14 @@ if ! rg -q 'mise run check:all-local' "${root_readme}"; then
   exit 1
 fi
 
+for required_text in \
+  'windows/install.ps1' \
+  'windows/components.json' \
+  '-PlanOnly'; do
+  if ! rg -Fq -- "${required_text}" "${root_readme}"; then
+    echo "FAIL: README must document the Windows root orchestrator: ${required_text}" >&2
+    exit 1
+  fi
+done
+
 echo "Windows component status tests passed"

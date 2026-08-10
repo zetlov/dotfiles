@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "components": [
+    {
+      "name": "glazewm",
+      "lifecycle": "active",
+      "selectionPolicy": "optional",
+      "order": 30,
+      "managedBy": [],
+      "conflictsWith": ["komorebi", "autostart"],
+      "requiresSelection": [],
+      "entrypoints": {
+        "install": "glazewm/install.ps1",
+        "update": "glazewm/install.ps1"
+      }
+    },
+    {
+      "name": "zebar",
+      "lifecycle": "active",
+      "selectionPolicy": "managed",
+      "order": 40,
+      "managedBy": ["glazewm"],
+      "conflictsWith": [],
+      "requiresSelection": [],
+      "entrypoints": {}
+    },
+    {
+      "name": "audio",
+      "lifecycle": "shared",
+      "selectionPolicy": "managed",
+      "order": 50,
+      "managedBy": ["glazewm", "komorebi"],
+      "conflictsWith": [],
+      "requiresSelection": [],
+      "entrypoints": {}
+    },
+    {
+      "name": "wezterm",
+      "lifecycle": "active",
+      "selectionPolicy": "required",
+      "order": 10,
+      "managedBy": [],
+      "conflictsWith": [],
+      "requiresSelection": [],
+      "entrypoints": {
+        "install": "wezterm/install.ps1",
+        "update": "wezterm/update-config.ps1"
+      }
+    },
+    {
+      "name": "kanata",
+      "lifecycle": "active",
+      "selectionPolicy": "required",
+      "order": 20,
+      "managedBy": [],
+      "conflictsWith": [],
+      "requiresSelection": [],
+      "entrypoints": {
+        "install": "kanata/install.ps1",
+        "update": "kanata/update-config.ps1"
+      }
+    },
+    {
+      "name": "komorebi",
+      "lifecycle": "rollback-only",
+      "selectionPolicy": "rollback-only",
+      "order": 60,
+      "managedBy": [],
+      "conflictsWith": ["glazewm"],
+      "requiresSelection": [],
+      "entrypoints": {
+        "install": "komorebi/install.ps1",
+        "update": "komorebi/update-config.ps1"
+      }
+    },
+    {
+      "name": "autostart",
+      "lifecycle": "rollback-only",
+      "selectionPolicy": "rollback-only",
+      "order": 70,
+      "managedBy": [],
+      "conflictsWith": ["glazewm"],
+      "requiresSelection": ["komorebi"],
+      "entrypoints": {
+        "install": "autostart/install.ps1",
+        "update": "autostart/install.ps1"
+      }
+    }
+  ]
+}

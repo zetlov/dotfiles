@@ -192,6 +192,34 @@ live under `windows/<component>/README.md`. A component README is authoritative
 for its deployed paths and host-runtime verification; the table above is
 authoritative for lifecycle status.
 
+`windows/components.json` is the machine-readable lifecycle and entrypoint
+catalog. The root `windows/install.ps1` validates that catalog, resolves a
+deterministic plan, preflights every selected entrypoint, and then runs the
+existing component installers sequentially. Its default plan contains only
+the required WezTerm and Kanata components; select GlazeWM explicitly when a
+window-manager deployment is intended.
+
+From a PowerShell prompt at the repository root, inspect a plan before applying
+it:
+
+```powershell
+& .\windows\install.ps1 -PlanOnly
+& .\windows\install.ps1 `
+  -Component @("wezterm", "kanata", "glazewm") `
+  -PlanOnly
+
+# Apply the reviewed plan.
+& .\windows\install.ps1 `
+  -Component @("wezterm", "kanata", "glazewm")
+```
+
+Zebar and audio remain managed dependencies and cannot be selected directly.
+Komorebi and standalone autostart require both explicit selection and
+`-AllowRollbackOnly`; conflicting active and rollback paths fail before any
+component runs. The root script is not a cross-component transaction: it stops
+at the first failure and preserves each component installer's own rollback and
+recovery contract. Use the component-specific CLI for advanced arguments.
+
 Windows host values can use ignored `*.local.json` files. For example,
 `windows/komorebi/audio-output.local.json` overrides the generic checked-in
 audio device patterns during install and update.

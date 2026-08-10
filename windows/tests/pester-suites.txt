@@ -6,5 +6,6 @@ windows/glazewm/tests/GlazeWMStartupApps.Tests.ps1
 windows/kanata/tests/KanataGameMode.Tests.ps1
 windows/kanata/tests/KanataInstaller.Tests.ps1
 windows/komorebi/tests/KomorebiInstaller.Tests.ps1
+windows/orchestrator/tests/WindowsOrchestrator.Tests.ps1
 windows/wezterm/tests/WezTermConfig.Tests.ps1
 windows/zebar/tests/ZebarConfig.Tests.ps1
