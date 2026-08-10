@@ -1,13 +1,16 @@
 # Windows app autostart
 
-This component manages per-user Task Scheduler entries for the GUI apps listed
-in `apps.json`. Windows starts the apps after logon; Komorebi independently
-routes their windows according to `windows/komorebi/komorebi.json`.
+This rollback-only component manages per-user Task Scheduler entries for the
+GUI apps listed in `apps.json`. It remains paired with the retained Komorebi
+rollback configuration and is not part of the active GlazeWM lifecycle.
+Windows starts the apps after logon; Komorebi independently routes their
+windows according to `windows/komorebi/komorebi.json`.
 
 The tasks use the `Dotfiles App - ` prefix in the Task Scheduler root.
 Installation updates that owned set and removes stale root tasks with the same
-prefix. It does not change tasks in other folders, Startup shortcuts, or
-application preferences outside that prefix.
+prefix. Run it only when deliberately restoring the Komorebi rollback path. It
+does not change tasks in other folders, Startup shortcuts, or application
+preferences outside that prefix.
 
 ## Install or update
 

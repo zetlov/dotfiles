@@ -28,7 +28,11 @@ git ls-files -z -- '*.json' | xargs -0 -r -n1 jq empty
 [tasks."check:zebar"]
 description = "Run Zebar tests, type checks, and build"
 dir = "windows/zebar"
-run = "mise run check"
+run = '''
+npm ci
+mise run check
+git diff --exit-code -- dist
+'''
 
 [tasks."check:windows"]
 description = "Run Windows tests with PowerShell 7"
@@ -52,3 +56,12 @@ depends = ["test", "lint", "check:configs", "security"]
 [tasks.check]
 description = "Run the default portable repository checks"
 depends = ["check:fast"]
+
+[tasks."check:all-local"]
+description = "Run every portable, Zebar, and Windows source verification task"
+depends = [
+  "check:fast",
+  "check:zebar",
+  "check:windows",
+  "check:windows-compat",
+]

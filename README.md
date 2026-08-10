@@ -172,10 +172,25 @@ Wallpaper assets are local. The default directory is
 The WSL bootstrap can deploy WezTerm, Kanata, and one explicitly selected
 Windows window manager. GlazeWM is the active configuration; Komorebi is kept
 temporarily as rollback material while the GlazeWM setup proves stable. Do not
-select both window-manager flags in one run. Login applications are managed
-through the active component or the per-user Task Scheduler entries in
-`windows/autostart`. Component-specific installation, update, rollback, and
-recovery instructions live under `windows/<component>/README.md`.
+select both window-manager flags in one run. GlazeWM owns active login-app
+startup and workspace placement. The standalone Task Scheduler component under
+`windows/autostart` remains paired with the Komorebi rollback path and is not
+part of the active GlazeWM lifecycle.
+
+| Component | Status | Ownership and deployment |
+| --- | --- | --- |
+| GlazeWM | active | Window manager, login-app startup, runtime helpers, and deployment through `windows/glazewm/install.ps1` |
+| Zebar | active | Bar source and tracked bundle; deployed by the GlazeWM installer through `windows/zebar/install.ps1` |
+| audio | shared | Hash-pinned `AudioDeviceCmdlets` dependency shared by the GlazeWM and Komorebi configurations |
+| WezTerm | active | Terminal configuration and user-scoped fonts through `windows/wezterm/install.ps1` |
+| Kanata | active | Keyboard service configuration and lifecycle through `windows/kanata/install.ps1` |
+| Komorebi | rollback-only | Previous window-manager configuration retained for a bounded rollback period |
+| autostart | rollback-only | Per-user scheduled tasks retained with the Komorebi rollback path |
+
+Component-specific installation, update, rollback, and recovery instructions
+live under `windows/<component>/README.md`. A component README is authoritative
+for its deployed paths and host-runtime verification; the table above is
+authoritative for lifecycle status.
 
 Windows host values can use ignored `*.local.json` files. For example,
 `windows/komorebi/audio-output.local.json` overrides the generic checked-in
@@ -183,19 +198,36 @@ audio device patterns during install and update.
 
 ## Validation
 
+The default check is intentionally portable: it covers repository shell tests,
+shell lint, Lua/JSON syntax, and the public-tree security boundary. It does not
+run the Zebar toolchain, Windows Pester suites, or host-runtime checks.
+
 ```bash
 mise run check
 mise run check:zebar
+mise run check:windows
+mise run check:windows-compat
+mise run check:all-local
 
 # Or run the repository tests without mise-managed audit tools:
 for test_file in scripts/tests/*.test.sh; do "$test_file"; done
 scripts/security/check-public-tree.sh
 ```
 
-PowerShell 7 is the primary Windows validation runtime. Run the Windows suite
-with `mise run check:windows`; use `mise run check:windows-compat` to retain
-Windows PowerShell 5.1 compatibility. Both tasks require Pester 5.7.1 so that
-local and CI behavior remains consistent.
+| Task | Boundary | Requirements |
+| --- | --- | --- |
+| `mise run check` | Portable repository tests, lint, config syntax, and security | Bootstrapped Linux/WSL checkout with `bash`, Git, jq, ripgrep, Stow, Zsh, and mise |
+| `mise run check:zebar` | Lockfile install, Zebar tests, type checking, production build, and tracked `dist/` drift check | mise-managed Node toolchain and npm registry access |
+| `mise run check:windows` | All Windows Pester suites under PowerShell 7 | Windows bridge and Pester 5.7.1 |
+| `mise run check:windows-compat` | The same suites under Windows PowerShell 5.1 | Windows bridge and Pester 5.7.1 |
+| `mise run check:all-local` | All four source-verification boundaries above | Every prerequisite in the rows above |
+
+PowerShell 7 is the primary Windows validation runtime; Windows PowerShell 5.1
+remains a compatibility target because deployed hotkeys and helpers still use
+`powershell.exe`. CI runs each boundary independently. Host-runtime checks such
+as process lifecycle, window preservation, scheduled tasks, font resolution,
+and actual configuration loading remain explicit post-deployment checks and
+are not implied by any source-verification task.
 
 The public boundary check rejects credential filenames, private assistant
 state, personal home paths, common personal email addresses, and symlinks that

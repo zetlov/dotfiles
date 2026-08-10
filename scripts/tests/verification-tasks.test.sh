@@ -22,7 +22,14 @@ with config_path.open("rb") as config_file:
     config = tomllib.load(config_file)
 
 tasks = config.get("tasks", {})
-expected_tasks = ("check:fast", "check:configs", "check:zebar", "check:windows")
+expected_tasks = (
+    "check:fast",
+    "check:configs",
+    "check:zebar",
+    "check:windows",
+    "check:windows-compat",
+    "check:all-local",
+)
 missing_tasks = [task for task in expected_tasks if task not in tasks]
 if missing_tasks:
     fail(f"root mise config is missing verification tasks: {', '.join(missing_tasks)}")
@@ -50,10 +57,28 @@ zebar_definition = " ".join(
 )
 if "zebar" not in zebar_definition.lower():
     fail("check:zebar should delegate to the Zebar verification workflow")
+if "npm ci" not in zebar_definition:
+    fail("check:zebar should install its lockfile-pinned dependencies")
+if "git diff --exit-code -- dist" not in zebar_definition:
+    fail("check:zebar should reject drift in the tracked production bundle")
 
 windows_definition = str(tasks["check:windows"].get("run", ""))
 if "Pester" not in windows_definition and "powershell" not in windows_definition.lower():
     fail("check:windows should run the Windows PowerShell verification workflow")
+
+all_local_dependencies = set(tasks["check:all-local"].get("depends", []))
+expected_dependencies = {
+    "check:fast",
+    "check:zebar",
+    "check:windows",
+    "check:windows-compat",
+}
+if all_local_dependencies != expected_dependencies:
+    fail("check:all-local should aggregate every local verification boundary")
+
+check_description = str(tasks.get("check", {}).get("description", "")).lower()
+if "portable" not in check_description:
+    fail("the default check task should state that it is portable, not comprehensive")
 PY
 
 echo "verification task tests passed"

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+script_dir=$(CDPATH= cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+repo_root=$(CDPATH= cd "${script_dir}/../.." && pwd)
+root_readme="${repo_root}/README.md"
+autostart_readme="${repo_root}/windows/autostart/README.md"
+
+expected_rows=(
+  "| GlazeWM | active |"
+  "| Zebar | active |"
+  "| audio | shared |"
+  "| WezTerm | active |"
+  "| Kanata | active |"
+  "| Komorebi | rollback-only |"
+  "| autostart | rollback-only |"
+)
+for row in "${expected_rows[@]}"; do
+  if ! rg -Fq "${row}" "${root_readme}"; then
+    echo "FAIL: Windows component table is missing exact row: ${row}" >&2
+    exit 1
+  fi
+done
+
+if ! rg -qi 'rollback-only' "${autostart_readme}"; then
+  echo "FAIL: Windows autostart must identify its rollback-only lifecycle" >&2
+  exit 1
+fi
+
+if ! rg -q 'mise run check:all-local' "${root_readme}"; then
+  echo "FAIL: README must expose the comprehensive local verification task" >&2
+  exit 1
+fi
+
+echo "Windows component status tests passed"
