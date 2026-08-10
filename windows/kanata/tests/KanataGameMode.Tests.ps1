@@ -96,6 +96,9 @@ Context "Get-KanataGameModeSettings" {
     Assert-Equal $settings.ResumeDelayMilliseconds 750
     Assert-Equal $settings.DisableOnlyWhenGameForeground $true
     Assert-Equal $settings.SteamIgnoreExecutables.Count 10
+    Assert-Equal (
+      $settings.SteamIgnoreDirectories -join "|"
+    ) "wallpaper_engine"
   }
 
   It "loads a valid settings file" {
@@ -112,6 +115,7 @@ Context "Get-KanataGameModeSettings" {
     "wallpaper32.exe",
     "wallpaper64.exe"
   ],
+  "steam_ignore_directories": ["wallpaper_engine"],
   "hard_off_executables": [
     "StreetFighter6.exe",
     "FactoryGameSteam.exe",
@@ -132,6 +136,7 @@ Context "Get-KanataGameModeSettings" {
     Assert-Equal $settings.DisableForSteamGames $true
     Assert-Equal $settings.DisableOnlyWhenGameForeground $true
     Assert-Equal $settings.SteamIgnoreExecutables.Count 2
+    Assert-Equal $settings.SteamIgnoreDirectories.Count 1
     Assert-Equal $settings.HardOffExecutables.Count 7
   }
 
@@ -146,6 +151,7 @@ Context "Get-KanataGameModeSettings" {
   "disable_for_steam_games": true,
   "disable_only_when_game_foreground": true,
   "steam_ignore_executables": [],
+  "steam_ignore_directories": [],
   "hard_off_executables": []
 }
 '@
@@ -154,6 +160,7 @@ Context "Get-KanataGameModeSettings" {
     $settings = Get-KanataGameModeSettings -Path $settingsPath
 
     Assert-Equal $settings.SteamIgnoreExecutables.Count 0
+    Assert-Equal $settings.SteamIgnoreDirectories.Count 0
     Assert-Equal $settings.HardOffExecutables.Count 0
   }
 
@@ -168,6 +175,7 @@ Context "Get-KanataGameModeSettings" {
   "disable_for_steam_games": true,
   "disable_only_when_game_foreground": true,
   "steam_ignore_executables": [],
+  "steam_ignore_directories": [],
   "hard_off_executables": ["C:\\Games\\game.exe"]
 }
 '@
@@ -280,6 +288,32 @@ Context "Test-KanataGameProcess" {
 
     Assert-Equal $isGame $false
   }
+
+  It "ignores every process inside a configured Steam utility directory" {
+    $isGame = Test-KanataGameProcess `
+      -ProcessName "winrtutil64" `
+      -ProcessPath "$steamCommon\wallpaper_engine\bin\winrtutil64.exe" `
+      -SteamCommonPaths @($steamCommon) `
+      -DisableForSteamGames $true `
+      -SteamIgnoreExecutables $steamIgnore `
+      -SteamIgnoreDirectories @("wallpaper_engine") `
+      -HardOffExecutables $hardOff
+
+    Assert-Equal $isGame $false
+  }
+
+  It "does not classify the Steam client as a game" {
+    $isGame = Test-KanataGameProcess `
+      -ProcessName "steam" `
+      -ProcessPath "C:\Program Files (x86)\Steam\steam.exe" `
+      -SteamCommonPaths @($steamCommon) `
+      -DisableForSteamGames $true `
+      -SteamIgnoreExecutables $steamIgnore `
+      -SteamIgnoreDirectories @("wallpaper_engine") `
+      -HardOffExecutables $hardOff
+
+    Assert-Equal $isGame $false
+  }
 }
 
 Context "Get-KanataForegroundGameProcesses" {
@@ -293,6 +327,7 @@ Context "Get-KanataForegroundGameProcesses" {
     $settings = [pscustomobject]@{
       DisableForSteamGames = $true
       SteamIgnoreExecutables = @()
+      SteamIgnoreDirectories = @()
       HardOffExecutables = @("StreetFighter6.exe")
     }
 
@@ -316,6 +351,7 @@ Context "Get-KanataForegroundGameProcesses" {
     $settings = [pscustomobject]@{
       DisableForSteamGames = $true
       SteamIgnoreExecutables = @()
+      SteamIgnoreDirectories = @()
       HardOffExecutables = @("StreetFighter6.exe")
     }
 

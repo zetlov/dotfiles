@@ -11,7 +11,7 @@
   ;; Space: tap=spc / hold=nav layer
   spcnav (tap-hold-press $tap $hold spc (layer-while-held nav))
 
-  ;; Physical LAlt (Super keycap): tap=IME Off / hold=Komorebi layer
+  ;; Physical LAlt (Super keycap): tap=IME Off / hold=window-manager layer
   lsuper (tap-hold-press 120 180 f13 (layer-while-held wm))
 
   ;; RAlt: tap=IME On / hold=Alt
@@ -19,6 +19,11 @@
 
   ;; Space+Q: send Escape, then turn IME off.
   escimeoff (macro esc f13)
+
+  ;; Keep Tab blocked through the physical Super key release boundary. The
+  ;; keycap is Left Alt, so checking only the physical Win keys leaves a short
+  ;; Ctrl+Alt+Tab race while the window-manager chord is being released.
+  safetab (switch ((input real lalt)) XX break () tab break)
 
   ;; Preserve Hyprland's Super+Shift+workspace move bindings.
   wm1 (switch ((or (input real lsft) (input real rsft))) C-A-S-1 break () C-A-1 break)
@@ -34,11 +39,11 @@
   wmminus (switch ((or (input real lsft) (input real rsft))) C-A-S-- break () C-A-- break)
   wmequal (switch ((or (input real lsft) (input real rsft))) C-A-S-= break () C-A-= break)
 
-  ;; Super focuses, Super+Ctrl moves, and Super+Shift+J changes layout.
-  wmh (switch ((or (input real lctl) (input real rctl))) C-A-S-h break ((or (input real lsft) (input real rsft))) XX break () C-A-h break)
-  wmj (switch ((or (input real lctl) (input real rctl))) C-A-S-j break ((or (input real lsft) (input real rsft))) C-A-S-; break () C-A-j break)
-  wmk (switch ((or (input real lctl) (input real rctl))) C-A-S-k break ((or (input real lsft) (input real rsft))) XX break () C-A-k break)
-  wml (switch ((or (input real lctl) (input real rctl))) C-A-S-l break ((or (input real lsft) (input real rsft))) XX break () C-A-l break)
+  ;; Use private function keys so window-manager chords never leak text input.
+  wmh (switch ((or (input real lctl) (input real rctl))) f20 break ((or (input real lsft) (input real rsft))) S-f16 break () f16 break)
+  wmj (switch ((or (input real lctl) (input real rctl))) f21 break ((or (input real lsft) (input real rsft))) S-f17 break () f17 break)
+  wmk (switch ((or (input real lctl) (input real rctl))) f22 break ((or (input real lsft) (input real rsft))) S-f18 break () f18 break)
+  wml (switch ((or (input real lctl) (input real rctl))) f23 break ((or (input real lsft) (input real rsft))) S-f19 break () f19 break)
   wmf (switch ((or (input real lsft) (input real rsft))) C-A-S-f break () C-A-f break)
   wmcomma (switch ((or (input real lctl) (input real rctl))) C-A-S-, break () C-A-, break)
   wmperiod (switch ((or (input real lctl) (input real rctl))) C-A-S-. break () C-A-. break)
@@ -60,7 +65,7 @@
 ;; Default layer (first deflayer = initial).
 (deflayer us
   _    _    _    _    _    _    _    _    _    _    _    _    _    _
-  _    _    _    _    _    _    _    _    _    _    _    _    _    _
+  @safetab _    _    _    _    _    _    _    _    _    _    _    _    _
   _    _    _    _    _    _    _    _    _    _    _    _    _
   _    _    _    _    _    _    _    _    _    _    _    _    _
   _    lalt @lsuper         @spcnav        @imeon _    _
@@ -70,7 +75,7 @@
 ;; JIS physical keyboard compensation layer.
 (deflayer jis
   _    _    _    _    _    _    _    _    _    _    _    _    _    _
-  _    _    _    _    _    _    _    _    _    _    _    _    _    ret
+  @safetab _    _    _    _    _    _    _    _    _    _    _    _    ret
   _    _    _    _    _    _    _    _    _    _    _    _    bspc
   _    _    _    _    _    _    _    _    _    _    _    rsft _
   _    lalt @lsuper         @spcnav        @imeon _    _
@@ -91,8 +96,8 @@
 (deflayer wm
   XX   @wm1 @wm2 @wm3 @wm4 @wm5 @wm6 @wm7 @wm8 @wm9 @wm0 @wmminus @wmequal XX
   XX   C-A-q XX    XX    XX    XX    XX    XX    XX    XX    pp    XX    XX    XX
-  XX   XX    M-S-s XX    @wmf  XX    @wmh  @wmj  @wmk  @wml  XX    XX    C-A-ret
+  XX   XX    M-S-s XX    @wmf  XX    @wmh  @wmj  @wmk  @wml  XX    XX    C-A-t
   XX   XX    XX    XX    XX    C-A-b XX    C-A-m @wmcomma @wmperiod XX XX    XX
-  _    _     XX                A-spc             _     XX    _
+  XX   _     XX                A-spc             _     XX    XX
   C-A-left C-A-down C-A-up C-A-rght
 )

@@ -15,6 +15,9 @@
     "webwallpaper32.exe",
     "webwallpaper64.exe"
   ],
+  "steam_ignore_directories": [
+    "wallpaper_engine"
+  ],
   "hard_off_executables": [
     "StreetFighter6.exe",
     "FactoryGameSteam.exe",

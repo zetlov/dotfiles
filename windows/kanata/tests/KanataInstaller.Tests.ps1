@@ -105,7 +105,7 @@ Context "Keyboard modifier configuration" {
       [regex]::Escape("(tap-hold-press 120 180 f13 (layer-while-held wm))") +
       "\s*$"
     if ($config -notmatch $leftSuper) {
-      throw "The Left Alt position must tap F13 and hold the Komorebi layer."
+      throw "The Left Alt position must tap F13 and hold the window-manager layer."
     }
 
     $rightIme = "(?m)^\s*imeon\s+" +
@@ -113,6 +113,22 @@ Context "Keyboard modifier configuration" {
       "\s*$"
     if ($config -notmatch $rightIme) {
       throw "Right Alt must tap F15 and hold the native Alt modifier."
+    }
+
+    $safeTab = "(?m)^\s*safetab\s+" +
+      [regex]::Escape(
+        "(switch ((input real lalt)) XX break () tab break)"
+      ) +
+      "\s*$"
+    if ($config -notmatch $safeTab) {
+      throw (
+        "Tab must stay blocked throughout the physical Super key chord " +
+        "and its release boundary."
+      )
+    }
+
+    if ($config -match 'safetab[^\r\n]*(input real lmet)') {
+      throw "The original Left Win position must retain native Alt+Tab."
     }
 
     $modifierRow = "(?m)^\s*_\s+lalt\s+@lsuper\s+@spcnav\s+@imeon\s+_\s+_\s*$"
@@ -137,6 +153,15 @@ Context "Keyboard modifier configuration" {
       Assert-Equal $layerTokens.Count $sourceTokens.Count
     }
 
+    foreach ($layerName in @("us", "jis")) {
+      $layer = [regex]::Match(
+        $activeConfig,
+        "(?ms)^\(deflayer\s+$layerName\s+(.*?)^\)\s*$"
+      )
+      $layerTokens = @($layer.Groups[1].Value -split "\s+" | Where-Object { $_ })
+      Assert-Equal $layerTokens[14] "@safetab"
+    }
+
     $wmLayer = [regex]::Match(
       $activeConfig,
       "(?ms)^\(deflayer\s+wm\s+(.*?)^\)\s*$"
@@ -150,10 +175,10 @@ Context "Keyboard modifier configuration" {
       "XX", "C-A-q", "XX", "XX", "XX", "XX", "XX", "XX", "XX", "XX",
       "pp", "XX", "XX", "XX",
       "XX", "XX", "M-S-s", "XX", "@wmf", "XX", "@wmh", "@wmj", "@wmk",
-      "@wml", "XX", "XX", "C-A-ret",
+      "@wml", "XX", "XX", "C-A-t",
       "XX", "XX", "XX", "XX", "XX", "C-A-b", "XX", "C-A-m", "@wmcomma",
       "@wmperiod", "XX", "XX", "XX",
-      "_", "_", "XX", "A-spc", "_", "XX", "_",
+      "XX", "_", "XX", "A-spc", "_", "XX", "XX",
       "C-A-left", "C-A-down", "C-A-up", "C-A-rght"
     )
     Assert-Equal ($tokens -join "|") ($expectedTokens -join "|")
@@ -187,10 +212,10 @@ Context "Keyboard modifier configuration" {
     }
 
     foreach ($mapping in @(
-      @{ Name = "wmh"; Key = "h"; Shift = "XX" },
-      @{ Name = "wmj"; Key = "j"; Shift = "C-A-S-;" },
-      @{ Name = "wmk"; Key = "k"; Shift = "XX" },
-      @{ Name = "wml"; Key = "l"; Shift = "XX" }
+      @{ Name = "wmh"; Focus = "f16"; Move = "f20"; Reserve = "S-f16" },
+      @{ Name = "wmj"; Focus = "f17"; Move = "f21"; Reserve = "S-f17" },
+      @{ Name = "wmk"; Focus = "f18"; Move = "f22"; Reserve = "S-f18" },
+      @{ Name = "wml"; Focus = "f19"; Move = "f23"; Reserve = "S-f19" }
     )) {
       $aliasLine = [regex]::Match(
         $activeConfig,
@@ -198,9 +223,9 @@ Context "Keyboard modifier configuration" {
       )
       Assert-Equal $aliasLine.Success $true
       $expected = (
-        "(switch $controlCondition C-A-S-$($mapping.Key) break " +
-        "$shiftCondition $($mapping.Shift) break " +
-        "() C-A-$($mapping.Key) break)"
+        "(switch $controlCondition $($mapping.Move) break " +
+        "$shiftCondition $($mapping.Reserve) break " +
+        "() $($mapping.Focus) break)"
       )
       Assert-Equal $aliasLine.Groups[1].Value $expected
     }
@@ -276,6 +301,21 @@ Context "Keyboard modifier configuration" {
 }
 
 Context "Game mode installer integration" {
+  It "does not recreate the shared Run key when it already exists" {
+    foreach ($relativePath in @(
+      "..\KanataGameMode.psm1",
+      "..\install.ps1",
+      "..\update-config.ps1"
+    )) {
+      $script = Get-Content `
+        -LiteralPath (Join-Path $PSScriptRoot $relativePath) `
+        -Raw
+      if ($script -match 'New-Item -Path \$runKey -Force') {
+        throw "The shared Windows Run key must not be recreated."
+      }
+    }
+  }
+
   BeforeAll {
     $installScript = Get-Content `
       -LiteralPath (Join-Path $PSScriptRoot "..\install.ps1") `

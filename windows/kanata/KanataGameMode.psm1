@@ -28,6 +28,34 @@ function ConvertTo-KanataExecutableList {
   return $executables
 }
 
+function ConvertTo-KanataDirectoryList {
+  param(
+    [Parameter(Mandatory = $true)]
+    [AllowEmptyCollection()]
+    [object[]]$Values,
+
+    [Parameter(Mandatory = $true)]
+    [string]$SettingName
+  )
+
+  $directories = @()
+  foreach ($value in $Values) {
+    $name = [string]$value
+    if (
+      [string]::IsNullOrWhiteSpace($name) -or
+      $name -in @(".", "..") -or
+      $name -notmatch '^[A-Za-z0-9][A-Za-z0-9._ -]*$'
+    ) {
+      throw "Invalid directory name in ${SettingName}: $name"
+    }
+    if ($directories -contains $name) {
+      throw "Duplicate directory name in ${SettingName}: $name"
+    }
+    $directories += $name
+  }
+  return $directories
+}
+
 function Resolve-KanataInstallDir {
   param(
     [Parameter(Mandatory = $true)]
@@ -74,6 +102,7 @@ function Get-KanataGameModeSettings {
     "disable_for_steam_games",
     "disable_only_when_game_foreground",
     "steam_ignore_executables",
+    "steam_ignore_directories",
     "hard_off_executables"
   )) {
     if (-not $raw.PSObject.Properties[$propertyName]) {
@@ -106,6 +135,11 @@ function Get-KanataGameModeSettings {
       -Values @($raw.hard_off_executables) `
       -SettingName "hard_off_executables"
   )
+  $steamIgnoreDirectories = @(
+    ConvertTo-KanataDirectoryList `
+      -Values @($raw.steam_ignore_directories) `
+      -SettingName "steam_ignore_directories"
+  )
   foreach ($executable in $steamIgnoreExecutables) {
     if ($hardOffExecutables -contains $executable) {
       throw "Executable cannot be both ignored and hard-off: $executable"
@@ -120,6 +154,7 @@ function Get-KanataGameModeSettings {
       [bool]$raw.disable_only_when_game_foreground
     )
     SteamIgnoreExecutables = $steamIgnoreExecutables
+    SteamIgnoreDirectories = $steamIgnoreDirectories
     HardOffExecutables = $hardOffExecutables
   }
 }
@@ -204,6 +239,8 @@ function Test-KanataGameProcess {
 
     [string[]]$SteamIgnoreExecutables = @(),
 
+    [string[]]$SteamIgnoreDirectories = @(),
+
     [string[]]$HardOffExecutables = @()
   )
 
@@ -247,6 +284,18 @@ function Test-KanataGameProcess {
       $normalizedCommonPath,
       [System.StringComparison]::OrdinalIgnoreCase
     )) {
+      $relativePath = $normalizedProcessPath.Substring(
+        $normalizedCommonPath.Length
+      )
+      $topLevelDirectory = @($relativePath.Split("\"))[0]
+      foreach ($ignoredDirectory in $SteamIgnoreDirectories) {
+        if ($topLevelDirectory.Equals(
+          $ignoredDirectory,
+          [System.StringComparison]::OrdinalIgnoreCase
+        )) {
+          return $false
+        }
+      }
       foreach ($ignoredExecutable in $SteamIgnoreExecutables) {
         if ($processExecutable.Equals(
           $ignoredExecutable,
@@ -284,6 +333,7 @@ function Get-KanataRunningGameProcesses {
       -SteamCommonPaths $SteamCommonPaths `
       -DisableForSteamGames $Settings.DisableForSteamGames `
       -SteamIgnoreExecutables $Settings.SteamIgnoreExecutables `
+      -SteamIgnoreDirectories $Settings.SteamIgnoreDirectories `
       -HardOffExecutables $Settings.HardOffExecutables
     ) {
       $matches += $process
@@ -372,6 +422,7 @@ function Get-KanataForegroundGameProcesses {
     -SteamCommonPaths $SteamCommonPaths `
     -DisableForSteamGames $Settings.DisableForSteamGames `
     -SteamIgnoreExecutables $Settings.SteamIgnoreExecutables `
+    -SteamIgnoreDirectories $Settings.SteamIgnoreDirectories `
     -HardOffExecutables $Settings.HardOffExecutables
   ) {
     return @($process)
@@ -569,7 +620,9 @@ function Set-KanataGameModeRunEntry {
   $command = Get-KanataGameModeRunCommand -InstallDir $InstallDir
   $legacyCommands = @(Get-KanataLegacyRunCommands -InstallDir $InstallDir)
 
-  New-Item -Path $runKey -Force | Out-Null
+  if (-not (Test-Path -LiteralPath $runKey)) {
+    New-Item -Path $runKey | Out-Null
+  }
   $runValues = Get-ItemProperty -LiteralPath $runKey
   $existingGameMode = $runValues.PSObject.Properties[$name]
   if (

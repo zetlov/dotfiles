@@ -20,7 +20,7 @@ registry update, and Kanata process run with normal user privileges.
 
 - Swap the physical Left Win and Left Alt keycaps.
 - The original Left Alt position becomes Left Super: tap for IME off, or hold
-  it to activate the dedicated Komorebi shortcut layer.
+  it to activate the dedicated window-manager shortcut layer.
 - `Left Super+Space` from that position emits the native Windows `Alt+Space`
   shortcut.
 - `Left Super+S` emits the native Windows `Win+Shift+S` shortcut for selecting
@@ -34,10 +34,11 @@ registry update, and Kanata process run with normal user privileges.
 - `Space+Q` sends Escape and then turns the IME off.
 
 The dual-role keys use `tap-hold-press`, so pressing another key selects the
-hold action immediately rather than waiting for the hold timeout. The Komorebi
-layer emits complete `Ctrl+Alt` output chords only for configured shortcuts and
-blocks other keys. Because the Left Super keycap now uses the physical Left Alt
-scan code, reserved shortcuts such as `Win+L` never reach Windows.
+hold action immediately rather than waiting for the hold timeout. The
+window-manager layer emits complete `Ctrl+Alt` output chords only for configured
+shortcuts and blocks other keys. Because the Left Super keycap now uses the
+physical Left Alt scan code, reserved shortcuts such as `Win+L` never reach
+Windows.
 
 ## Game mode
 
@@ -59,6 +60,11 @@ Long-running Steam utilities can be excluded with `steam_ignore_executables`.
 Wallpaper Engine's renderer, service, UI, web wallpaper, and application
 injection processes are excluded by default so they do not keep Kanata
 disabled after a game exits.
+
+Entire Steam application directories can be excluded with
+`steam_ignore_directories`. The default `wallpaper_engine` entry also covers
+helper executables such as `winrtutil64.exe`, while Steam itself remains
+outside `steamapps\common` and is never classified as a game.
 
 Stopping the user-mode Kanata process avoids remapping while a detected game is
 focused, but it does not guarantee compatibility with every anti-cheat system.

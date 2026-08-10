@@ -127,7 +127,9 @@ try {
           Remove-Item -LiteralPath $destinationPath -Force
         }
       }
-      New-Item -Path $runKey -Force | Out-Null
+      if (-not (Test-Path -LiteralPath $runKey)) {
+        New-Item -Path $runKey | Out-Null
+      }
       foreach ($name in @("DotfilesKanataGameMode", "Kanata")) {
         $state = $previousRunValues[$name]
         if ($state.Existed) {
