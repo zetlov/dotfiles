@@ -927,7 +927,34 @@ Context "Safe Komorebi restart" {
 Context "Windows audio output switching" {
   BeforeAll {
     $scriptPath = Join-Path $PSScriptRoot "..\switch-audio.ps1"
+    $scriptSource = Get-Content -LiteralPath $scriptPath -Raw
     . $scriptPath -NoRun
+  }
+
+  It "imports the pinned module through its exact CurrentUser manifest path" {
+    $scriptSource | Should -Match '"WindowsPowerShell"'
+    $scriptSource | Should -Match '"Modules"'
+    $scriptSource | Should -Match '"AudioDeviceCmdlets"'
+    $scriptSource | Should -Match '"3\.1\.0\.2"'
+    $scriptSource | Should -Match (
+      '(?s)Import-Module\s+.*?-Name \$manifestPath'
+    )
+    $scriptSource | Should -Not -Match (
+      'Import-Module\s+["'']AudioDeviceCmdlets["'']'
+    )
+    $scriptSource | Should -Match 'Get-FileHash'
+    foreach ($hashPart in @(
+      "0D657B8DDE3DC9B090716162ED351B68F",
+      "785F50483B92E937528D082469DBFB5",
+      "2E81666DD09BC835C669DAF9771686FD",
+      "AD5651FBEBB600A234F11AF80CA5D25F"
+    )) {
+      $scriptSource | Should -Match $hashPart
+    }
+    $scriptSource | Should -Match (
+      '\$module\.ExportedCommands\["Get-AudioDevice"\]'
+    )
+    $scriptSource | Should -Match '& \$GetCommand -List'
   }
 
   It "resolves configured playback devices without depending on display prefixes" {
@@ -1000,6 +1027,144 @@ Context "Windows audio output switching" {
     }
     Assert-Throws {
       Resolve-AudioOutputDevices -Devices $devices -Patterns @("Desktop speakers")
+    }
+  }
+
+  It "invokes audio commands and notification through injected scriptblocks" {
+    $script:getAudioInvocation = $null
+    $script:setAudioInvocation = $null
+    $script:audioNotification = $null
+    $devices = @(
+      [pscustomobject]@{
+        Type = "Playback"
+        Name = "Headphones (USB headset)"
+        ID = "a"
+        Default = $true
+      },
+      [pscustomobject]@{
+        Type = "Playback"
+        Name = "Speakers (Desktop speakers)"
+        ID = "b"
+        Default = $false
+      }
+    )
+
+    Invoke-AudioOutputChange `
+      -Patterns @("USB headset", "Desktop speakers") `
+      -GetCommand {
+        $script:getAudioInvocation = $args -join "|"
+        return $devices
+      } `
+      -SetCommand {
+        $script:setAudioInvocation = $args -join "|"
+      } `
+      -Notifier {
+        param($title, $message)
+        $script:audioNotification = "$title|$message"
+      }
+
+    Assert-Equal $script:getAudioInvocation "-List"
+    Assert-Equal $script:setAudioInvocation "-ID|b"
+    Assert-Equal $script:audioNotification (
+      "Audio output|Speakers (Desktop speakers)"
+    )
+  }
+
+  Context "validated runtime module loading" {
+    BeforeEach {
+      $runtimeDocumentsPath = Join-Path `
+        $TestDrive `
+        ([guid]::NewGuid().ToString("N"))
+      $runtimeModuleRoot = Join-Path $runtimeDocumentsPath (
+        "WindowsPowerShell\Modules\AudioDeviceCmdlets\3.1.0.2"
+      )
+      $runtimeManifestPath = Join-Path `
+        $runtimeModuleRoot `
+        "AudioDeviceCmdlets.psd1"
+      $runtimeManifestHash = (
+        "0D657B8DDE3DC9B090716162ED351B68F" +
+        "785F50483B92E937528D082469DBFB5"
+      )
+      $runtimeDllHash = (
+        "2E81666DD09BC835C669DAF9771686FD" +
+        "AD5651FBEBB600A234F11AF80CA5D25F"
+      )
+      $global:AudioRuntimeTestModule = [pscustomobject]@{
+        ModuleBase = $runtimeModuleRoot
+        Version = [version]"3.1.0.2"
+        ExportedCommands = @{
+          "Get-AudioDevice" = { param([switch]$List) }
+          "Set-AudioDevice" = { param([string]$ID) }
+        }
+      }
+
+      Mock Test-Path { $true }
+      Mock Get-Item {
+        [pscustomobject]@{
+          Attributes = [System.IO.FileAttributes]::Normal
+        }
+      }
+      Mock Get-FileHash {
+        if ($LiteralPath -like "*.psd1") {
+          return [pscustomobject]@{ Hash = $runtimeManifestHash }
+        }
+        return [pscustomobject]@{ Hash = $runtimeDllHash }
+      }
+      Mock Import-Module { $global:AudioRuntimeTestModule }
+    }
+
+    AfterEach {
+      Remove-Variable `
+        -Name AudioRuntimeTestModule `
+        -Scope Global `
+        -ErrorAction SilentlyContinue
+    }
+
+    It "accepts the exact validated module without changing audio" {
+      {
+        . $scriptPath `
+          -ValidateOnly `
+          -DocumentsPath $runtimeDocumentsPath
+      } | Should -Not -Throw
+
+      Should -Invoke Import-Module -Times 1 -ParameterFilter {
+        $Name -eq $runtimeManifestPath -and
+          $Force -and
+          $PassThru -and
+          $ErrorAction -eq "Stop"
+      }
+    }
+
+    It "rejects an imported module from a different ModuleBase" {
+      $global:AudioRuntimeTestModule.ModuleBase = "C:\attacker"
+
+      {
+        . $scriptPath `
+          -ValidateOnly `
+          -DocumentsPath $runtimeDocumentsPath
+      } | Should -Throw "*integrity*"
+    }
+
+    It "rejects an imported module with a different version" {
+      $global:AudioRuntimeTestModule.Version = [version]"3.1.0.1"
+
+      {
+        . $scriptPath `
+          -ValidateOnly `
+          -DocumentsPath $runtimeDocumentsPath
+      } | Should -Throw "*integrity*"
+    }
+
+    It "rejects an imported module without both required exports" {
+      $global:AudioRuntimeTestModule.ExportedCommands = @{
+        "Get-AudioDevice" = { param([switch]$List) }
+      }
+
+      {
+        . $scriptPath `
+          -ValidateOnly `
+          -DocumentsPath $runtimeDocumentsPath
+      } | Should -Throw "*integrity*"
     }
   }
 }

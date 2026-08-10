@@ -1,5 +1,7 @@
 param(
-  [switch]$NoRun = $false
+  [switch]$NoRun = $false,
+  [switch]$ValidateOnly = $false,
+  [string]$DocumentsPath = [Environment]::GetFolderPath("MyDocuments")
 )
 
 Set-StrictMode -Version Latest
@@ -145,19 +147,176 @@ function Show-AudioOutputNotification {
   }
 }
 
+function Assert-AudioModulePathIsNotReparsePoint {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Path,
+
+    [Parameter(Mandatory = $true)]
+    [string]$Description
+  )
+
+  if (-not (Test-Path -LiteralPath $Path)) {
+    throw "AudioDeviceCmdlets integrity check failed: missing $Description at $Path"
+  }
+  $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+  if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+    throw "AudioDeviceCmdlets integrity check failed: $Description is a reparse point."
+  }
+}
+
+function Assert-AudioModuleFileHash {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Path,
+
+    [Parameter(Mandatory = $true)]
+    [string]$ExpectedSha256
+  )
+
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+    throw "AudioDeviceCmdlets integrity check failed: required file is missing: $Path"
+  }
+  Assert-AudioModulePathIsNotReparsePoint `
+    -Path $Path `
+    -Description "module file"
+
+  $actualHash = (Get-FileHash -LiteralPath $Path -Algorithm "SHA256").Hash
+  if (-not [string]::Equals(
+    [string]$actualHash,
+    $ExpectedSha256,
+    [System.StringComparison]::OrdinalIgnoreCase
+  )) {
+    throw "AudioDeviceCmdlets integrity check failed for: $Path"
+  }
+}
+
+function Resolve-TrustedAudioDeviceModule {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$DocumentsPath
+  )
+
+  if ([string]::IsNullOrWhiteSpace($DocumentsPath)) {
+    throw "Cannot resolve the current user's MyDocuments directory."
+  }
+
+  $requiredVersion = "3.1.0.2"
+  $windowsPowerShellPath = Join-Path $DocumentsPath "WindowsPowerShell"
+  $modulesPath = Join-Path $windowsPowerShellPath "Modules"
+  $moduleContainerPath = Join-Path $modulesPath "AudioDeviceCmdlets"
+  $moduleRoot = Join-Path $moduleContainerPath $requiredVersion
+  $manifestPath = Join-Path $moduleRoot "AudioDeviceCmdlets.psd1"
+  $dllPath = Join-Path $moduleRoot "AudioDeviceCmdlets.dll"
+  $manifestSha256 = (
+    "0D657B8DDE3DC9B090716162ED351B68F" +
+    "785F50483B92E937528D082469DBFB5"
+  )
+  $dllSha256 = (
+    "2E81666DD09BC835C669DAF9771686FD" +
+    "AD5651FBEBB600A234F11AF80CA5D25F"
+  )
+
+  foreach ($pathEntry in @(
+    @($windowsPowerShellPath, "WindowsPowerShell directory"),
+    @($modulesPath, "PowerShell modules directory"),
+    @($moduleContainerPath, "module container directory"),
+    @($moduleRoot, "module version directory")
+  )) {
+    Assert-AudioModulePathIsNotReparsePoint `
+      -Path $pathEntry[0] `
+      -Description $pathEntry[1]
+  }
+  Assert-AudioModuleFileHash `
+    -Path $manifestPath `
+    -ExpectedSha256 $manifestSha256
+  Assert-AudioModuleFileHash `
+    -Path $dllPath `
+    -ExpectedSha256 $dllSha256
+
+  $modules = @(
+    Import-Module `
+      -Name $manifestPath `
+      -Force `
+      -PassThru `
+      -ErrorAction Stop
+  )
+  if ($modules.Count -ne 1) {
+    throw "AudioDeviceCmdlets integrity check failed: import returned an unexpected module count."
+  }
+
+  $module = $modules[0]
+  $expectedModuleBase = [System.IO.Path]::GetFullPath($moduleRoot).TrimEnd(
+    [System.IO.Path]::DirectorySeparatorChar,
+    [System.IO.Path]::AltDirectorySeparatorChar
+  )
+  $actualModuleBase = [System.IO.Path]::GetFullPath(
+    [string]$module.ModuleBase
+  ).TrimEnd(
+    [System.IO.Path]::DirectorySeparatorChar,
+    [System.IO.Path]::AltDirectorySeparatorChar
+  )
+  if (-not [string]::Equals(
+    $actualModuleBase,
+    $expectedModuleBase,
+    [System.StringComparison]::OrdinalIgnoreCase
+  )) {
+    throw "AudioDeviceCmdlets integrity check failed: the imported module path is unexpected."
+  }
+  if ($module.Version -ne [version]$requiredVersion) {
+    throw "AudioDeviceCmdlets integrity check failed: the imported module version is unexpected."
+  }
+
+  $getAudioDevice = $module.ExportedCommands["Get-AudioDevice"]
+  $setAudioDevice = $module.ExportedCommands["Set-AudioDevice"]
+  if ($null -eq $getAudioDevice -or $null -eq $setAudioDevice) {
+    throw "AudioDeviceCmdlets integrity check failed: required commands are not exported."
+  }
+
+  return [pscustomobject]@{
+    Module = $module
+    GetCommand = $getAudioDevice
+    SetCommand = $setAudioDevice
+  }
+}
+
+function Invoke-AudioOutputChange {
+  param(
+    [Parameter(Mandatory = $true)]
+    [object]$GetCommand,
+
+    [Parameter(Mandatory = $true)]
+    [object]$SetCommand,
+
+    [Parameter(Mandatory = $true)]
+    [string[]]$Patterns,
+
+    [scriptblock]$Notifier
+  )
+
+  $devices = @(& $GetCommand -List)
+  $configuredDevices = @(
+    Resolve-AudioOutputDevices -Devices $devices -Patterns $Patterns
+  )
+  $nextDevice = Select-NextAudioOutputDevice -Devices $configuredDevices
+  & $SetCommand -ID $nextDevice.ID | Out-Null
+  Write-Host "Audio output: $($nextDevice.Name)"
+  Show-AudioOutputNotification -DeviceName $nextDevice.Name -Notifier $Notifier
+  return $nextDevice
+}
+
 if ($NoRun) {
   return
 }
 
-$requiredVersion = "3.1.0.2"
+$trustedModule = Resolve-TrustedAudioDeviceModule -DocumentsPath $DocumentsPath
+if ($ValidateOnly) {
+  return $trustedModule.Module
+}
+
 $configPath = Join-Path $PSScriptRoot "audio-output.json"
 $patterns = @(Get-AudioOutputPatterns -Path $configPath)
-Import-Module "AudioDeviceCmdlets" -RequiredVersion $requiredVersion -ErrorAction Stop
-$devices = @(Get-AudioDevice -List)
-$configuredDevices = @(
-  Resolve-AudioOutputDevices -Devices $devices -Patterns $patterns
-)
-$nextDevice = Select-NextAudioOutputDevice -Devices $configuredDevices
-Set-AudioDevice -ID $nextDevice.ID | Out-Null
-Write-Host "Audio output: $($nextDevice.Name)"
-Show-AudioOutputNotification -DeviceName $nextDevice.Name
+[void](Invoke-AudioOutputChange `
+  -GetCommand $trustedModule.GetCommand `
+  -SetCommand $trustedModule.SetCommand `
+  -Patterns $patterns)
