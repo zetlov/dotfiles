@@ -5,6 +5,7 @@ set -euo pipefail
 SCRIPT_DIR=$(CDPATH= cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(CDPATH= cd "${SCRIPT_DIR}/../.." && pwd)
 VALIDATOR="${REPO_ROOT}/scripts/validate-install-target.sh"
+BOOTSTRAP="${REPO_ROOT}/scripts/install/bootstrap.sh"
 TEST_ROOT=$(mktemp -d)
 trap 'rm -rf "${TEST_ROOT}"' EXIT
 
@@ -75,15 +76,15 @@ for package in libva-nvidia-driver nvidia-open nvidia-settings nvidia-utils olla
         exit 1
     fi
 done
-if ! rg -q -- '--with-nvidia' "${REPO_ROOT}/install.sh"; then
+if ! rg -q -- '--with-nvidia' "${BOOTSTRAP}"; then
     echo "FAIL: NVIDIA packages should require an explicit install flag" >&2
     exit 1
 fi
-if ! rg -q -- '--with-glazewm' "${REPO_ROOT}/install.sh"; then
+if ! rg -q -- '--with-glazewm' "${BOOTSTRAP}"; then
     echo "FAIL: GlazeWM should require an explicit install flag" >&2
     exit 1
 fi
-if ! rg -q 'Choose only one Windows window manager' "${REPO_ROOT}/install.sh"; then
+if ! rg -q 'Choose only one Windows window manager' "${BOOTSTRAP}"; then
     echo "FAIL: the installer should reject selecting both window managers" >&2
     exit 1
 fi

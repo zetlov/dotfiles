@@ -4,16 +4,19 @@ set -euo pipefail
 
 SCRIPT_DIR=$(CDPATH= cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 INSTALL_SCRIPT="${SCRIPT_DIR}/../../install.sh"
+BOOTSTRAP_SCRIPT="${SCRIPT_DIR}/../install/bootstrap.sh"
+INSTALL_SOURCES=("${INSTALL_SCRIPT}" "${SCRIPT_DIR}"/../install/*.sh)
 TEST_ROOT=$(mktemp -d)
 trap 'rm -rf "${TEST_ROOT}"' EXIT
 
-if rg -q 'releases/latest|curl[^\n]*\|\s*(sh|bash)|wget[^\n]*-O\s*-|git clone' "${INSTALL_SCRIPT}"; then
+if rg -q 'releases/latest|curl[^\n]*\|\s*(sh|bash)|wget[^\n]*-O\s*-|git clone' \
+    "${INSTALL_SOURCES[@]}"; then
     echo "FAIL: install.sh must not execute mutable or unverified remote content" >&2
     exit 1
 fi
 
-if ! rg -q 'WIN32YANK_SHA256=' "${INSTALL_SCRIPT}" \
-    || ! rg -q 'sha256sum --check' "${INSTALL_SCRIPT}"; then
+if ! rg -q 'WIN32YANK_SHA256=' "${BOOTSTRAP_SCRIPT}" \
+    || ! rg -q 'sha256sum --check' "${BOOTSTRAP_SCRIPT}"; then
     echo "FAIL: downloaded executable archives must use a pinned SHA-256" >&2
     exit 1
 fi
@@ -60,7 +63,8 @@ if ! rg -U -q 'jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654.*\n\s*wi
     echo "FAIL: mise-action v4 must pin the mise binary version and checksum" >&2
     exit 1
 fi
-if rg -q 'DOTFILES_DIR="\$\{DOTFILES_DIR:-|DOTFILES_(OS_RELEASE|ARCH|ENV)' "${INSTALL_SCRIPT}"; then
+if rg -q 'DOTFILES_DIR="\$\{DOTFILES_DIR:-|DOTFILES_(OS_RELEASE|ARCH|ENV)' \
+    "${INSTALL_SOURCES[@]}"; then
     echo "FAIL: install trust boundaries must not be replaceable through environment variables" >&2
     exit 1
 fi

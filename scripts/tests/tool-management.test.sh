@@ -6,7 +6,7 @@ SCRIPT_DIR=$(CDPATH= cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(CDPATH= cd "${SCRIPT_DIR}/../.." && pwd)
 COMMON_PACKAGES="${REPO_ROOT}/packages/common.txt"
 GLOBAL_MISE_CONFIG="${REPO_ROOT}/stow/base/.config/mise/conf.d/dotfiles.toml"
-INSTALL_SCRIPT="${REPO_ROOT}/install.sh"
+INSTALL_SCRIPT="${REPO_ROOT}/scripts/install/bootstrap.sh"
 
 assert_package_present() {
     local package="$1"

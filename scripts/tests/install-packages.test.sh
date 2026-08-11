@@ -185,8 +185,9 @@ if [ "$(count_calls "${yay_log}")" -ne 0 ]; then
     fail "failed pending-update probe reached yay"
 fi
 
-if rg -q '^[[:space:]]*yay -Syu' "${repo_root}/install.sh"; then
-    fail "thin install dispatcher still performs package upgrades directly"
+if rg -q '^[[:space:]]*yay -Syu' \
+    "${repo_root}/scripts/install/bootstrap.sh"; then
+    fail "bootstrap still performs package upgrades directly"
 fi
 
 echo "install package tests passed"

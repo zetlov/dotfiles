@@ -5,6 +5,7 @@ set -euo pipefail
 script_dir=$(CDPATH='' cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(CDPATH='' cd "${script_dir}/../.." && pwd)
 helper="${repo_root}/scripts/install/windows-components.sh"
+bootstrap="${repo_root}/scripts/install/bootstrap.sh"
 
 # shellcheck source=../install/windows-components.sh
 # shellcheck disable=SC1091
@@ -47,7 +48,7 @@ if rg -q '\bjq\b|components\.json' "${helper}"; then
     fail "Bash bridge duplicates catalog selection or requires preinstalled jq"
 fi
 if ! rg -Fq 'Windows integration: required catalog components' \
-    "${repo_root}/install.sh"; then
+    "${bootstrap}"; then
     fail "dry-run does not describe catalog-driven required components"
 fi
 
@@ -177,27 +178,27 @@ if ! rg -Fq \
 fi
 
 if [ "$(rg -c '^    apply_windows_components[[:space:]]' \
-    "${repo_root}/install.sh")" -ne 1 ]; then
+    "${bootstrap}")" -ne 1 ]; then
     fail "install.sh must invoke the Windows component bridge exactly once"
 fi
 if [ "$(rg -c '^    preflight_windows_components[[:space:]]' \
-    "${repo_root}/install.sh")" -ne 1 ]; then
+    "${bootstrap}")" -ne 1 ]; then
     fail "install.sh must invoke the Windows preflight exactly once"
 fi
 preflight_line=$(rg -n '^    preflight_windows_components[[:space:]]' \
-    "${repo_root}/install.sh" | cut -d: -f1)
+    "${bootstrap}" | cut -d: -f1)
 container_validation_line=$(rg -n '^"\$\{DOTFILES_DIR\}/scripts/validate-container-backend\.sh"' \
-    "${repo_root}/install.sh" | cut -d: -f1)
+    "${bootstrap}" | cut -d: -f1)
 if [ "${preflight_line}" -ge "${container_validation_line}" ]; then
     fail "Windows preflight must run before container validation"
 fi
 for legacy_installer in wezterm kanata komorebi glazewm; do
     if rg -Fq "windows/${legacy_installer}/install.ps1" \
-        "${repo_root}/install.sh"; then
+        "${bootstrap}"; then
         fail "install.sh retains a legacy ${legacy_installer} invocation"
     fi
 done
-if rg -q 'powershell\.exe[[:space:]]+-' "${repo_root}/install.sh"; then
+if rg -q 'powershell\.exe[[:space:]]+-' "${bootstrap}"; then
     fail "install.sh retains a Windows PowerShell executable invocation"
 fi
 
