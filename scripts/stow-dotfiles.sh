@@ -58,11 +58,6 @@ HOME=$(resolve_root_path "HOME" "${HOME}")
 DOTFILES_DIR=$(resolve_root_path "DOTFILES_DIR" "${DOTFILES_DIR}")
 readonly STOW_ROOT="${DOTFILES_DIR}/stow"
 
-if ! command -v stow >/dev/null 2>&1; then
-    echo "GNU Stow is required to link dotfiles." >&2
-    exit 1
-fi
-
 for package in "${STOW_PACKAGES[@]}"; do
     if [ ! -d "${STOW_ROOT}/${package}" ]; then
         echo "Required Stow package not found: ${STOW_ROOT}/${package}" >&2
@@ -358,6 +353,11 @@ if [ "${PREFLIGHT_ONLY}" -eq 1 ]; then
     transaction_complete=1
     echo "Stow preflight passed for profile: ${STOW_PROFILE}"
     exit 0
+fi
+
+if ! command -v stow >/dev/null 2>&1; then
+    echo "GNU Stow is required to link dotfiles." >&2
+    exit 1
 fi
 
 zshrc_source="${STOW_ROOT}/base/.zshrc"

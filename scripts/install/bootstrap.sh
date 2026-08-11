@@ -13,6 +13,9 @@ source "${DOTFILES_DIR}/scripts/install/windows-components.sh"
 # shellcheck source=scripts/install/packages.sh
 # shellcheck disable=SC1091
 source "${DOTFILES_DIR}/scripts/install/packages.sh"
+# shellcheck source=scripts/install/dotfiles.sh
+# shellcheck disable=SC1091
+source "${DOTFILES_DIR}/scripts/install/dotfiles.sh"
 
 # --- 0. 引数パース ---
 
@@ -60,35 +63,6 @@ if [ "${WITH_KOMOREBI}" -eq 1 ] && [ "${WITH_GLAZEWM}" -eq 1 ]; then
     exit 1
 fi
 
-link_dotfiles() {
-    echo "Validating local configuration and Stow targets..."
-    HOME="${HOME}" "${DOTFILES_DIR}/scripts/init-local-config.sh" \
-        --dry-run "--profile=${STOW_PROFILE}" >/dev/null
-    DOTFILES_DIR="${DOTFILES_DIR}" "${DOTFILES_DIR}/scripts/stow-dotfiles.sh" \
-        "--profile=${STOW_PROFILE}" --preflight >/dev/null
-    echo "Initializing local configuration..."
-    "${DOTFILES_DIR}/scripts/init-local-config.sh" "--profile=${STOW_PROFILE}"
-    echo "Linking dotfiles with Stow..."
-    DOTFILES_DIR="${DOTFILES_DIR}" "${DOTFILES_DIR}/scripts/stow-dotfiles.sh" \
-        "--profile=${STOW_PROFILE}"
-}
-
-install_mise_tools() {
-    echo "Installing mise-managed development tools..."
-    (
-        cd "${DOTFILES_DIR}"
-        mise install
-    )
-}
-
-install_herdr_integration() {
-    echo "Installing the Herdr Codex integration..."
-    (
-        cd "${DOTFILES_DIR}"
-        mise exec -- herdr integration install codex
-    )
-}
-
 if [ "${LINK_ONLY}" -eq 1 ] && [ "${STOW_PROFILE}" = "auto" ]; then
     STOW_PROFILE=desktop
 fi
@@ -102,7 +76,8 @@ if [ "${LINK_ONLY}" -eq 1 ] && [ "${DRY_RUN}" -eq 1 ]; then
 fi
 
 if [ "${LINK_ONLY}" -eq 1 ]; then
-    link_dotfiles
+    preflight_dotfiles "${DOTFILES_DIR}" "${STOW_PROFILE}"
+    apply_dotfiles "${DOTFILES_DIR}" "${STOW_PROFILE}"
     echo "Link-only installation complete."
     exit 0
 fi
@@ -187,6 +162,7 @@ fi
 
 "${DOTFILES_DIR}/scripts/validate-container-backend.sh" \
     "${ENV}" "${CONTAINER_BACKEND}"
+preflight_dotfiles "${DOTFILES_DIR}" "${STOW_PROFILE}"
 
 # --- 2. パッケージインストール (common + 環境固有) ---
 
@@ -205,9 +181,9 @@ apply_package_profiles \
     "${PACKAGE_PROFILES[@]}"
 
 # --- 3. Dotfiles Linking (Stow) ---
-link_dotfiles
-install_mise_tools
-install_herdr_integration
+apply_dotfiles "${DOTFILES_DIR}" "${STOW_PROFILE}"
+install_mise_tools "${DOTFILES_DIR}"
+install_herdr_integration "${DOTFILES_DIR}"
 
 # --- 6. WSL固有設定 ---
 

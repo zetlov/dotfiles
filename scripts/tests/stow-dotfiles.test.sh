@@ -164,6 +164,39 @@ test_preflight_does_not_link_files() {
         "Stow preflight should not create links"
 }
 
+test_preflight_does_not_require_stow_executable() {
+    local fixture_root="${TEST_ROOT}/preflight-without-stow"
+    local paths
+    local repo
+    local home
+    local isolated_path="${fixture_root}/bin"
+    local tool
+    paths=$(create_fixture "${fixture_root}")
+    repo=$(printf '%s\n' "${paths}" | sed -n '1p')
+    home=$(printf '%s\n' "${paths}" | sed -n '2p')
+    mkdir -p "${isolated_path}"
+
+    for tool in dirname find readlink realpath; do
+        ln -s "$(command -v "${tool}")" "${isolated_path}/${tool}"
+    done
+
+    PATH="${isolated_path}" HOME="${home}" DOTFILES_DIR="${repo}" \
+        /usr/bin/bash "${STOW_SCRIPT}" --profile=wsl --preflight \
+        >/dev/null
+
+    if PATH="${isolated_path}" HOME="${home}" DOTFILES_DIR="${repo}" \
+        /usr/bin/bash "${STOW_SCRIPT}" --profile=wsl \
+        >"${fixture_root}/apply.stdout" \
+        2>"${fixture_root}/apply.stderr"; then
+        echo "FAIL: Stow apply should require the stow executable" >&2
+        exit 1
+    fi
+    if ! rg -q 'GNU Stow is required' "${fixture_root}/apply.stderr"; then
+        echo "FAIL: missing stow should produce clear apply guidance" >&2
+        exit 1
+    fi
+}
+
 test_removes_inactive_profile_links() {
     local fixture_root="${TEST_ROOT}/profile-transition"
     local paths
@@ -498,6 +531,7 @@ test_links_exact_package_set
 test_links_wsl_profile_without_desktop_files
 test_rejects_unknown_profile_before_mutation
 test_preflight_does_not_link_files
+test_preflight_does_not_require_stow_executable
 test_removes_inactive_profile_links
 test_restores_inactive_links_when_stow_fails
 test_restores_inactive_link_when_unlink_reports_failure
