@@ -31,15 +31,17 @@ Import-Module $modulePath -Force -ErrorAction Stop
 
 if ($ListComponents) {
   $conflictingOptions = @(
-    "Mode",
-    "Component",
-    "ComponentCsv",
-    "AdditionalComponentCsv",
-    "AllowRollbackOnly",
-    "PlanOnly",
-    "Preflight",
-    "AddKanataDefenderExclusion"
-  ) | Where-Object { $PSBoundParameters.ContainsKey($_) }
+    @(
+      "Mode",
+      "Component",
+      "ComponentCsv",
+      "AdditionalComponentCsv",
+      "AllowRollbackOnly",
+      "PlanOnly",
+      "Preflight",
+      "AddKanataDefenderExclusion"
+    ) | Where-Object { $PSBoundParameters.ContainsKey($_) }
+  )
   if ($conflictingOptions.Count -gt 0) {
     throw (
       "-ListComponents cannot be combined with execution options: " +
