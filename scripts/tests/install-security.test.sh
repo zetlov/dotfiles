@@ -5,6 +5,7 @@ set -euo pipefail
 SCRIPT_DIR=$(CDPATH= cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 INSTALL_SCRIPT="${SCRIPT_DIR}/../../install.sh"
 BOOTSTRAP_SCRIPT="${SCRIPT_DIR}/../install/bootstrap.sh"
+WSL_EXTRAS_SCRIPT="${SCRIPT_DIR}/../install/wsl-extras.sh"
 INSTALL_SOURCES=("${INSTALL_SCRIPT}" "${SCRIPT_DIR}"/../install/*.sh)
 TEST_ROOT=$(mktemp -d)
 trap 'rm -rf "${TEST_ROOT}"' EXIT
@@ -15,8 +16,8 @@ if rg -q 'releases/latest|curl[^\n]*\|\s*(sh|bash)|wget[^\n]*-O\s*-|git clone' \
     exit 1
 fi
 
-if ! rg -q 'WIN32YANK_SHA256=' "${BOOTSTRAP_SCRIPT}" \
-    || ! rg -q 'sha256sum --check' "${BOOTSTRAP_SCRIPT}"; then
+if ! rg -q 'WIN32YANK_SHA256=' "${WSL_EXTRAS_SCRIPT}" \
+    || ! rg -q 'sha256sum --check' "${WSL_EXTRAS_SCRIPT}"; then
     echo "FAIL: downloaded executable archives must use a pinned SHA-256" >&2
     exit 1
 fi

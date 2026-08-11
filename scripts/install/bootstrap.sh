@@ -4,8 +4,6 @@ set -eu
 
 SCRIPT_DIR=$(CDPATH= cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 DOTFILES_DIR=$(CDPATH= cd "${SCRIPT_DIR}/../.." && pwd)
-WIN32YANK_VERSION="0.1.1"
-WIN32YANK_SHA256="247c9a05b94387a884b49d3db13f806b1677dfc38020f955f719be6902260cd6"
 
 # shellcheck source=scripts/install/windows-components.sh
 # shellcheck disable=SC1091
@@ -16,6 +14,9 @@ source "${DOTFILES_DIR}/scripts/install/packages.sh"
 # shellcheck source=scripts/install/dotfiles.sh
 # shellcheck disable=SC1091
 source "${DOTFILES_DIR}/scripts/install/dotfiles.sh"
+# shellcheck source=scripts/install/wsl-extras.sh
+# shellcheck disable=SC1091
+source "${DOTFILES_DIR}/scripts/install/wsl-extras.sh"
 
 # --- 0. 引数パース ---
 
@@ -188,48 +189,11 @@ install_herdr_integration "${DOTFILES_DIR}"
 # --- 6. WSL固有設定 ---
 
 if [ "${ENV}" = "wsl" ]; then
-    echo "Applying WSL specific settings..."
-
     apply_windows_components \
         "${DOTFILES_DIR}" \
         "${WINDOWS_ADDITIONAL_COMPONENT}" \
         "${KANATA_ADD_DEFENDER_EXCLUSION:-0}"
-
-    # install win32yank to home/bin (clipboard bridge for neovim)
-    if [ ! -f "${HOME}/bin/win32yank.exe" ]; then
-        echo "installing win32yank.exe to ${HOME}/bin"
-        mkdir -p "${HOME}/bin"
-        win32yank_zip=$(mktemp --suffix=.zip)
-        curl -fsSL -o "$win32yank_zip" \
-            "https://github.com/equalsraf/win32yank/releases/download/v${WIN32YANK_VERSION}/win32yank-x64.zip"
-        printf '%s  %s\n' "${WIN32YANK_SHA256}" "${win32yank_zip}" \
-            | sha256sum --check --status
-        unzip -o "$win32yank_zip" win32yank.exe -d "${HOME}/bin"
-        chmod +x "${HOME}/bin/win32yank.exe"
-        rm -f "$win32yank_zip"
-    fi
-
-    # SumatraPDF (vimtex viewer)
-    if ! command -v SumatraPDF.exe &>/dev/null; then
-        echo "installing SumatraPDF via winget..."
-        "${WINDOWS_PWSH_BIN}" -NoProfile -Command \
-            "winget install --id SumatraPDF.SumatraPDF -e --silent --accept-source-agreements --accept-package-agreements" \
-            || echo "winget install failed (maybe already installed)"
-
-        WIN_LOCALAPPDATA="$("${WINDOWS_PWSH_BIN}" -NoProfile \
-            -Command 'Write-Output $Env:LOCALAPPDATA' | tr -d '\r')"
-        LOCALAPPDATA_WSL="$(wslpath "$WIN_LOCALAPPDATA")"
-        SUMATRA_EXE="${LOCALAPPDATA_WSL}/Programs/SumatraPDF/SumatraPDF.exe"
-
-        if [ -f "$SUMATRA_EXE" ]; then
-            mkdir -p "${HOME}/bin"
-            ln -sf "$SUMATRA_EXE" "${HOME}/bin/SumatraPDF.exe"
-            echo "linked SumatraPDF.exe to ~/bin"
-        else
-            echo "warning: SumatraPDF.exe not found at $SUMATRA_EXE" >&2
-        fi
-    fi
-
+    apply_wsl_extras "${HOME}" "${WINDOWS_PWSH_BIN}"
 fi
 
 echo "Installation Complete!"
