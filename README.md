@@ -24,12 +24,22 @@ and reviewing `yay` separately:
 ./install.sh --with-komorebi
 ./install.sh --with-glazewm
 ./install.sh --with-nvidia
+./install.sh --system-upgrade
 ```
 
-The full bootstrap upgrades packages and installs official/AUR packages. It
-does not bootstrap an AUR helper or execute remote installer scripts. Review
-the AUR packages in `packages/` before running it. Use `--link-only` when
-preparing an existing machine or reviewing a clone.
+The full bootstrap installs missing official/AUR packages without upgrading
+unrelated installed packages. Add `--system-upgrade` to run a full system and
+AUR upgrade before installing the selected profiles. This flag does not update
+mise tools or Windows components beyond the normal bootstrap behavior. The
+installer does not bootstrap an AUR helper or execute remote installer scripts.
+Review the AUR packages in `packages/` before running it. Use `--link-only`
+when preparing an existing machine or reviewing a clone.
+
+To avoid an unsupported Arch partial upgrade, the default package phase checks
+the current sync database with `pacman -Qu` and stops before mutation when
+system updates are pending. In that state, review the update and rerun with
+`--system-upgrade`; the installer never refreshes the package database without
+performing the matching full upgrade.
 
 `--dry-run` validates the target and prints the detected environment,
 container backend, and package profiles without changing the system or HOME.

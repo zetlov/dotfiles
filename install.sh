@@ -10,6 +10,9 @@ WIN32YANK_SHA256="247c9a05b94387a884b49d3db13f806b1677dfc38020f955f719be6902260c
 # shellcheck source=scripts/install/windows-components.sh
 # shellcheck disable=SC1091
 source "${DOTFILES_DIR}/scripts/install/windows-components.sh"
+# shellcheck source=scripts/install/packages.sh
+# shellcheck disable=SC1091
+source "${DOTFILES_DIR}/scripts/install/packages.sh"
 
 # --- 0. 引数パース ---
 
@@ -20,6 +23,7 @@ WITH_GLAZEWM=0
 WITH_NVIDIA=0
 LINK_ONLY=0
 DRY_RUN=0
+SYSTEM_UPGRADE=0
 CONTAINER_BACKEND=auto
 STOW_PROFILE=auto
 for arg in "$@"; do
@@ -31,6 +35,7 @@ for arg in "$@"; do
         --with-nvidia) WITH_NVIDIA=1 ;;
         --link-only) LINK_ONLY=1 ;;
         --dry-run) DRY_RUN=1 ;;
+        --system-upgrade) SYSTEM_UPGRADE=1 ;;
         --container-backend=auto) CONTAINER_BACKEND=auto ;;
         --container-backend=desktop) CONTAINER_BACKEND=desktop ;;
         --container-backend=native) CONTAINER_BACKEND=native ;;
@@ -159,7 +164,11 @@ if [ "${DRY_RUN}" -eq 1 ]; then
     for profile in "${PACKAGE_PROFILES[@]}"; do
         echo "Package profile: ${profile}"
     done
-    echo "System upgrade: yes"
+    if [ "${SYSTEM_UPGRADE}" -eq 1 ]; then
+        echo "System upgrade: yes"
+    else
+        echo "System upgrade: no"
+    fi
     echo "Dotfile profile: ${STOW_PROFILE}"
     if [ "${ENV}" = "wsl" ]; then
         echo "Windows integration: required catalog components"
@@ -181,35 +190,19 @@ fi
 
 # --- 2. パッケージインストール (common + 環境固有) ---
 
-if ! command -v yay &>/dev/null; then
+if ! YAY_BIN=$(command -v yay); then
     echo "The full bootstrap requires an existing yay installation." >&2
     echo "Install and review an AUR helper separately, or use --link-only." >&2
     exit 1
 fi
+PACMAN_BIN="/usr/bin/pacman"
 
-install_packages() {
-    local file="$1"
-    local pkgs
-    if [ ! -f "$file" ]; then
-        echo "Required package profile is missing: ${file}" >&2
-        return 1
-    fi
-    pkgs=$(grep -v '^\s*#' "$file" | grep -v '^\s*$' || true)
-    if [ -n "$pkgs" ]; then
-        printf '%s\n' "$pkgs" | yay -S --needed -
-    else
-        echo "No packages listed in ${file}, skipping."
-    fi
-}
-
-yay -Syu
-
-for profile in "${PACKAGE_PROFILES[@]}"; do
-    if [ "${profile}" = "tex.txt" ]; then
-        echo "Installing TeX Live packages..."
-    fi
-    install_packages "${DOTFILES_DIR}/packages/${profile}"
-done
+apply_package_profiles \
+    "${DOTFILES_DIR}" \
+    "${SYSTEM_UPGRADE}" \
+    "${YAY_BIN}" \
+    "${PACMAN_BIN}" \
+    "${PACKAGE_PROFILES[@]}"
 
 # --- 3. Dotfiles Linking (Stow) ---
 link_dotfiles
