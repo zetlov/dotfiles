@@ -15,6 +15,8 @@ param(
 
   [switch]$Preflight = $false,
 
+  [switch]$ListComponents = $false,
+
   [switch]$AddKanataDefenderExclusion = $false
 )
 
@@ -26,6 +28,40 @@ $modulePath = Join-Path `
   "orchestrator\WindowsOrchestrator.psm1"
 
 Import-Module $modulePath -Force -ErrorAction Stop
+
+if ($ListComponents) {
+  $conflictingOptions = @(
+    "Mode",
+    "Component",
+    "ComponentCsv",
+    "AdditionalComponentCsv",
+    "AllowRollbackOnly",
+    "PlanOnly",
+    "Preflight",
+    "AddKanataDefenderExclusion"
+  ) | Where-Object { $PSBoundParameters.ContainsKey($_) }
+  if ($conflictingOptions.Count -gt 0) {
+    throw (
+      "-ListComponents cannot be combined with execution options: " +
+      ($conflictingOptions -join ", ")
+    )
+  }
+
+  $manifestPath = Join-Path $PSScriptRoot "components.json"
+  Import-WindowsComponentCatalog `
+    -Path $manifestPath `
+    -WindowsRoot $PSScriptRoot |
+    Sort-Object Order, Name |
+    Select-Object `
+      Name, `
+      Lifecycle, `
+      SelectionPolicy, `
+      Order, `
+      ManagedBy, `
+      ConflictsWith, `
+      RequiresSelection
+  return
+}
 
 if (
   $PSBoundParameters.ContainsKey("AdditionalComponentCsv") -and

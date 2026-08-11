@@ -662,6 +662,37 @@ Describe "Windows component orchestrator" {
     $plan[0].Entrypoint | Should -Be "glazewm/install.ps1"
   }
 
+  It "lists lifecycle metadata from the authoritative catalog" {
+    $components = @(& $rootInstallerPath -ListComponents)
+
+    @($components.Name) | Should -Be @(
+      "wezterm",
+      "kanata",
+      "glazewm",
+      "zebar",
+      "audio",
+      "komorebi",
+      "autostart"
+    )
+    @($components | ForEach-Object {
+      "$($_.Name)|$($_.Lifecycle)|$($_.SelectionPolicy)"
+    }) | Should -Be @(
+      "wezterm|active|required",
+      "kanata|active|required",
+      "glazewm|active|optional",
+      "zebar|active|managed",
+      "audio|shared|managed",
+      "komorebi|rollback-only|rollback-only",
+      "autostart|rollback-only|rollback-only"
+    )
+  }
+
+  It "keeps component listing isolated from execution options" {
+    {
+      & $rootInstallerPath -ListComponents -Component "glazewm"
+    } | Should -Throw "*ListComponents*cannot be combined*"
+  }
+
   It "accepts a scalar component CSV from native File callers" {
     $plan = @(
       & $rootInstallerPath `

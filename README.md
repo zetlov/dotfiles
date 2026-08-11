@@ -189,18 +189,19 @@ part of the active GlazeWM lifecycle.
 
 | Component | Status | Ownership and deployment |
 | --- | --- | --- |
-| GlazeWM | active | Window manager, login-app startup, runtime helpers, and deployment through `windows/glazewm/install.ps1` |
-| Zebar | active | Bar source and tracked bundle; deployed by the GlazeWM installer through `windows/zebar/install.ps1` |
+| glazewm | active | Window manager, login-app startup, runtime helpers, and deployment through `windows/glazewm/install.ps1` |
+| zebar | active | Bar source and tracked bundle; deployed by the GlazeWM installer through `windows/zebar/install.ps1` |
 | audio | shared | Hash-pinned `AudioDeviceCmdlets` dependency shared by the GlazeWM and Komorebi configurations |
-| WezTerm | active | Terminal configuration and user-scoped fonts through `windows/wezterm/install.ps1` |
-| Kanata | active | Keyboard service configuration and lifecycle through `windows/kanata/install.ps1` |
-| Komorebi | rollback-only | Previous window-manager configuration retained for a bounded rollback period |
+| wezterm | active | Terminal configuration and user-scoped fonts through `windows/wezterm/install.ps1` |
+| kanata | active | Keyboard service configuration and lifecycle through `windows/kanata/install.ps1` |
+| komorebi | rollback-only | Previous window-manager configuration retained for a bounded rollback period |
 | autostart | rollback-only | Per-user scheduled tasks retained with the Komorebi rollback path |
 
 Component-specific installation, update, rollback, and recovery instructions
 live under `windows/<component>/README.md`. A component README is authoritative
-for its deployed paths and host-runtime verification; the table above is
-authoritative for lifecycle status.
+for its deployed paths and host-runtime verification. The table above is a
+human-readable summary derived from `windows/components.json`; the catalog is
+the only authoritative source for lifecycle and selection policy.
 
 `windows/components.json` is the machine-readable lifecycle and entrypoint
 catalog. The root `windows/install.ps1` validates that catalog, resolves a
@@ -236,6 +237,7 @@ From a PowerShell prompt at the repository root, inspect a plan before applying
 it:
 
 ```powershell
+& .\windows\install.ps1 -ListComponents
 & .\windows\install.ps1 -PlanOnly
 & .\windows\install.ps1 `
   -Component @("wezterm", "kanata", "glazewm") `
