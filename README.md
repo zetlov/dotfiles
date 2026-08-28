@@ -151,14 +151,16 @@ Tool ownership follows the runtime boundary:
   then runs `mise install`.
 
 The global Node.js entry tracks a major release so compatible updates arrive
-without jumping to a new major. Codex CLI, Herdr, and AWS CLI track their latest
-releases because they are interactive user tools, while repository audit tools
-use exact versions for reproducible checks. Herdr's official installation
-documentation supports mise; using that path avoids executing a mutable remote
-installer during bootstrap. A full bootstrap also installs Herdr's Codex
-integration after the local Codex configuration has been initialized. AWS
-credentials and configuration remain local and are never managed by this
-repository. Run `mise upgrade` to update the global tools. Keep
+without jumping to a new major. Codex CLI, difit, Hunk, Herdr, and AWS CLI track
+their latest releases because they are interactive user tools, while repository
+audit tools use exact versions for reproducible checks. difit is installed
+through mise's npm backend; Hunk uses the standalone release binary from mise's
+registry. These routes follow each project's documented installation path and
+avoid adding OS-level packages or executing mutable remote installer scripts
+during bootstrap. A full bootstrap also installs Herdr's Codex integration
+after the local Codex configuration has been initialized. AWS credentials and
+configuration remain local and are never managed by this repository. Run
+`mise upgrade` to update the global tools. Keep
 machine- or project-specific overrides in an untracked
 `~/.config/mise/config.toml` or project `mise.local.toml` rather than adding
 them to the shared global file. The unmanaged global file has higher priority

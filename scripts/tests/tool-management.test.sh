@@ -19,7 +19,7 @@ assert_package_present() {
 
 assert_package_absent() {
     local package="$1"
-    if rg -x -q "${package}" "${COMMON_PACKAGES}"; then
+    if rg -x -q "${package}" "${REPO_ROOT}"/packages/*.txt; then
         echo "FAIL: ${package} should be managed by mise, not yay/pacman" >&2
         exit 1
     fi
@@ -45,7 +45,12 @@ if ! rg -q '^"npm:@openai/codex" = "latest"$' "${GLOBAL_MISE_CONFIG}"; then
     exit 1
 fi
 
-for tool in herdr aws; do
+if ! rg -q '^"npm:difit" = "latest"$' "${GLOBAL_MISE_CONFIG}"; then
+    echo "FAIL: difit should track the latest mise-managed npm version" >&2
+    exit 1
+fi
+
+for tool in herdr aws hunk; do
     if ! rg -q "^${tool} = \"latest\"$" "${GLOBAL_MISE_CONFIG}"; then
         echo "FAIL: ${tool} should be installed through the shared mise configuration" >&2
         exit 1
@@ -56,7 +61,7 @@ for package in mise python github-cli jq neovim ripgrep fd fzf lazygit; do
     assert_package_present "${package}"
 done
 
-for package in nodejs npm shellcheck gitleaks herdr aws-cli; do
+for package in nodejs npm shellcheck gitleaks herdr aws-cli difit hunk hunkdiff; do
     assert_package_absent "${package}"
 done
 

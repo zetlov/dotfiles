@@ -1,5 +1,7 @@
 [tools]
 node = "26"
 "npm:@openai/codex" = "latest"
+"npm:difit" = "latest"
+hunk = "latest"
 herdr = "latest"
 aws = "latest"
