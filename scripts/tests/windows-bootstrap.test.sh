@@ -30,18 +30,18 @@ assert_equals() {
 assert_equals "" \
     "$(resolve_windows_components 0 0)" \
     "default selection"
-assert_equals "glazewm" \
+assert_equals "glazewm,monitor-profiles" \
     "$(resolve_windows_components 1 0)" \
     "GlazeWM selection"
 assert_equals "komorebi" \
     "$(resolve_windows_components 0 1)" \
     "Komorebi selection"
 
-if resolve_windows_components 1 1 >/dev/null 2>&1; then
-    fail "resolver accepted mutually exclusive window managers"
-fi
 if resolve_windows_components yes 0 >/dev/null 2>&1; then
     fail "resolver accepted a non-boolean flag"
+fi
+if resolve_windows_components 1 1 >/dev/null 2>&1; then
+    fail "resolver accepted both window managers"
 fi
 
 if rg -q '\bjq\b|components\.json' "${helper}"; then
@@ -134,6 +134,7 @@ ${fake_repo}/windows/install.ps1" "$(cat "${wslpath_log}")" \
 for invalid_component in \
     "wezterm" \
     "autostart" \
+    "glazewm" \
     "glazewm,komorebi"; do
     if apply_windows_components \
         "${fake_repo}" "${invalid_component}" 0 \

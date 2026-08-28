@@ -436,7 +436,8 @@ function Get-KanataGameModeDecision {
     [bool]$GameActive,
 
     [Parameter(Mandatory = $true)]
-    [bool]$KanataRunning,
+    [ValidateSet("Normal", "Game", "Stopped", "Unknown")]
+    [string]$CurrentProfile,
 
     [Parameter(Mandatory = $true)]
     [bool]$KeyboardKeyPressed,
@@ -453,17 +454,17 @@ function Get-KanataGameModeDecision {
   )
 
   if ($GameActive) {
-    $action = if ($KanataRunning -and -not $KeyboardKeyPressed) {
-      "Stop"
-    } else {
+    $action = if ($CurrentProfile -eq "Game" -or $KeyboardKeyPressed) {
       "None"
+    } else {
+      "SwitchToGame"
     }
     return [pscustomobject]@{
       Action = $action
       ResumeKanataAt = [datetime]::MinValue
     }
   }
-  if ($KanataRunning) {
+  if ($CurrentProfile -eq "Normal") {
     return [pscustomobject]@{
       Action = "None"
       ResumeKanataAt = [datetime]::MinValue
@@ -475,9 +476,9 @@ function Get-KanataGameModeDecision {
       ResumeKanataAt = $Now.AddMilliseconds($ResumeDelayMilliseconds)
     }
   }
-  if ($Now -ge $ResumeKanataAt) {
+  if ($Now -ge $ResumeKanataAt -and -not $KeyboardKeyPressed) {
     return [pscustomobject]@{
-      Action = "Start"
+      Action = "SwitchToNormal"
       ResumeKanataAt = [datetime]::MinValue
     }
   }
@@ -669,11 +670,20 @@ function Start-KanataManagedProcess {
     }
   }
   $arguments = "--nodelay --cfg $(Get-KanataQuotedArgument -Value $ConfigPath)"
-  return Start-Process `
+  $process = Start-Process `
     -FilePath $ExePath `
     -ArgumentList $arguments `
     -WindowStyle Hidden `
     -PassThru
+  Start-Sleep -Milliseconds 250
+  $process.Refresh()
+  if ($process.HasExited) {
+    throw (
+      "Managed Kanata process exited during startup with code " +
+      "$($process.ExitCode)."
+    )
+  }
+  return $process
 }
 
 function Get-KanataManagedProcesses {
@@ -701,16 +711,35 @@ function Get-KanataManagedProcesses {
 function Stop-KanataManagedProcesses {
   param(
     [Parameter(Mandatory = $true)]
-    [string]$ExePath
+    [string]$ExePath,
+
+    [ValidateRange(100, 10000)]
+    [int]$TimeoutMilliseconds = 3000
   )
 
-  foreach ($process in @(Get-KanataManagedProcesses -ExePath $ExePath)) {
+  $processes = @(Get-KanataManagedProcesses -ExePath $ExePath)
+  foreach ($process in $processes) {
     try {
-      $process | Stop-Process -Force -ErrorAction Stop
+      Stop-Process -Id $process.Id -Force -ErrorAction Stop
     } catch {
-      Write-Warning "Failed to stop managed Kanata process $($process.Id)."
+      throw (
+        "Failed to stop managed Kanata process $($process.Id): " +
+        $_.Exception.Message
+      )
     }
   }
+
+  $deadline = [DateTime]::UtcNow.AddMilliseconds($TimeoutMilliseconds)
+  do {
+    $remaining = @(Get-KanataManagedProcesses -ExePath $ExePath)
+    if ($remaining.Count -eq 0) {
+      return
+    }
+    if ([DateTime]::UtcNow -ge $deadline) {
+      throw "Timed out waiting for managed Kanata processes to stop."
+    }
+    Start-Sleep -Milliseconds 50
+  } while ($true)
 }
 
 function Start-KanataGameModeWatcher {

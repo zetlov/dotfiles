@@ -8,24 +8,17 @@
 )
 
 (defalias
-  ;; Space: tap=spc / hold=nav layer
+  ;; Space: tap=space / hold=navigation layer.
   spcnav (tap-hold-press $tap $hold spc (layer-while-held nav))
 
-  ;; Physical LAlt (Super keycap): tap=IME Off / hold=window-manager layer
-  lsuper (tap-hold-press 120 180 f13 (layer-while-held wm))
+  ;; Dedicated physical keys beside Space: tap=IME / hold=GlazeWM layer.
+  imeoffmod (tap-hold-press 120 180 f13 (layer-while-held wm))
+  imeonmod (tap-hold-press 120 180 f15 (layer-while-held wm))
 
-  ;; RAlt: tap=IME On / hold=Alt
-  imeon (tap-hold-press 120 180 f15 ralt)
-
-  ;; Space+Q: send Escape, then turn IME off.
+  ;; Space+Q sends Escape and then turns IME off.
   escimeoff (macro esc f13)
 
-  ;; Keep Tab blocked through the physical Super key release boundary. The
-  ;; keycap is Left Alt, so checking only the physical Win keys leaves a short
-  ;; Ctrl+Alt+Tab race while the window-manager chord is being released.
-  safetab (switch ((input real lalt)) XX break () tab break)
-
-  ;; Preserve Hyprland's Super+Shift+workspace move bindings.
+  ;; Shift changes workspace focus into move-and-follow.
   wm1 (switch ((or (input real lsft) (input real rsft))) C-A-S-1 break () C-A-1 break)
   wm2 (switch ((or (input real lsft) (input real rsft))) C-A-S-2 break () C-A-2 break)
   wm3 (switch ((or (input real lsft) (input real rsft))) C-A-S-3 break () C-A-3 break)
@@ -39,16 +32,15 @@
   wmminus (switch ((or (input real lsft) (input real rsft))) C-A-S-- break () C-A-- break)
   wmequal (switch ((or (input real lsft) (input real rsft))) C-A-S-= break () C-A-= break)
 
-  ;; Use private function keys so window-manager chords never leak text input.
-  wmh (switch ((or (input real lctl) (input real rctl))) f20 break ((or (input real lsft) (input real rsft))) S-f16 break () f16 break)
-  wmj (switch ((or (input real lctl) (input real rctl))) f21 break ((or (input real lsft) (input real rsft))) S-f17 break () f17 break)
-  wmk (switch ((or (input real lctl) (input real rctl))) f22 break ((or (input real lsft) (input real rsft))) S-f18 break () f18 break)
-  wml (switch ((or (input real lctl) (input real rctl))) f23 break ((or (input real lsft) (input real rsft))) S-f19 break () f19 break)
+  ;; Private function keys prevent GlazeWM navigation from leaking text input.
+  wmh (switch ((or (input real lctl) (input real rctl))) f20 break () f16 break)
+  wmj (switch ((or (input real lctl) (input real rctl))) f21 break () f17 break)
+  wmk (switch ((or (input real lctl) (input real rctl))) f22 break () f18 break)
+  wml (switch ((or (input real lctl) (input real rctl))) f23 break () f19 break)
   wmf (switch ((or (input real lsft) (input real rsft))) C-A-S-f break () C-A-f break)
   wmcomma (switch ((or (input real lctl) (input real rctl))) C-A-S-, break () C-A-, break)
   wmperiod (switch ((or (input real lctl) (input real rctl))) C-A-S-. break () C-A-. break)
 
-  ;; Layer switch (persistent)
   to-us  (layer-switch us)
   to-jis (layer-switch jis)
 )
@@ -60,26 +52,29 @@
   lsft z    x    c    v    b    n    m    ,    .    /    ro   rsft
   lctl lmet lalt           spc            ralt rmet rctl
   left down up rght
+  f13  f15
 )
 
-;; Default layer (first deflayer = initial).
+;; Default layer. Native Win and Alt keys are never remapped.
 (deflayer us
   _    _    _    _    _    _    _    _    _    _    _    _    _    _
-  @safetab _    _    _    _    _    _    _    _    _    _    _    _    _
+  _    _    _    _    _    _    _    _    _    _    _    _    _    _
   _    _    _    _    _    _    _    _    _    _    _    _    _
   _    _    _    _    _    _    _    _    _    _    _    _    _
-  _    lalt @lsuper         @spcnav        @imeon _    _
+  _    _    _              @spcnav        _    _    _
   _    _    _    _
+  @imeoffmod @imeonmod
 )
 
 ;; JIS physical keyboard compensation layer.
 (deflayer jis
   _    _    _    _    _    _    _    _    _    _    _    _    _    _
-  @safetab _    _    _    _    _    _    _    _    _    _    _    _    ret
+  _    _    _    _    _    _    _    _    _    _    _    _    _    ret
   _    _    _    _    _    _    _    _    _    _    _    _    bspc
   _    _    _    _    _    _    _    _    _    _    _    rsft _
-  _    lalt @lsuper         @spcnav        @imeon _    _
+  _    _    _              @spcnav        _    _    _
   _    _    _    _
+  @imeoffmod @imeonmod
 )
 
 (deflayer nav
@@ -89,15 +84,16 @@
   _    _    _    _    _    _    @to-us @to-jis _ _  \    _    _
   _    _    _              _              _    _    _
   _    _    _    _
+  @imeoffmod @imeonmod
 )
 
-;; LSuper shortcut layer. Left Super+Space emits the Windows Alt+Space menu.
-;; Other unbound keys are blocked so Windows never receives a partial Win chord.
+;; Hold either dedicated IME key for GlazeWM and retained Windows shortcuts.
 (deflayer wm
   XX   @wm1 @wm2 @wm3 @wm4 @wm5 @wm6 @wm7 @wm8 @wm9 @wm0 @wmminus @wmequal XX
-  XX   C-A-q XX    XX    XX    XX    XX    XX    XX    XX    pp    XX    XX    XX
-  XX   XX    M-S-s XX    @wmf  XX    @wmh  @wmj  @wmk  @wml  XX    XX    C-A-t
-  XX   XX    XX    XX    XX    C-A-b XX    C-A-m @wmcomma @wmperiod XX XX    XX
-  XX   _     XX                A-spc             _     XX    XX
+  A-tab C-A-q XX XX XX XX XX XX XX XX pp XX XX XX
+  XX   XX   M-S-s XX @wmf XX @wmh @wmj @wmk @wml XX XX C-A-t
+  XX   XX   XX   XX   XX   C-A-b XX C-A-f12 @wmcomma @wmperiod f24 XX XX
+  _    _    _              A-spc          _    _    _
   C-A-left C-A-down C-A-up C-A-rght
+  XX   XX
 )

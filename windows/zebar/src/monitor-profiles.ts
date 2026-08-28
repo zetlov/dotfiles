@@ -1,0 +1,46 @@
+export const monitorProfiles = [
+  { name: 'all', label: '3 displays' },
+  { name: 'left-center', label: 'Left + center' },
+  { name: 'right-only', label: 'Right only' },
+] as const;
+
+export type MonitorProfileName = (typeof monitorProfiles)[number]['name'];
+
+const powershellPath =
+  'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+const switchScriptPath =
+  '$env:LOCALAPPDATA\\dotfiles\\monitor-profiles\\' +
+  'Switch-MonitorProfile.ps1';
+
+function isMonitorProfileName(name: string): name is MonitorProfileName {
+  return monitorProfiles.some(profile => profile.name === name);
+}
+
+export function getMonitorProfileForCount(
+  monitorCount: number,
+): MonitorProfileName | null {
+  if (monitorCount === 3) return 'all';
+  if (monitorCount === 2) return 'left-center';
+  if (monitorCount === 1) return 'right-only';
+  return null;
+}
+
+export function createMonitorProfileCommand(name: string): {
+  readonly program: string;
+  readonly args: readonly string[];
+} {
+  if (!isMonitorProfileName(name)) {
+    throw new Error(`Unknown monitor profile: ${name}`);
+  }
+  return {
+    program: powershellPath,
+    args: [
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-Command',
+      `& "${switchScriptPath}" -Name ${name}`,
+    ],
+  };
+}

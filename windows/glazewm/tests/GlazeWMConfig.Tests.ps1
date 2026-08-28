@@ -3,15 +3,23 @@ Describe "GlazeWM managed configuration" {
     $configPath = Join-Path $PSScriptRoot "..\config.yaml"
     $startPath = Join-Path $PSScriptRoot "..\install.ps1"
     $kanataPath = Join-Path $PSScriptRoot "..\..\kanata\kanata.kbd"
+    $gameModePath = Join-Path $PSScriptRoot "..\..\kanata\game-mode.json"
   }
 
-  It "defines twelve primary workspaces and one secondary workspace" {
+  It "defines profile-safe workspaces without fixed monitor indexes" {
     $config = Get-Content -LiteralPath $configPath -Raw
 
     foreach ($workspace in 1..12) {
       $config | Should -Match "(?m)^  - name: '$workspace'\r?$"
     }
-    $config | Should -Match "(?ms)^  - name: 'vert'\r?\n    bind_to_monitor: 1\r?$"
+    $config | Should -Match "(?m)^  - name: 'left'\r?$"
+    $config | Should -Match "(?m)^  - name: 'vert'\r?$"
+    foreach ($workspace in @("left", "vert")) {
+      $config | Should -Match (
+        "(?ms)^  - name: '$workspace'\r?\n    keep_alive: true\r?$"
+      )
+    }
+    $config | Should -Not -Match "bind_to_monitor"
   }
 
   It "uses the existing Kanata Ctrl Alt chords for core navigation" {
@@ -42,6 +50,14 @@ Describe "GlazeWM managed configuration" {
     }
   }
 
+  It "accepts Ctrl-modified move keys while physical Ctrl remains held" {
+    $config = Get-Content -LiteralPath $configPath -Raw
+
+    foreach ($binding in @("ctrl+f20", "ctrl+f21", "ctrl+f22", "ctrl+f23")) {
+      $config | Should -Match ([regex]::Escape("'$binding'"))
+    }
+  }
+
   It "launches the GUI terminal without a console-host intermediary" {
     Get-Content -LiteralPath $configPath -Raw |
       Should -Match ([regex]::Escape("'shell-exec wezterm-gui start'"))
@@ -52,7 +68,8 @@ Describe "GlazeWM managed configuration" {
 
     $config | Should -Match "autotile\.ps1"
     $config | Should -Match "Start-GlazeWorkspaceApps\.ps1"
-    $config | Should -Match "zebar start-widget-preset"
+    $config | Should -Match "Sync-GlazeMonitorLayout\.ps1"
+    $config | Should -Match "-RestartZebar"
     $config | Should -Not -Match "(?i)seelen"
   }
 
@@ -66,19 +83,18 @@ Describe "GlazeWM managed configuration" {
 
     $script | Should -Match "glazewm\.exe"
     $script | Should -Match "autotile\.ps1"
+    $script | Should -Match "Sync-GlazeMonitorLayout\.ps1"
+    $script | Should -Match "GlazeWMMonitorSync\.psm1"
     $script | Should -Match 'sourceZebarInstaller'
     $script | Should -Not -Match "(?i)seelen"
   }
 
-  It "uses the shared audio dependency installer" {
+  It "leaves audio lifecycle to the active audio component" {
     $script = Get-Content -LiteralPath $startPath -Raw
 
-    $script | Should -Match 'audio\\AudioOutputInstaller\.psm1'
-    $script | Should -Match 'Import-Module \$sourceAudioInstaller'
-    $script | Should -Not -Match 'KomorebiInstaller\.psm1'
-    $script | Should -Match (
-      'Install-AudioDeviceModule -RequiredVersion "3\.1\.0\.2"'
-    )
+    $script | Should -Not -Match 'AudioOutputInstaller'
+    $script | Should -Not -Match 'switch-audio\.ps1'
+    $script | Should -Not -Match 'audio-output\.json'
   }
 
   It "keeps the elevated manager separate from the dedicated IPC client" {
@@ -114,6 +130,21 @@ Describe "GlazeWM managed configuration" {
       $parts = $rule.Split(":")
       $pattern = "(?ms)commands: \['move --workspace $($parts[1])'\].{0,400}window_process: \{ equals: '$([regex]::Escape($parts[0]))' \}"
       $config | Should -Match $pattern
+    }
+  }
+
+  It "routes every registered game to floating workspace eleven" {
+    $config = Get-Content -LiteralPath $configPath -Raw
+    $settings = Get-Content -LiteralPath $gameModePath -Raw | ConvertFrom-Json
+
+    $config | Should -Match ([regex]::Escape(
+      "commands: ['move --workspace 11', 'set-floating --centered=false']"
+    ))
+    foreach ($executable in @($settings.hard_off_executables)) {
+      $processName = [IO.Path]::GetFileNameWithoutExtension($executable)
+      $config | Should -Match ([regex]::Escape(
+        "window_process: { equals: '$processName' }"
+      ))
     }
   }
 

@@ -1,0 +1,13 @@
+(defcfg
+  process-unmapped-keys yes
+)
+
+;; Game profile: all normal keys, including Win and Alt, pass through. The
+;; keyboard's physical F13/F15 keys remain Windows IME Off/On keys.
+(defsrc
+  f13 f15
+)
+
+(deflayer game
+  _ _
+)

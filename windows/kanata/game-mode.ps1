@@ -13,6 +13,7 @@ $paths = Get-KanataWatcherPaths -InstallDir $InstallDir
 $settings = Get-KanataGameModeSettings -Path $paths.Settings
 $exePath = Join-Path $InstallDir "kanata.exe"
 $configPath = Join-Path $InstallDir "kanata.kbd"
+$gameConfigPath = Join-Path $InstallDir "kanata-game.kbd"
 $mutex = New-Object `
   -TypeName System.Threading.Mutex `
   -ArgumentList @($false, "Local\DotfilesKanataGameMode")
@@ -66,6 +67,7 @@ try {
   $steamCommonPaths = @()
   $steamRefreshAt = [datetime]::MinValue
   $resumeKanataAt = [datetime]::MinValue
+  $currentProfile = "Stopped"
 
   while (-not $stopEvent.WaitOne(0)) {
     try {
@@ -112,13 +114,23 @@ try {
         Get-KanataManagedProcesses -ExePath $exePath
       )
 
+      if ($kanataProcesses.Count -eq 0) {
+        $currentProfile = "Stopped"
+      } elseif ($currentProfile -eq "Stopped") {
+        $currentProfile = "Unknown"
+      }
+
+      $profileMismatch = (
+        ($games.Count -gt 0 -and $currentProfile -ne "Game") -or
+        ($games.Count -eq 0 -and $currentProfile -ne "Normal")
+      )
       $keyboardKeyPressed = (
-        $games.Count -gt 0 -and
+        $profileMismatch -and
         (Test-KanataAnyKeyboardKeyPressed)
       )
       $decision = Get-KanataGameModeDecision `
         -GameActive ($games.Count -gt 0) `
-        -KanataRunning ($kanataProcesses.Count -gt 0) `
+        -CurrentProfile $currentProfile `
         -KeyboardKeyPressed $keyboardKeyPressed `
         -ResumeKanataAt $resumeKanataAt `
         -Now ([datetime]::UtcNow) `
@@ -126,15 +138,25 @@ try {
       $resumeKanataAt = $decision.ResumeKanataAt
 
       switch ($decision.Action) {
-        "Stop" {
+        "SwitchToGame" {
           if (-not (Test-KanataAnyKeyboardKeyPressed)) {
             Stop-KanataManagedProcesses -ExePath $exePath
+            $currentProfile = "Stopped"
+            Start-KanataManagedProcess `
+              -ExePath $exePath `
+              -ConfigPath $gameConfigPath | Out-Null
+            $currentProfile = "Game"
           }
         }
-        "Start" {
-          Start-KanataManagedProcess `
-            -ExePath $exePath `
-            -ConfigPath $configPath | Out-Null
+        "SwitchToNormal" {
+          if (-not (Test-KanataAnyKeyboardKeyPressed)) {
+            Stop-KanataManagedProcesses -ExePath $exePath
+            $currentProfile = "Stopped"
+            Start-KanataManagedProcess `
+              -ExePath $exePath `
+              -ConfigPath $configPath | Out-Null
+            $currentProfile = "Normal"
+          }
         }
       }
     } catch {

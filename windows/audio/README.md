@@ -1,9 +1,23 @@
-# Windows audio dependencies
+# Windows audio output switching
 
-`AudioOutputInstaller.psm1` owns installation of the shared Windows audio
-dependency used by both the GlazeWM and Komorebi configurations.
+The active Windows audio component installs a private `Ctrl+Alt+F12` shell
+transport and the runtime files under:
 
-The consumers pin `AudioDeviceCmdlets` to version `3.1.0.2`. The installer
+```text
+%LOCALAPPDATA%\dotfiles\audio
+```
+
+Kanata maps held `F13/F15+M` to that transport chord. The shortcut is stored in
+the current user's Start Menu Programs folder, so Windows Explorer registers it
+without another resident hotkey daemon. `Ctrl+Alt+F12` is an implementation
+detail; the user-facing binding is held `F13/F15+M`. The Komorebi rollback
+configuration does not register a competing audio binding.
+
+`audio-output.local.json` can override the checked-in device patterns without
+being tracked. During migration, the installer also accepts the existing
+`windows/komorebi/audio-output.local.json` override.
+
+The component pins `AudioDeviceCmdlets` to version `3.1.0.2`. The installer
 downloads that exact package from a fixed PowerShell Gallery HTTPS package URI;
 it does not use PowerShellGet, PackageManagement, repository configuration, or
 module discovery through `PSModulePath`.
@@ -42,5 +56,13 @@ availability. Updating the module version therefore requires reviewing the new
 package contents and updating the URI, destination version, and both hashes
 together.
 
-Audio switching scripts, device matching configuration, hotkeys, and runtime
-deployment paths remain owned by their window-manager directories.
+Install or update only this component from WSL:
+
+```bash
+/init /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe \
+  -NoProfile -ExecutionPolicy Bypass \
+  -File "$(wslpath -w "$PWD/windows/install.ps1")" \
+  -Mode Install -Component audio
+```
+
+The default Windows component plan includes audio, WezTerm, and Kanata.

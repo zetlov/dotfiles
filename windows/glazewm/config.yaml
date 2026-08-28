@@ -2,7 +2,7 @@ general:
   startup_commands:
     - 'shell-exec --hide-window powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%LOCALAPPDATA%\dotfiles\glazewm\autotile.ps1"'
     - 'shell-exec --hide-window powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%LOCALAPPDATA%\dotfiles\glazewm\Start-GlazeWorkspaceApps.ps1"'
-    - 'shell-exec zebar start-widget-preset --pack zetshell --widget-name bar --preset primary-monitor'
+    - 'shell-exec --hide-window powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%LOCALAPPDATA%\dotfiles\glazewm\Sync-GlazeMonitorLayout.ps1" -RestartZebar'
   shutdown_commands: []
   config_reload_commands: []
   focus_follows_cursor: false
@@ -60,31 +60,21 @@ window_behavior:
 
 workspaces:
   - name: '1'
-    bind_to_monitor: 0
   - name: '2'
-    bind_to_monitor: 0
   - name: '3'
-    bind_to_monitor: 0
   - name: '4'
-    bind_to_monitor: 0
   - name: '5'
-    bind_to_monitor: 0
   - name: '6'
-    bind_to_monitor: 0
   - name: '7'
-    bind_to_monitor: 0
   - name: '8'
-    bind_to_monitor: 0
   - name: '9'
-    bind_to_monitor: 0
   - name: '10'
-    bind_to_monitor: 0
   - name: '11'
-    bind_to_monitor: 0
   - name: '12'
-    bind_to_monitor: 0
+  - name: 'left'
+    keep_alive: true
   - name: 'vert'
-    bind_to_monitor: 1
+    keep_alive: true
 
 window_rules:
   - commands: ['move --workspace 1']
@@ -103,6 +93,19 @@ window_rules:
   - commands: ['move --workspace 4']
     match:
       - window_process: { equals: 'Obsidian' }
+  - commands: ['move --workspace 11', 'set-floating --centered=false']
+    match:
+      - window_process: { equals: 'StreetFighter6' }
+      - window_process: { equals: 'FactoryGameSteam' }
+      - window_process: { equals: 'FactoryGameSteam-Win64-Shipping' }
+      - window_process: { equals: 'ShadowverseWB' }
+      - window_process: { equals: 'AimLab_tb' }
+      - window_process: { equals: 'VALORANT' }
+      - window_process: { equals: 'VALORANT-Win64-Shipping' }
+      - window_process: { equals: 'GenshinImpact' }
+      - window_process: { equals: 'StarRail' }
+      - window_process: { equals: 'EscapeFromTarkov' }
+      - window_process: { equals: 'EscapeFromTarkov_BE' }
   - commands: ['ignore']
     match:
       - window_process: { equals: 'zebar' }
@@ -132,13 +135,13 @@ keybindings:
     bindings: ['f19', 'ctrl+alt+l']
 
   - commands: ['move --direction left']
-    bindings: ['f20', 'ctrl+alt+shift+h']
+    bindings: ['f20', 'ctrl+f20', 'ctrl+alt+shift+h']
   - commands: ['move --direction down']
-    bindings: ['f21', 'ctrl+alt+shift+j']
+    bindings: ['f21', 'ctrl+f21', 'ctrl+alt+shift+j']
   - commands: ['move --direction up']
-    bindings: ['f22', 'ctrl+alt+shift+k']
+    bindings: ['f22', 'ctrl+f22', 'ctrl+alt+shift+k']
   - commands: ['move --direction right']
-    bindings: ['f23', 'ctrl+alt+shift+l']
+    bindings: ['f23', 'ctrl+f23', 'ctrl+alt+shift+l']
 
   - commands: ['resize --width -2%']
     bindings: ['ctrl+alt+left']
@@ -153,8 +156,6 @@ keybindings:
     bindings: ['ctrl+alt+t']
   - commands: ['shell-exec zen']
     bindings: ['ctrl+alt+b']
-  - commands: ['shell-exec --hide-window powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%LOCALAPPDATA%\dotfiles\glazewm\switch-audio.ps1"']
-    bindings: ['ctrl+alt+m']
   - commands: ['toggle-floating --centered']
     bindings: ['ctrl+alt+f']
   - commands: ['toggle-fullscreen']
@@ -219,6 +220,8 @@ keybindings:
   - commands: ['focus --monitor 0']
     bindings: ['ctrl+alt+,']
   - commands: ['focus --monitor 1']
+    bindings: ['f24']
+  - commands: ['focus --monitor 2']
     bindings: ['ctrl+alt+.']
   - commands: ['move-workspace --direction left']
     bindings: ['ctrl+alt+shift+,']

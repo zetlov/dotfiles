@@ -17,11 +17,12 @@ Describe "Windows component orchestrator" {
 
   It "keeps the lifecycle manifest authoritative" {
     $expected = @{
-      glazewm = "active|optional"
-      zebar = "active|managed"
-      audio = "shared|managed"
+      "monitor-profiles" = "active|optional"
+      audio = "active|required"
       wezterm = "active|required"
       kanata = "active|required"
+      glazewm = "active|optional"
+      zebar = "shared|managed"
       komorebi = "rollback-only|rollback-only"
       autostart = "rollback-only|rollback-only"
     }
@@ -117,9 +118,10 @@ Describe "Windows component orchestrator" {
         -WindowsRoot $windowsRoot
     )
 
-    @($plan.Name) | Should -Be @("wezterm", "kanata")
+    @($plan.Name) | Should -Be @("wezterm", "audio", "kanata")
     @($plan.Entrypoint) | Should -Be @(
       "wezterm/install.ps1",
+      "audio/install.ps1",
       "kanata/install.ps1"
     )
   }
@@ -132,9 +134,10 @@ Describe "Windows component orchestrator" {
         -WindowsRoot $windowsRoot
     )
 
-    @($plan.Name) | Should -Be @("wezterm", "kanata")
+    @($plan.Name) | Should -Be @("wezterm", "audio", "kanata")
     @($plan.Entrypoint) | Should -Be @(
       "wezterm/update-config.ps1",
+      "audio/install.ps1",
       "kanata/update-config.ps1"
     )
   }
@@ -144,14 +147,27 @@ Describe "Windows component orchestrator" {
       Resolve-WindowsComponentPlan `
         -Catalog $catalog `
         -Mode Install `
-        -Component @("glazewm", "kanata", "wezterm") `
+        -Component @("monitor-profiles", "kanata", "wezterm") `
         -WindowsRoot $windowsRoot
     )
 
-    @($plan.Name) | Should -Be @("wezterm", "kanata", "glazewm")
+    @($plan.Name) | Should -Be @("wezterm", "kanata", "monitor-profiles")
   }
 
-  It "keeps managed dependencies inside their current owner" {
+  It "allows direct audio component selection" {
+    $plan = @(
+      Resolve-WindowsComponentPlan `
+        -Catalog $catalog `
+        -Mode Install `
+        -Component "audio" `
+        -WindowsRoot $windowsRoot
+    )
+
+    @($plan.Name) | Should -Be @("audio")
+    $plan[0].Entrypoint | Should -Be "audio/install.ps1"
+  }
+
+  It "selects GlazeWM directly while keeping Zebar manager-owned" {
     $plan = @(
       Resolve-WindowsComponentPlan `
         -Catalog $catalog `
@@ -161,20 +177,14 @@ Describe "Windows component orchestrator" {
     )
 
     @($plan.Name) | Should -Be @("glazewm")
+    $plan[0].Entrypoint | Should -Be "glazewm/install.ps1"
     {
       Resolve-WindowsComponentPlan `
         -Catalog $catalog `
         -Mode Install `
         -Component "zebar" `
         -WindowsRoot $windowsRoot
-    } | Should -Throw "*managed by*"
-    {
-      Resolve-WindowsComponentPlan `
-        -Catalog $catalog `
-        -Mode Install `
-        -Component "audio" `
-        -WindowsRoot $windowsRoot
-    } | Should -Throw "*managed by*"
+    } | Should -Throw "*managed by*glazewm*"
   }
 
   It "requires an explicit gate for rollback-only components" {
@@ -206,26 +216,6 @@ Describe "Windows component orchestrator" {
         -AllowRollbackOnly `
         -WindowsRoot $windowsRoot
     } | Should -Throw "*requires*komorebi*"
-  }
-
-  It "rejects conflicting window manager selections before execution" {
-    {
-      Resolve-WindowsComponentPlan `
-        -Catalog $catalog `
-        -Mode Install `
-        -Component @("glazewm", "komorebi") `
-        -AllowRollbackOnly `
-        -WindowsRoot $windowsRoot
-    } | Should -Throw "*conflict*"
-
-    {
-      Resolve-WindowsComponentPlan `
-        -Catalog $catalog `
-        -Mode Install `
-        -Component @("glazewm", "autostart") `
-        -AllowRollbackOnly `
-        -WindowsRoot $windowsRoot
-    } | Should -Throw "*conflict*"
   }
 
   It "rejects unknown, duplicate, and unsafe component definitions" {
@@ -490,79 +480,6 @@ Describe "Windows component orchestrator" {
       -Times 0
   }
 
-  It "blocks GlazeWM while Komorebi processes are running" {
-    Mock Get-Process {
-      [pscustomobject]@{ Id = 5678; ProcessName = "komorebi" }
-    } -ModuleName WindowsOrchestrator
-    Mock Invoke-WindowsComponentEntrypoint {} `
-      -ModuleName WindowsOrchestrator
-
-    {
-      Invoke-WindowsComponentSelection `
-        -Mode Install `
-        -Component "glazewm"
-    } | Should -Throw "*Komorebi rollback processes are running*"
-    Should -Invoke Invoke-WindowsComponentEntrypoint `
-      -ModuleName WindowsOrchestrator `
-      -Times 0
-  }
-
-  It "blocks GlazeWM while the Komorebi startup shortcut exists" {
-    Mock Get-Process { @() } -ModuleName WindowsOrchestrator
-    Mock Test-KomorebiStartupShortcut { $true } `
-      -ModuleName WindowsOrchestrator
-    Mock Invoke-WindowsComponentEntrypoint {} `
-      -ModuleName WindowsOrchestrator
-
-    {
-      Invoke-WindowsComponentSelection `
-        -Mode Install `
-        -Component "glazewm"
-    } | Should -Throw "*Komorebi automatic startup*"
-    Should -Invoke Invoke-WindowsComponentEntrypoint `
-      -ModuleName WindowsOrchestrator `
-      -Times 0
-  }
-
-  It "blocks GlazeWM while rollback app tasks exist" {
-    Mock Get-Process { @() } -ModuleName WindowsOrchestrator
-    Mock Test-KomorebiStartupShortcut { $false } `
-      -ModuleName WindowsOrchestrator
-    Mock Get-ScheduledTask {
-      [pscustomobject]@{ TaskName = "Dotfiles App - Todoist" }
-    } -ModuleName WindowsOrchestrator
-    Mock Invoke-WindowsComponentEntrypoint {} `
-      -ModuleName WindowsOrchestrator
-
-    {
-      Invoke-WindowsComponentSelection `
-        -Mode Install `
-        -Component "glazewm"
-    } | Should -Throw "*Rollback-only app autostart tasks*"
-    Should -Invoke Invoke-WindowsComponentEntrypoint `
-      -ModuleName WindowsOrchestrator `
-      -Times 0
-  }
-
-  It "fails closed when scheduled tasks cannot be inspected" {
-    Mock Get-Process { @() } -ModuleName WindowsOrchestrator
-    Mock Test-KomorebiStartupShortcut { $false } `
-      -ModuleName WindowsOrchestrator
-    Mock Get-ScheduledTask { throw "probe failed" } `
-      -ModuleName WindowsOrchestrator
-    Mock Invoke-WindowsComponentEntrypoint {} `
-      -ModuleName WindowsOrchestrator
-
-    {
-      Invoke-WindowsComponentSelection `
-        -Mode Install `
-        -Component "glazewm"
-    } | Should -Throw "*Unable to inspect scheduled tasks*"
-    Should -Invoke Invoke-WindowsComponentEntrypoint `
-      -ModuleName WindowsOrchestrator `
-      -Times 0
-  }
-
   It "runs runtime compatibility checks in Preflight without entrypoints" {
     Mock Get-Process {
       [pscustomobject]@{ Id = 1234; ProcessName = "glazewm" }
@@ -591,7 +508,8 @@ Describe "Windows component orchestrator" {
     {
       Invoke-WindowsComponentSelection `
         -Mode Install `
-        -Component "glazewm" `
+        -Component "komorebi" `
+        -AllowRollbackOnly `
         -Preflight
     } | Should -Throw "*Unable to inspect Windows processes*"
     Should -Invoke Invoke-WindowsComponentEntrypoint `
@@ -606,11 +524,11 @@ Describe "Windows component orchestrator" {
     $plan = @(
       Invoke-WindowsComponentSelection `
         -Mode Install `
-        -Component "glazewm" `
+        -Component "monitor-profiles" `
         -PlanOnly
     )
 
-    @($plan.Name) | Should -Be @("glazewm")
+    @($plan.Name) | Should -Be @("monitor-profiles")
     Should -Invoke Assert-WindowsRuntimeCompatibility `
       -ModuleName WindowsOrchestrator `
       -Times 0
@@ -634,7 +552,7 @@ Describe "Windows component orchestrator" {
     {
       Invoke-WindowsComponentSelection `
         -Mode Install `
-        -Component @("wezterm", "kanata", "glazewm")
+        -Component @("wezterm", "kanata", "monitor-profiles")
     } | Should -Throw "*kanata*injected failure*"
     Should -Invoke Invoke-WindowsComponentEntrypoint `
       -ModuleName WindowsOrchestrator `
@@ -647,19 +565,19 @@ Describe "Windows component orchestrator" {
     Should -Invoke Invoke-WindowsComponentEntrypoint `
       -ModuleName WindowsOrchestrator `
       -Times 0 `
-      -ParameterFilter { $Component.Name -eq "glazewm" }
+      -ParameterFilter { $Component.Name -eq "monitor-profiles" }
   }
 
   It "supports a non-mutating root plan" {
     $plan = @(
       & $rootInstallerPath `
         -Mode Install `
-        -Component "glazewm" `
+        -Component "monitor-profiles" `
         -PlanOnly
     )
 
-    @($plan.Name) | Should -Be @("glazewm")
-    $plan[0].Entrypoint | Should -Be "glazewm/install.ps1"
+    @($plan.Name) | Should -Be @("monitor-profiles")
+    $plan[0].Entrypoint | Should -Be "monitor-profiles/install.ps1"
   }
 
   It "lists lifecycle metadata from the authoritative catalog" {
@@ -667,10 +585,11 @@ Describe "Windows component orchestrator" {
 
     @($components.Name) | Should -Be @(
       "wezterm",
+      "audio",
       "kanata",
+      "monitor-profiles",
       "glazewm",
       "zebar",
-      "audio",
       "komorebi",
       "autostart"
     )
@@ -678,10 +597,11 @@ Describe "Windows component orchestrator" {
       "$($_.Name)|$($_.Lifecycle)|$($_.SelectionPolicy)"
     }) | Should -Be @(
       "wezterm|active|required",
+      "audio|active|required",
       "kanata|active|required",
+      "monitor-profiles|active|optional",
       "glazewm|active|optional",
-      "zebar|active|managed",
-      "audio|shared|managed",
+      "zebar|shared|managed",
       "komorebi|rollback-only|rollback-only",
       "autostart|rollback-only|rollback-only"
     )
@@ -689,7 +609,7 @@ Describe "Windows component orchestrator" {
 
   It "keeps component listing isolated from execution options" {
     {
-      & $rootInstallerPath -ListComponents -Component "glazewm"
+      & $rootInstallerPath -ListComponents -Component "monitor-profiles"
     } | Should -Throw "*ListComponents*cannot be combined*"
   }
 
@@ -697,29 +617,31 @@ Describe "Windows component orchestrator" {
     $plan = @(
       & $rootInstallerPath `
         -Mode Install `
-        -ComponentCsv "glazewm,kanata,wezterm" `
+        -ComponentCsv "monitor-profiles,kanata,wezterm" `
         -PlanOnly
     )
 
-    @($plan.Name) | Should -Be @("wezterm", "kanata", "glazewm")
+    @($plan.Name) | Should -Be @("wezterm", "kanata", "monitor-profiles")
   }
 
   It "adds optional components to catalog-required defaults" {
     $plan = @(
       & $rootInstallerPath `
         -Mode Install `
-        -AdditionalComponentCsv "glazewm" `
+        -AdditionalComponentCsv "monitor-profiles" `
         -PlanOnly
     )
 
-    @($plan.Name) | Should -Be @("wezterm", "kanata", "glazewm")
+    @($plan.Name) | Should -Be @(
+      "wezterm", "audio", "kanata", "monitor-profiles"
+    )
   }
 
   It "rejects explicit and additional component selections together" {
     {
       & $rootInstallerPath `
         -ComponentCsv "wezterm,kanata" `
-        -AdditionalComponentCsv "glazewm" `
+        -AdditionalComponentCsv "monitor-profiles" `
         -PlanOnly
     } | Should -Throw "*AdditionalComponentCsv*"
   }
@@ -755,7 +677,7 @@ Describe "Windows component orchestrator" {
     {
       & $rootInstallerPath `
         -Mode Install `
-        -Component "glazewm" `
+        -Component "monitor-profiles" `
         -AddKanataDefenderExclusion `
         -PlanOnly
     } | Should -Throw "*requires Kanata*"

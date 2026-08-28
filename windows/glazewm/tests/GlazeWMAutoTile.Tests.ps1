@@ -201,7 +201,7 @@ Describe "GlazeWM automatic tiling" {
     Test-GlazeWindowRequiresGameFloating `
       -Window $window `
       -WorkspaceName "11" `
-      -GameWorkspaceNames @("11", "12") |
+      -GameWorkspaceNames @("11") |
       Should -Be $true
   }
 
@@ -220,12 +220,12 @@ Describe "GlazeWM automatic tiling" {
     Test-GlazeWindowRequiresGameFloating `
       -Window $floating `
       -WorkspaceName "11" `
-      -GameWorkspaceNames @("11", "12") |
+      -GameWorkspaceNames @("11") |
       Should -Be $false
     Test-GlazeWindowRequiresGameFloating `
       -Window $tiling `
       -WorkspaceName "4" `
-      -GameWorkspaceNames @("11", "12") |
+      -GameWorkspaceNames @("11") |
       Should -Be $false
   }
 
@@ -273,7 +273,7 @@ Describe "GlazeWM automatic tiling" {
     $windows = @(
       Get-GlazeGameWorkspaceTilingWindows `
         -Workspaces $workspaces `
-        -GameWorkspaceNames @("11", "12")
+        -GameWorkspaceNames @("11")
     )
 
     $windows.Count | Should -Be 1
@@ -284,6 +284,13 @@ Describe "GlazeWM automatic tiling" {
     $module = Get-Content -LiteralPath $modulePath -Raw
 
     $module | Should -Match '(?s)try \{\r?\n\s+Invoke-GlazeGameWorkspaceReconcile.+?& \$GlazeWMPath sub -e'
+  }
+
+  It "defaults to workspace eleven as the only game workspace" {
+    $module = Get-Content -LiteralPath $modulePath -Raw
+
+    $module | Should -Match '\[string\[\]\]\$GameWorkspaceNames = @\("11"\)'
+    $module | Should -Not -Match '@\("11", "12"\)'
   }
 
   It "pairs the two leftmost windows from a four-column layout" {
@@ -454,6 +461,37 @@ Describe "GlazeWM automatic tiling" {
 
     $script:gridInvocations.Count | Should -Be 1
     $script:gridInvocations[0] -join " " | Should -Be "query workspaces"
+  }
+
+  It "skips a workspace that contains an unmanaged window" {
+    $script:gridInvocations = @()
+    $invoker = {
+      param($request)
+      $arguments = @($request.Arguments)
+      $script:gridInvocations += , @($arguments)
+      $response = New-WorkspaceGridResponse -Balanced $false |
+        ConvertFrom-Json
+      $response.data.workspaces[0].children += [pscustomobject]@{
+        type = "window"
+        id = "other"
+        processName = "wezterm-gui"
+        state = [pscustomobject]@{ type = "tiling" }
+        children = @()
+      }
+      [pscustomobject]@{
+        Output = @($response | ConvertTo-Json -Depth 8 -Compress)
+        ExitCode = 0
+      }
+    }
+
+    Invoke-GlazeWorkspaceGrid `
+      -GlazeWMPath "fake-glazewm.exe" `
+      -WorkspaceName "2" `
+      -ProcessNames @("Zotero", "Raindrop", "Todoist", "Notion Calendar") `
+      -WaitSeconds 1 `
+      -CommandInvoker $invoker
+
+    $script:gridInvocations.Count | Should -Be 1
   }
 
   It "rebuilds a hidden unbalanced grid in a guarded eight-command sequence" {

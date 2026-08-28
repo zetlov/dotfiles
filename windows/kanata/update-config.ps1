@@ -20,6 +20,7 @@ $cfgDst = Join-Path $InstallDir "kanata.kbd"
 $exeDst = Join-Path $InstallDir "kanata.exe"
 $managedFiles = @(
   "kanata.kbd",
+  "kanata-game.kbd",
   "KanataGameMode.psm1",
   "game-mode.ps1",
   "game-mode.json"

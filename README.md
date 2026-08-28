@@ -21,8 +21,8 @@ and reviewing `yay` separately:
 ./install.sh --dry-run
 ./install.sh
 ./install.sh --with-tex
-./install.sh --with-komorebi
 ./install.sh --with-glazewm
+./install.sh --with-komorebi
 ./install.sh --with-nvidia
 ./install.sh --system-upgrade
 ```
@@ -179,21 +179,20 @@ Wallpaper assets are local. The default directory is
 
 ## Windows and WSL
 
-The WSL bootstrap can deploy WezTerm, Kanata, and one explicitly selected
-Windows window manager. GlazeWM is the active configuration; Komorebi is kept
-temporarily as rollback material while the GlazeWM setup proves stable. Do not
-select both window-manager flags in one run. GlazeWM owns active login-app
-startup and workspace placement. The standalone Task Scheduler component under
-`windows/autostart` remains paired with the Komorebi rollback path and is not
-part of the active GlazeWM lifecycle.
+The WSL bootstrap deploys WezTerm and Kanata. GlazeWM and its managed Zebar bar
+are selected with `--with-glazewm`; monitor profiles are installed with that
+selection so display changes can reconcile the bar and workspace locations.
+Komorebi and the standalone Task Scheduler component remain only as an explicit
+rollback path.
 
 | Component | Status | Ownership and deployment |
 | --- | --- | --- |
-| glazewm | active | Window manager, login-app startup, runtime helpers, and deployment through `windows/glazewm/install.ps1` |
-| zebar | active | Bar source and tracked bundle; deployed by the GlazeWM installer through `windows/zebar/install.ps1` |
-| audio | shared | Hash-pinned `AudioDeviceCmdlets` dependency shared by the GlazeWM and Komorebi configurations |
+| audio | active | Audio output switcher on held `F13/F15+M` through `windows/audio/install.ps1` |
 | wezterm | active | Terminal configuration and user-scoped fonts through `windows/wezterm/install.ps1` |
 | kanata | active | Keyboard service configuration and lifecycle through `windows/kanata/install.ps1` |
+| monitor-profiles | active | Verified display profiles with GlazeWM and Zebar reconciliation |
+| glazewm | active | Optional tiling window manager selected with `--with-glazewm` |
+| zebar | shared | Bar deployed and supervised by the GlazeWM component |
 | komorebi | rollback-only | Previous window-manager configuration retained for a bounded rollback period |
 | autostart | rollback-only | Per-user scheduled tasks retained with the Komorebi rollback path |
 
@@ -206,9 +205,9 @@ the only authoritative source for lifecycle and selection policy.
 `windows/components.json` is the machine-readable lifecycle and entrypoint
 catalog. The root `windows/install.ps1` validates that catalog, resolves a
 deterministic plan, preflights every selected entrypoint, and then runs the
-existing component installers sequentially. Its default plan contains only
-the required WezTerm and Kanata components; select GlazeWM explicitly when a
-window-manager deployment is intended.
+existing component installers sequentially. Its default plan contains the
+required WezTerm, audio, and Kanata components. GlazeWM and monitor profiles are
+selected together by `./install.sh --with-glazewm`.
 
 The WSL bootstrap resolves that selection once and applies it through a single
 PowerShell 7 orchestrator invocation. It uses scalar CSV parameters because
@@ -231,7 +230,7 @@ policy, running processes, startup registrations, and scheduled-task probes
 without invoking component entrypoints.
 The later apply remains a separate single orchestrator invocation. Required
 components and their order are read from `windows/components.json`; the Bash
-bridge passes only the optional window-manager addition.
+bridge can pass only the explicit Komorebi rollback addition.
 
 From a PowerShell prompt at the repository root, inspect a plan before applying
 it:
@@ -240,24 +239,23 @@ it:
 & .\windows\install.ps1 -ListComponents
 & .\windows\install.ps1 -PlanOnly
 & .\windows\install.ps1 `
-  -Component @("wezterm", "kanata", "glazewm") `
+  -Component @("wezterm", "kanata", "monitor-profiles") `
   -PlanOnly
 
 # Apply the reviewed plan.
 & .\windows\install.ps1 `
-  -Component @("wezterm", "kanata", "glazewm")
+  -Component @("wezterm", "kanata", "monitor-profiles")
 ```
 
-Zebar and audio remain managed dependencies and cannot be selected directly.
 Komorebi and standalone autostart require both explicit selection and
-`-AllowRollbackOnly`; conflicting active and rollback paths fail before any
-component runs. The root script is not a cross-component transaction: it stops
-at the first failure and preserves each component installer's own rollback and
-recovery contract. Use the component-specific CLI for advanced arguments.
+`-AllowRollbackOnly`. The root script is not a cross-component transaction:
+it stops at the first failure and preserves each component installer's own
+rollback and recovery contract. Use the component-specific CLI for advanced
+arguments.
 
 Windows host values can use ignored `*.local.json` files. For example,
-`windows/komorebi/audio-output.local.json` overrides the generic checked-in
-audio device patterns during install and update.
+`windows/audio/audio-output.local.json` overrides the generic checked-in
+audio device patterns. The legacy Komorebi location remains a migration fallback.
 
 ## Validation
 

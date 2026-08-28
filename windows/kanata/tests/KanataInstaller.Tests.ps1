@@ -77,6 +77,33 @@ Context "Resolve-KanataDefenderExclusionPath" {
 }
 
 Context "Keyboard modifier configuration" {
+  It "passes only the dedicated IME keys through in the game profile" {
+    $configPath = Join-Path $PSScriptRoot "..\kanata-game.kbd"
+    $config = Get-Content -LiteralPath $configPath -Raw
+
+    Assert-Equal ($config -match "(?ms)^\(defsrc\s+f13\s+f15\s*\)") $true
+    Assert-Equal ($config -match "(?ms)^\(deflayer\s+game\s+_\s+_\s*\)") $true
+    Assert-Equal $config.Contains("layer-while-held") $false
+    Assert-Equal $config.Contains("C-A-") $false
+
+    $activeConfig = [regex]::Replace($config, "(?m);;.*$", "")
+    $defsrc = [regex]::Match(
+      $activeConfig,
+      "(?ms)^\(defsrc\s+(.*?)^\)\s*$"
+    )
+    $gameLayer = [regex]::Match(
+      $activeConfig,
+      "(?ms)^\(deflayer\s+game\s+(.*?)^\)\s*$"
+    )
+    Assert-Equal $defsrc.Success $true
+    Assert-Equal $gameLayer.Success $true
+    $sourceTokens = @($defsrc.Groups[1].Value -split "\s+" | Where-Object { $_ })
+    $gameTokens = @($gameLayer.Groups[1].Value -split "\s+" | Where-Object { $_ })
+    Assert-Equal $gameTokens.Count $sourceTokens.Count
+
+    Assert-Equal ($config -match "(?i)\b(?:lmet|rmet|lalt|ralt)\b") $false
+  }
+
   It "turns IME off after sending Escape from Space+Q" {
     $configPath = Join-Path $PSScriptRoot "..\kanata.kbd"
     $config = Get-Content -LiteralPath $configPath -Raw
@@ -97,42 +124,17 @@ Context "Keyboard modifier configuration" {
     Assert-Equal $tokens[15] "@escimeoff"
   }
 
-  It "swaps Left Win and Left Alt and uses Right Alt for IME on" {
+  It "keeps Win and Alt native and uses physical F13 and F15 as mods" {
     $configPath = Join-Path $PSScriptRoot "..\kanata.kbd"
     $config = Get-Content -LiteralPath $configPath -Raw
 
-    $leftSuper = "(?m)^\s*lsuper\s+" +
-      [regex]::Escape("(tap-hold-press 120 180 f13 (layer-while-held wm))") +
-      "\s*$"
-    if ($config -notmatch $leftSuper) {
-      throw "The Left Alt position must tap F13 and hold the window-manager layer."
+    foreach ($alias in @(
+      "imeoffmod (tap-hold-press 120 180 f13 (layer-while-held wm))",
+      "imeonmod (tap-hold-press 120 180 f15 (layer-while-held wm))"
+    )) {
+      Assert-Equal $config.Contains($alias) $true
     }
-
-    $rightIme = "(?m)^\s*imeon\s+" +
-      [regex]::Escape("(tap-hold-press 120 180 f15 ralt)") +
-      "\s*$"
-    if ($config -notmatch $rightIme) {
-      throw "Right Alt must tap F15 and hold the native Alt modifier."
-    }
-
-    $safeTab = "(?m)^\s*safetab\s+" +
-      [regex]::Escape(
-        "(switch ((input real lalt)) XX break () tab break)"
-      ) +
-      "\s*$"
-    if ($config -notmatch $safeTab) {
-      throw (
-        "Tab must stay blocked throughout the physical Super key chord " +
-        "and its release boundary."
-      )
-    }
-
-    if ($config -match 'safetab[^\r\n]*(input real lmet)') {
-      throw "The original Left Win position must retain native Alt+Tab."
-    }
-
-    $modifierRow = "(?m)^\s*_\s+lalt\s+@lsuper\s+@spcnav\s+@imeon\s+_\s+_\s*$"
-    Assert-Equal ([regex]::Matches($config, $modifierRow).Count) 2
+    Assert-Equal ($config -match "(?m)^\s*safetab\s+") $false
 
     $activeConfig = [regex]::Replace($config, "(?m);;.*$", "")
     $defsrc = [regex]::Match(
@@ -141,7 +143,8 @@ Context "Keyboard modifier configuration" {
     )
     Assert-Equal $defsrc.Success $true
     $sourceTokens = @($defsrc.Groups[1].Value -split "\s+" | Where-Object { $_ })
-    Assert-Equal $sourceTokens.Count 65
+    Assert-Equal $sourceTokens.Count 67
+    Assert-Equal ($sourceTokens[-2..-1] -join "|") "f13|f15"
 
     foreach ($layerName in @("us", "jis", "nav", "wm")) {
       $layer = [regex]::Match(
@@ -159,7 +162,27 @@ Context "Keyboard modifier configuration" {
         "(?ms)^\(deflayer\s+$layerName\s+(.*?)^\)\s*$"
       )
       $layerTokens = @($layer.Groups[1].Value -split "\s+" | Where-Object { $_ })
-      Assert-Equal $layerTokens[14] "@safetab"
+      Assert-Equal $layerTokens[14] "_"
+      Assert-Equal $layerTokens[55] "_"
+      Assert-Equal $layerTokens[56] "_"
+      Assert-Equal $layerTokens[58] "_"
+      Assert-Equal $layerTokens[65] "@imeoffmod"
+      Assert-Equal $layerTokens[66] "@imeonmod"
+    }
+  }
+
+  It "emits the GlazeWM and retained Windows shortcuts from the private mods" {
+    $configPath = Join-Path $PSScriptRoot "..\kanata.kbd"
+    $config = Get-Content -LiteralPath $configPath -Raw
+    $activeConfig = [regex]::Replace($config, "(?m);;.*$", "")
+
+    Assert-Equal ($activeConfig -match "(?m)^\(deflayer\s+wm\b") $true
+    Assert-Equal ($activeConfig -match "(?m)^\(deflayer\s+desktop\b") $false
+    foreach ($binding in @(
+      "f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23", "f24",
+      "C-A-f12", "A-tab", "A-spc"
+    )) {
+      Assert-Equal ($activeConfig -match "(?i)(?<!\S)$([regex]::Escape($binding))(?!\S)") $true
     }
 
     $wmLayer = [regex]::Match(
@@ -167,136 +190,22 @@ Context "Keyboard modifier configuration" {
       "(?ms)^\(deflayer\s+wm\s+(.*?)^\)\s*$"
     )
     Assert-Equal $wmLayer.Success $true
-
     $tokens = @($wmLayer.Groups[1].Value -split "\s+" | Where-Object { $_ })
-    $expectedTokens = @(
-      "XX", "@wm1", "@wm2", "@wm3", "@wm4", "@wm5", "@wm6",
-      "@wm7", "@wm8", "@wm9", "@wm0", "@wmminus", "@wmequal", "XX",
-      "XX", "C-A-q", "XX", "XX", "XX", "XX", "XX", "XX", "XX", "XX",
-      "pp", "XX", "XX", "XX",
-      "XX", "XX", "M-S-s", "XX", "@wmf", "XX", "@wmh", "@wmj", "@wmk",
-      "@wml", "XX", "XX", "C-A-t",
-      "XX", "XX", "XX", "XX", "XX", "C-A-b", "XX", "C-A-m", "@wmcomma",
-      "@wmperiod", "XX", "XX", "XX",
-      "XX", "_", "XX", "A-spc", "_", "XX", "XX",
-      "C-A-left", "C-A-down", "C-A-up", "C-A-rght"
-    )
-    Assert-Equal ($tokens -join "|") ($expectedTokens -join "|")
+    Assert-Equal $tokens.Count 67
+    Assert-Equal $tokens[29] "XX"
+    Assert-Equal $tokens[48] "C-A-f12"
+    Assert-Equal ($activeConfig -match "(?i)\bwindowstate\b") $false
+    Assert-Equal ($activeConfig -match "(?i)(?<!\S)M-(?:down|up)(?!\S)") $false
+  }
 
-    $shiftCondition = "((or (input real lsft) (input real rsft)))"
-    $controlCondition = "((or (input real lctl) (input real rctl)))"
-    foreach ($mapping in @(
-      @{ Name = "wm1"; Key = "1" },
-      @{ Name = "wm2"; Key = "2" },
-      @{ Name = "wm3"; Key = "3" },
-      @{ Name = "wm4"; Key = "4" },
-      @{ Name = "wm5"; Key = "5" },
-      @{ Name = "wm6"; Key = "6" },
-      @{ Name = "wm7"; Key = "7" },
-      @{ Name = "wm8"; Key = "8" },
-      @{ Name = "wm9"; Key = "9" },
-      @{ Name = "wm0"; Key = "0" },
-      @{ Name = "wmminus"; Key = "-" },
-      @{ Name = "wmequal"; Key = "=" }
-    )) {
-      $aliasLine = [regex]::Match(
-        $activeConfig,
-        "(?m)^\s*$($mapping.Name)\s+(.+?)\s*$"
-      )
-      Assert-Equal $aliasLine.Success $true
-      $expected = (
-        "(switch $shiftCondition C-A-S-$($mapping.Key) break " +
-        "() C-A-$($mapping.Key) break)"
-      )
-      Assert-Equal $aliasLine.Groups[1].Value $expected
-    }
+  It "passes Win and Alt through in the IME-only game profile" {
+    $configPath = Join-Path $PSScriptRoot "..\kanata-game.kbd"
+    $config = Get-Content -LiteralPath $configPath -Raw
 
-    foreach ($mapping in @(
-      @{ Name = "wmh"; Focus = "f16"; Move = "f20"; Reserve = "S-f16" },
-      @{ Name = "wmj"; Focus = "f17"; Move = "f21"; Reserve = "S-f17" },
-      @{ Name = "wmk"; Focus = "f18"; Move = "f22"; Reserve = "S-f18" },
-      @{ Name = "wml"; Focus = "f19"; Move = "f23"; Reserve = "S-f19" }
-    )) {
-      $aliasLine = [regex]::Match(
-        $activeConfig,
-        "(?m)^\s*$($mapping.Name)\s+(.+?)\s*$"
-      )
-      Assert-Equal $aliasLine.Success $true
-      $expected = (
-        "(switch $controlCondition $($mapping.Move) break " +
-        "$shiftCondition $($mapping.Reserve) break " +
-        "() $($mapping.Focus) break)"
-      )
-      Assert-Equal $aliasLine.Groups[1].Value $expected
-    }
-
-    $floatAlias = [regex]::Match(
-      $activeConfig,
-      "(?m)^\s*wmf\s+(.+?)\s*$"
-    )
-    Assert-Equal $floatAlias.Success $true
-    Assert-Equal $floatAlias.Groups[1].Value (
-      "(switch $shiftCondition C-A-S-f break () C-A-f break)"
-    )
-
-    foreach ($mapping in @(
-      @{ Name = "wmcomma"; Key = "," },
-      @{ Name = "wmperiod"; Key = "." }
-    )) {
-      $aliasLine = [regex]::Match(
-        $activeConfig,
-        "(?m)^\s*$($mapping.Name)\s+(.+?)\s*$"
-      )
-      Assert-Equal $aliasLine.Success $true
-      $expected = (
-        "(switch $controlCondition C-A-S-$($mapping.Key) break " +
-        "() C-A-$($mapping.Key) break)"
-      )
-      Assert-Equal $aliasLine.Groups[1].Value $expected
-    }
-
-    $whkdPath = Join-Path $PSScriptRoot "..\..\komorebi\whkdrc"
-    $whkdKeyAliases = @{
-      "oem_1" = ";"
-      "oem_comma" = ","
-      "oem_period" = "."
-      "oem_minus" = "-"
-      "oem_plus" = "="
-      "return" = "ret"
-      "right" = "rght"
-    }
-    $whkdChords = @(
-      foreach ($line in Get-Content -LiteralPath $whkdPath) {
-        $binding = [regex]::Match(
-          $line,
-          "^\s*ctrl\s+\+\s+alt(?:\s+\+\s+shift)?\s+\+\s+([^:]+?)\s+:"
-        )
-        $pause = [regex]::Match(
-          $line,
-          "^\s*\.pause\s+ctrl\s+\+\s+alt(?:\s+\+\s+shift)?\s+\+\s+(\S+)\s*$"
-        )
-        if ($binding.Success -or $pause.Success) {
-          $match = if ($binding.Success) { $binding } else { $pause }
-          $key = $match.Groups[1].Value.Trim()
-          if ($whkdKeyAliases.ContainsKey($key)) {
-            $key = $whkdKeyAliases[$key]
-          }
-          $prefix = if ($line -match "\+\s+shift\s+\+") {
-            "C-A-S-"
-          } else {
-            "C-A-"
-          }
-          "$prefix$key"
-        }
-      }
-    ) | Sort-Object -Unique
-    $wmChords = @(
-      [regex]::Matches($activeConfig, "(?<!\S)C-A-[^\s()]+") |
-        ForEach-Object { $_.Value } |
-        Sort-Object -Unique
-    )
-    $undefinedChords = @($wmChords | Where-Object { $_ -notin $whkdChords })
-    Assert-Equal ($undefinedChords -join "|") ""
+    Assert-Equal ($config -match "(?ms)^\(defsrc\s+f13\s+f15\s*\)") $true
+    Assert-Equal ($config -match "(?ms)^\(deflayer\s+game\s+_\s+_\s*\)") $true
+    Assert-Equal ($config -match "(?i)\b(?:lmet|rmet|lalt|ralt)\b") $false
+    Assert-Equal ($config -match "layer-while-held") $false
   }
 }
 
@@ -330,6 +239,7 @@ Context "Game mode installer integration" {
 
   It "installs and starts the game mode watcher" {
     foreach ($name in @(
+      "kanata-game.kbd",
       "KanataGameMode.psm1",
       "game-mode.ps1",
       "game-mode.json"
@@ -342,6 +252,7 @@ Context "Game mode installer integration" {
   It "lets the watcher restart Kanata after config updates" {
     foreach ($name in @(
       "kanata.kbd",
+      "kanata-game.kbd",
       "KanataGameMode.psm1",
       "game-mode.ps1",
       "game-mode.json"

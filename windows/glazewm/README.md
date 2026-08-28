@@ -39,8 +39,8 @@ show a UAC prompt when it starts.
 
 The managed configuration keeps the Komorebi-era 8 px inner gaps, 10 px outer
 gaps, Catppuccin borders, opaque windows, keyboard focus, twelve primary
-workspaces, and a secondary `vert` workspace. Workspace 11 and 12 use the
-managed automatic-floating policy for games.
+workspaces, and auxiliary `left` and `vert` workspaces. Registered games are
+moved to workspace 11 and made non-centered floating windows.
 
 ## Automatic layout
 
@@ -52,7 +52,7 @@ the important dwindle sequence: a tall tile splits top/bottom, then the wide
 bottom tile splits left/right. Closing a window may temporarily leave a
 single-child split; restarting GlazeWM rebuilds a clean tree.
 
-The same helper reconciles every tiling window in workspace 11 or 12 to
+The same helper reconciles every tiling window in workspace 11 to
 non-centered floating. This includes unfocused windows and windows that were
 already present when the helper started. Fullscreen and already-floating
 windows are left unchanged.
@@ -65,12 +65,23 @@ its `primary-monitor` preset. It is a Windows adaptation of the Arch Zetshell ba
 a centered clock with seconds. See `windows/zebar/README.md` for build and
 provider details.
 
+GlazeWM does not use static monitor indexes. At startup and after every managed
+display-profile change, the synchronization helper waits until GlazeWM sees the
+same display bounds as Windows, then routes workspaces 1 through 12 to the
+Windows primary display, `left` to the leftmost display, and `vert` to the
+rightmost display. With fewer displays, auxiliary workspaces collapse onto the
+available edge or the sole primary display. An existing Zebar process is kept
+alive across profile changes to avoid Zebar 3.3.1's orphaned-port bug; Zebar is
+started only when absent. The helper verifies the visible managed bar, listener
+ownership, and the 42 px primary-display top reservation.
+
 ## Application workspaces
 
 - Workspace 1: Zen Browser
 - Workspace 2: Zotero, Raindrop.io, Todoist, and Notion Calendar
 - Workspace 3: Spotify and Discord
 - Workspace 4: Obsidian
+- Workspace 11: registered games, floating and not centered
 
 At startup, the four managed workspace 2 windows are converted from a single
 horizontal row into two equal vertical pairs that fill the workspace. A hidden
@@ -83,22 +94,23 @@ Start Apps entries. GlazeWM window rules perform the workspace routing.
 
 ## Key bindings
 
-Kanata translates the physical Super layer to the `Ctrl+Alt` bindings below.
+Kanata translates either held physical `F13`/`F15` key to the private bindings
+below. Native Win and Alt are not used as GlazeWM modifiers.
 
 | Physical binding | Action |
 | --- | --- |
-| `Super+H/J/K/L` | Focus left/down/up/right |
-| `Super+Ctrl+H/J/K/L` | Move the focused window |
-| `Super+1..0` | Focus workspace 1..10 |
-| `Super+-/=` | Focus workspace 11/12 |
+| `F13/F15+H/J/K/L` | Focus left/down/up/right |
+| `F13/F15+Ctrl+H/J/K/L` | Move the focused window |
+| `F13/F15+1..0` | Focus workspace 1..10 |
+| `F13/F15+-/=` | Focus workspace 11/12 |
 | Add `Shift` to a workspace binding | Move and follow the window |
-| `Super+Enter` | Start WezTerm directly through `wezterm-gui` |
-| `Super+B` | Start Zen Browser |
-| `Super+F` | Toggle floating |
-| `Super+Shift+F` | Toggle fullscreen |
-| `Super+Arrow` | Resize the focused tile |
-| `Super+M` | Cycle audio outputs and show the selected device |
-| `Super+,/.` | Focus the monitor to the left/right |
+| `F13/F15+Enter` | Start WezTerm directly through `wezterm-gui` |
+| `F13/F15+B` | Start Zen Browser |
+| `F13/F15+F` | Toggle floating |
+| `F13/F15+Shift+F` | Toggle fullscreen |
+| `F13/F15+Arrow` | Resize the focused tile |
+| `F13/F15+M` | Cycle audio outputs and show the selected device |
+| `F13/F15+,` / `/` / `.` | Focus left/primary/right monitor index |
 
 GlazeWM can move a whole workspace between monitors but does not expose the
 same direct single-window monitor command as Komorebi. The shifted monitor

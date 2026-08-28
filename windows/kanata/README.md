@@ -18,56 +18,62 @@ registry update, and Kanata process run with normal user privileges.
 
 ## Key behavior
 
-- Swap the physical Left Win and Left Alt keycaps.
-- The original Left Alt position becomes Left Super: tap for IME off, or hold
-  it to activate the dedicated window-manager shortcut layer.
-- `Left Super+Space` from that position emits the native Windows `Alt+Space`
-  shortcut.
-- `Left Super+S` emits the native Windows `Win+Shift+S` shortcut for selecting
-  a screenshot region.
-- `Left Super+P` emits the standard media Play/Pause key.
-- The original Left Win position becomes a normal Left Alt key.
-- Tap Right Alt to turn the IME on, or hold it as a normal Alt key.
-- Right Super remains a native Windows key for shortcuts such as `Win+E` and
-  `Win+L`.
+- Configure the two physical keys beside Space in the keyboard firmware: the
+  left key must emit `F13`, and the right key must emit `F15`.
+- Tap `F13` for IME off or `F15` for IME on. Hold either key to activate the
+  GlazeWM shortcut layer.
+- Left/Right Win and Left/Right Alt remain native Windows keys.
 - Tap Space for Space, or hold it to activate the navigation layer.
 - `Space+Q` sends Escape and then turns the IME off.
 
-The dual-role keys use `tap-hold-press`, so pressing another key selects the
-hold action immediately rather than waiting for the hold timeout. The
-window-manager layer emits complete `Ctrl+Alt` output chords only for configured
-shortcuts and blocks other keys. Because the Left Super keycap now uses the
-physical Left Alt scan code, reserved shortcuts such as `Win+L` never reach
-Windows.
+| Shortcut | Action |
+| --- | --- |
+| `F13/F15+H/J/K/L` | Focus the GlazeWM window left/down/up/right |
+| `F13/F15+Ctrl+H/J/K/L` | Move the focused window |
+| `F13/F15+1..0,-,=` | Focus workspace 1..12 |
+| Add `Shift` to a workspace binding | Move and follow the active window |
+| `F13/F15+Q` | Close the active window |
+| `F13/F15+M` | Switch to the next configured audio output |
+| `F13/F15+Tab` | Switch windows with `Alt+Tab` |
+| `F13/F15+Space` | Open the launcher bound to `Alt+Space` |
+| `F13/F15+F / Shift+F` | Toggle floating/fullscreen |
+
+The firmware mapping is outside this repository. Kanata can validate and use
+`F13`/`F15`, but it cannot make a different hardware scancode become those
+keys without adding that original key to `defsrc`.
 
 ## Game mode
 
-The installer starts a user-level watcher alongside Kanata. By default, Kanata
-is stopped completely only while the foreground window belongs to an
-executable under a detected Steam `steamapps\common` directory. It starts again
-750 ms after focus leaves the game, which avoids restart churn during brief
-focus changes. Explicit executable-name fallbacks cover Street Fighter 6,
-Satisfactory, Shadowverse: Worlds Beyond, and Aimlabs when a process path
-cannot be read.
+The installer starts a user-level watcher alongside Kanata. When a detected
+game process is running, the watcher switches Kanata from the normal
+`kanata.kbd` configuration to the IME-only `kanata-game.kbd` configuration.
+The game profile maps only `F13` and `F15`, which continue to reach Windows as
+the IME Off/On keys. Win, Alt, navigation, and every other key pass through;
+all window-manager and custom shortcut layers are disabled.
 
-Valorant is also detected by executable name in `game-mode.json`. Add other
-non-Steam games to `hard_off_executables` using executable file names only. Set
-`disable_only_when_game_foreground` to `false` to keep Kanata disabled for the
-entire game process lifetime. The watcher polls four times per second, runs
-without administrator privileges, and replaces the direct Kanata login entry.
+Every executable under a detected Steam `steamapps\common` directory is
+detected. Executable-name fallbacks cover Street Fighter 6, Satisfactory,
+Shadowverse: Worlds Beyond, Aimlabs, Valorant, Genshin Impact, Honkai: Star Rail,
+and Escape from Tarkov when a process path cannot be read. Because
+`disable_only_when_game_foreground` is `true`, the game profile is active only
+while a detected game's window owns the foreground. The normal profile returns
+750 ms after focus leaves the game. The watcher
+polls four times per second, runs without administrator privileges, and replaces
+the direct Kanata login entry.
 
 Long-running Steam utilities can be excluded with `steam_ignore_executables`.
 Wallpaper Engine's renderer, service, UI, web wallpaper, and application
-injection processes are excluded by default so they do not keep Kanata
-disabled after a game exits.
+injection processes are excluded by default so they do not keep the game
+profile active after a game exits.
 
 Entire Steam application directories can be excluded with
 `steam_ignore_directories`. The default `wallpaper_engine` entry also covers
 helper executables such as `winrtutil64.exe`, while Steam itself remains
 outside `steamapps\common` and is never classified as a game.
 
-Stopping the user-mode Kanata process avoids remapping while a detected game is
-focused, but it does not guarantee compatibility with every anti-cheat system.
+Switching profiles restarts the user-mode Kanata process, so Kanata remains
+active during games, and compatibility with every anti-cheat system is not
+guaranteed.
 Follow each game's anti-cheat policy; driver and input-tool restrictions may
 change independently of this configuration.
 

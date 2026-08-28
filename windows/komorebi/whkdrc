@@ -5,7 +5,11 @@
 ctrl + alt + t : Start-Process wezterm -WindowStyle Hidden
 ctrl + alt + b : Start-Process zen
 ctrl + alt + q : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" close
-ctrl + alt + m : & "$Env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$Env:KOMOREBI_CONFIG_HOME\switch-audio.ps1"
+
+# Monitor profiles
+ctrl + alt + shift + a : & "$Env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$Env:LOCALAPPDATA\dotfiles\monitor-profiles\Switch-MonitorProfile.ps1" -Name all
+ctrl + alt + shift + c : & "$Env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$Env:LOCALAPPDATA\dotfiles\monitor-profiles\Switch-MonitorProfile.ps1" -Name left-center
+ctrl + alt + shift + r : & "$Env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$Env:LOCALAPPDATA\dotfiles\monitor-profiles\Switch-MonitorProfile.ps1" -Name right-only
 
 # Focus windows
 ctrl + alt + h : & "$Env:ProgramFiles\komorebi\bin\komorebic.exe" focus left

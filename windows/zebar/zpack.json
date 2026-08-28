@@ -6,7 +6,7 @@
     {
       "name": "bar",
       "htmlPath": "./dist/index.html",
-      "zOrder": "top_most",
+      "zOrder": "normal",
       "shownInTaskbar": false,
       "focused": false,
       "resizable": false,
@@ -19,6 +19,10 @@
           {
             "program": "C:\\Windows\\System32\\nvidia-smi.exe",
             "argsRegex": "^--query-gpu=utilization\\.gpu,temperature\\.gpu --format=csv,noheader,nounits --id=0 --loop-ms=2000$"
+          },
+          {
+            "program": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+            "argsRegex": "^-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command & \"\\$env:LOCALAPPDATA\\\\dotfiles\\\\monitor-profiles\\\\Switch-MonitorProfile\\.ps1\" -Name (all|left-center|right-only)$"
           }
         ]
       },

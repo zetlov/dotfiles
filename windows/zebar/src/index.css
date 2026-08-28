@@ -82,6 +82,38 @@ button {
   padding: 0 4px;
 }
 
+.monitor-profile-card {
+  color: var(--accent);
+  gap: 6px;
+  padding: 0 9px;
+}
+
+.monitor-profile-card.error {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.monitor-profile-select {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  outline: none;
+  padding: 0 2px;
+}
+
+.monitor-profile-select:disabled {
+  color: var(--muted);
+  cursor: wait;
+}
+
+.monitor-profile-select option {
+  background: #202634;
+  color: var(--text);
+}
+
 .workspace-button,
 .icon-button {
   align-items: center;

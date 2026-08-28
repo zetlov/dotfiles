@@ -39,14 +39,6 @@ Assert-KomorebiInactive
 $processModule = Join-Path $PSScriptRoot "GlazeWMProcess.psm1"
 Import-Module $processModule -Force -ErrorAction Stop
 
-$sourceAudioInstaller = Join-Path `
-  $PSScriptRoot `
-  "..\audio\AudioOutputInstaller.psm1"
-if (-not (Test-Path -LiteralPath $sourceAudioInstaller -PathType Leaf)) {
-  throw "Required audio installer module not found: $sourceAudioInstaller"
-}
-Import-Module $sourceAudioInstaller -Force -ErrorAction Stop
-
 if ($env:OS -ne "Windows_NT") {
   throw "This script must run on Windows."
 }
@@ -194,36 +186,31 @@ $sourceWorkspaceHelpers = Join-Path `
   $PSScriptRoot `
   "GlazeWMWorkspaceHelpers.ps1"
 $sourceDaemon = Join-Path $PSScriptRoot "autotile.ps1"
+$sourceMonitorSyncModule = Join-Path `
+  $PSScriptRoot `
+  "GlazeWMMonitorSync.psm1"
+$sourceMonitorSyncScript = Join-Path `
+  $PSScriptRoot `
+  "Sync-GlazeMonitorLayout.ps1"
 $sourceStartupScript = Join-Path $PSScriptRoot "Start-GlazeWorkspaceApps.ps1"
 $sourceStartupConfig = Join-Path $PSScriptRoot "startup-apps.json"
 $sourceZebarInstaller = Join-Path $PSScriptRoot "..\zebar\install.ps1"
-$komorebiSourceRoot = Join-Path $PSScriptRoot "..\komorebi"
-$sourceAudioScript = Join-Path $komorebiSourceRoot "switch-audio.ps1"
-$localAudioConfig = Join-Path $komorebiSourceRoot "audio-output.local.json"
-$defaultAudioConfig = Join-Path $komorebiSourceRoot "audio-output.json"
-$sourceAudioConfig = if (Test-Path -LiteralPath $localAudioConfig -PathType Leaf) {
-  $localAudioConfig
-} else {
-  $defaultAudioConfig
-}
 
 foreach ($sourcePath in @(
   $sourceConfig,
   $sourceModule,
   $sourceWorkspaceHelpers,
   $sourceDaemon,
+  $sourceMonitorSyncModule,
+  $sourceMonitorSyncScript,
   $sourceStartupScript,
   $sourceStartupConfig,
-  $sourceZebarInstaller,
-  $sourceAudioScript,
-  $sourceAudioConfig
+  $sourceZebarInstaller
 )) {
   if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) {
     throw "Required GlazeWM file not found: $sourcePath"
   }
 }
-
-[void](Install-AudioDeviceModule -RequiredVersion "3.1.0.2")
 
 New-Item -ItemType Directory -Path $ConfigRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $RuntimeRoot -Force | Out-Null
@@ -243,20 +230,20 @@ $runtimeDeployments = @(
     Destination = Join-Path $RuntimeRoot "autotile.ps1"
   },
   [pscustomobject]@{
+    Source = $sourceMonitorSyncModule
+    Destination = Join-Path $RuntimeRoot "GlazeWMMonitorSync.psm1"
+  },
+  [pscustomobject]@{
+    Source = $sourceMonitorSyncScript
+    Destination = Join-Path $RuntimeRoot "Sync-GlazeMonitorLayout.ps1"
+  },
+  [pscustomobject]@{
     Source = $sourceStartupScript
     Destination = Join-Path $RuntimeRoot "Start-GlazeWorkspaceApps.ps1"
   },
   [pscustomobject]@{
     Source = $sourceStartupConfig
     Destination = Join-Path $RuntimeRoot "startup-apps.json"
-  },
-  [pscustomobject]@{
-    Source = $sourceAudioScript
-    Destination = Join-Path $RuntimeRoot "switch-audio.ps1"
-  },
-  [pscustomobject]@{
-    Source = $sourceAudioConfig
-    Destination = Join-Path $RuntimeRoot "audio-output.json"
   }
 )
 
@@ -329,6 +316,9 @@ if (
 }
 
 $deployedDaemon = Join-Path $RuntimeRoot "autotile.ps1"
+$deployedMonitorSyncScript = Join-Path `
+  $RuntimeRoot `
+  "Sync-GlazeMonitorLayout.ps1"
 $deployedStartupScript = Join-Path $RuntimeRoot "Start-GlazeWorkspaceApps.ps1"
 $startupStatePath = Join-Path $RuntimeRoot "startup-apps-state.json"
 $startupErrorPath = Join-Path $RuntimeRoot "startup-apps-error.log"
@@ -414,7 +404,10 @@ try {
       -ScriptPath $deployedDaemon
     $startupAppsProcess = Start-HiddenPowerShellScript `
       -ScriptPath $deployedStartupScript
-    Start-ManagedZebar -ZebarState $zebarState
+    & $deployedMonitorSyncScript `
+      -GlazeWMPath $GlazeWMPath `
+      -ZebarPath $zebarState.ZebarPath `
+      -RestartZebar | Out-Null
   }
 
   $daemonDeadline = (Get-Date).AddSeconds($StartupTimeoutSeconds)

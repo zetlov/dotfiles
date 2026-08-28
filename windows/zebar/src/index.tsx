@@ -4,6 +4,7 @@ import {
   Cpu,
   Gpu,
   MemoryStick,
+  Monitor,
   Pause,
   Play,
   SkipBack,
@@ -25,6 +26,12 @@ import {
   sortWorkspaces,
 } from './view-model';
 import { startGpuMonitor } from './gpu-monitor';
+import {
+  createMonitorProfileCommand,
+  getMonitorProfileForCount,
+  monitorProfiles,
+  type MonitorProfileName,
+} from './monitor-profiles';
 
 const providers = zebar.createProviderGroup({
   audio: { type: 'audio' },
@@ -52,6 +59,10 @@ function App() {
     readonly temperature: number;
     readonly usage: number;
   } | null>(null);
+  const [pendingMonitorProfile, setPendingMonitorProfile] =
+    createSignal<MonitorProfileName | null>(null);
+  const [monitorProfileError, setMonitorProfileError] =
+    createSignal<string | null>(null);
   providers.onOutput(outputMap => setOutput(outputMap));
   onCleanup(startGpuMonitor(
     setGpuMetrics,
@@ -62,6 +73,32 @@ function App() {
     const volume = output.audio?.defaultPlaybackDevice?.volume;
     if (volume === undefined) return;
     void output.audio?.setVolume(clampPercent(volume + delta));
+  };
+
+  const currentMonitorProfile = () => getMonitorProfileForCount(
+    output.glazewm?.allMonitors.length ?? 0,
+  );
+
+  const switchMonitorProfile = async (name: string) => {
+    if (pendingMonitorProfile() || name === currentMonitorProfile()) return;
+    const command = createMonitorProfileCommand(name);
+    setPendingMonitorProfile(name as MonitorProfileName);
+    setMonitorProfileError(null);
+    try {
+      const process = await zebar.shellSpawn(
+        command.program,
+        [...command.args],
+      );
+      process.onExit(({ exitCode }) => {
+        setPendingMonitorProfile(null);
+        if (exitCode !== 0) {
+          setMonitorProfileError('Monitor profile switch failed');
+        }
+      });
+    } catch {
+      setPendingMonitorProfile(null);
+      setMonitorProfileError('Monitor profile switch failed');
+    }
   };
 
   return (
@@ -93,6 +130,27 @@ function App() {
             </div>
           )}
         </Show>
+
+        <div
+          class="island monitor-profile-card"
+          classList={{ error: monitorProfileError() !== null }}
+          title={monitorProfileError() ?? 'Monitor profile'}
+          aria-busy={pendingMonitorProfile() !== null}
+        >
+          <Monitor size={14} />
+          <select
+            class="monitor-profile-select"
+            aria-label="Monitor profile"
+            value={pendingMonitorProfile() ?? currentMonitorProfile() ?? ''}
+            disabled={pendingMonitorProfile() !== null}
+            onChange={event => void switchMonitorProfile(event.currentTarget.value)}
+          >
+            <option value="" disabled>Unknown layout</option>
+            <For each={monitorProfiles}>
+              {profile => <option value={profile.name}>{profile.label}</option>}
+            </For>
+          </select>
+        </div>
 
         <Show when={output.media?.currentSession}>
           {session => (

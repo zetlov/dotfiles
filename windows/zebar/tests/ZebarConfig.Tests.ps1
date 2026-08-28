@@ -36,7 +36,6 @@ Describe "Zetshell Zebar configuration" {
     $stylePath = Join-Path $root "src\index.css"
     $installerPath = Join-Path $root "install.ps1"
     $processHelpersPath = Join-Path $root "ZebarProcessHelpers.ps1"
-    $glazeConfigPath = Join-Path $root "..\glazewm\config.yaml"
     $packagePath = Join-Path $root "package.json"
     $misePath = Join-Path $root "mise.toml"
     $workflowPath = Join-Path $root "..\..\.github\workflows\check.yaml"
@@ -52,6 +51,7 @@ Describe "Zetshell Zebar configuration" {
     $widget.htmlPath | Assert-Equal "./dist/index.html"
     (@($widget.includeFiles) -contains "dist/**/*") | Assert-Equal $true
     $widget.transparent | Assert-Equal $true
+    $widget.zOrder | Assert-Equal "normal"
     $preset.height | Assert-Equal "42px"
     $preset.width | Assert-Equal "100%"
     $preset.name | Assert-Equal "primary-monitor"
@@ -82,18 +82,39 @@ Describe "Zetshell Zebar configuration" {
     $source | Assert-Match -Not "https?://"
   }
 
-  It "allows only the pinned NVIDIA utilization and temperature command" {
+  It "allows only pinned GPU monitoring and managed monitor profile switching" {
     $pack = Get-Content -LiteralPath $packPath -Raw | ConvertFrom-Json
     $widget = @($pack.widgets)[0]
     $commands = @($widget.privileges.shellCommands)
 
-    $commands.Count | Assert-Equal 1
+    $commands.Count | Assert-Equal 2
     $commands[0].program | Assert-Equal "C:\Windows\System32\nvidia-smi.exe"
     $commands[0].argsRegex | Assert-Equal (
       '^--query-gpu=utilization\.gpu,temperature\.gpu ' +
       '--format=csv,noheader,nounits ' +
       '--id=0 --loop-ms=2000$'
     )
+    $commands[1].program | Assert-Equal (
+      "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+    )
+    $commands[1].argsRegex | Assert-Equal (
+      '^-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ' +
+      '& "\$env:LOCALAPPDATA\\dotfiles\\monitor-profiles\\' +
+      'Switch-MonitorProfile\.ps1" -Name ' +
+      '(all|left-center|right-only)$'
+    )
+  }
+
+  It "shows the current monitor profile in an accessible selector" {
+    $source = Get-Content -LiteralPath $sourcePath -Raw
+    $style = Get-Content -LiteralPath $stylePath -Raw
+
+    $source | Assert-Match 'class="[^"]*\bmonitor-profile-card\b[^"]*"'
+    $source | Assert-Match 'aria-label="Monitor profile"'
+    $source | Assert-Match 'createMonitorProfileCommand'
+    $source | Assert-Match 'allMonitors\.length'
+    $style | Assert-Match '\.monitor-profile-card\s*\{'
+    $style | Assert-Match '\.monitor-profile-select\s*\{'
   }
 
   It "uses floating glass islands with restrained motion" {
@@ -150,15 +171,14 @@ Describe "Zetshell Zebar configuration" {
     $workflow | Assert-Match 'git diff --exit-code -- dist'
   }
 
-  It "deploys the built pack and is started by GlazeWM" {
+  It "deploys the built pack independently" {
     $installer = Get-Content -LiteralPath $installerPath -Raw
-    $glazeConfig = Get-Content -LiteralPath $glazeConfigPath -Raw
 
     $installer | Assert-Match 'zpack\.json'
     $installer | Assert-Match 'dist'
     $installer | Assert-Match '\.glzr\\zebar\\zetshell'
-    $glazeConfig | Assert-Match 'zebar start-widget-preset'
-    $glazeConfig | Assert-Match 'window_process: \{ equals: ''zebar'' \}'
+    $installer | Assert-Match 'Test-ZebarPackMatches'
+    $installer | Assert-Match 'Get-FileHash'
   }
 
   It "pins and validates the Zebar runtime version" {
@@ -172,15 +192,12 @@ Describe "Zetshell Zebar configuration" {
 
   It "restores a running managed widget after deployment failure" {
     $installer = Get-Content -LiteralPath $installerPath -Raw
-    $glazeConfig = Get-Content -LiteralPath $glazeConfigPath -Raw
 
     $installer | Assert-Match '\$zebarWasRunning'
     $installer | Assert-Match 'if \(-not \$installed -and \$zebarWasRunning'
     $installer | Assert-Match 'start-widget-preset'
     $installer | Assert-Match '"--preset", "primary-monitor"'
-    $glazeConfig | Assert-Match '--preset primary-monitor'
     $installer | Assert-Match -Not 'all-monitors'
-    $glazeConfig | Assert-Match -Not 'all-monitors'
   }
 
   It "stops only the managed GPU monitor before replacing Zebar" {

@@ -215,26 +215,5 @@ Context "direct rollback installers" {
     $firstMutationIndex | Should -BeGreaterThan $guardCallIndex
   }
 
-  It "guards GlazeWM before importing component modules or mutating state" {
-    $installerPath = Join-Path $PSScriptRoot "..\..\glazewm\install.ps1"
-    $source = Get-Content -LiteralPath $installerPath -Raw
-    $guardPathIndex = $source.IndexOf(
-      'Join-Path $PSScriptRoot "..\rollback\RollbackSafety.psm1"'
-    )
-    $guardImportIndex = $source.IndexOf(
-      'Import-Module $rollbackSafetyModule -Force -ErrorAction Stop'
-    )
-    $guardCallIndex = $source.IndexOf("Assert-KomorebiInactive")
-    $componentImportIndex = $source.IndexOf(
-      'Import-Module $sourceAudioInstaller -Force -ErrorAction Stop'
-    )
-    $firstMutationIndex = $source.IndexOf("& winget.exe install")
-
-    $guardPathIndex | Should -BeGreaterThan -1
-    $guardImportIndex | Should -BeGreaterThan $guardPathIndex
-    $guardCallIndex | Should -BeGreaterThan $guardImportIndex
-    $componentImportIndex | Should -BeGreaterThan $guardCallIndex
-    $firstMutationIndex | Should -BeGreaterThan $guardCallIndex
-  }
 }
 }

@@ -158,7 +158,7 @@ function Test-GlazeWindowRequiresGameFloating {
     [AllowEmptyString()]
     [string]$WorkspaceName = "",
 
-    [string[]]$GameWorkspaceNames = @("11", "12")
+    [string[]]$GameWorkspaceNames = @("11")
   )
 
   return (
@@ -212,7 +212,7 @@ function Get-GlazeGameWorkspaceTilingWindows {
     [AllowEmptyCollection()]
     [object[]]$Workspaces,
 
-    [string[]]$GameWorkspaceNames = @("11", "12")
+    [string[]]$GameWorkspaceNames = @("11")
   )
 
   foreach ($workspace in $Workspaces) {
@@ -569,6 +569,25 @@ function Invoke-GlazeWorkspaceGrid {
       -WorkspaceName $WorkspaceName
     if ($null -ne $workspace) {
       $windows = @(Get-GlazeWindowsInContainer -Container $workspace)
+      $unmanagedWindows = @($windows | Where-Object {
+        $_.PSObject.Properties.Name -notcontains "processName" -or
+        [string]$_.processName -notin $ProcessNames
+      })
+      $duplicateManagedProcess = @(
+        $ProcessNames | Where-Object {
+          $processName = $_
+          @($windows | Where-Object {
+            $_.PSObject.Properties.Name -contains "processName" -and
+            [string]$_.processName -eq $processName
+          }).Count -gt 1
+        }
+      )
+      if (
+        $unmanagedWindows.Count -gt 0 -or
+        $duplicateManagedProcess.Count -gt 0
+      ) {
+        return
+      }
       if (Test-GlazeWorkspaceBalancedTwoByTwo `
         -Workspace $workspace `
         -Windows $windows `
@@ -635,7 +654,7 @@ function Invoke-GlazeGameWorkspaceReconcile {
     [Parameter(Mandatory = $true)]
     [string]$GlazeWMPath,
 
-    [string[]]$GameWorkspaceNames = @("11", "12")
+    [string[]]$GameWorkspaceNames = @("11")
   )
 
   $response = & $GlazeWMPath query workspaces 2>$null |
@@ -677,7 +696,7 @@ function Start-GlazeAutoTile {
     [ValidateRange(1, 30)]
     [int]$ReconnectDelaySeconds = 2,
 
-    [string[]]$GameWorkspaceNames = @("11", "12")
+    [string[]]$GameWorkspaceNames = @("11")
   )
 
   if (-not (Test-Path -LiteralPath $GlazeWMPath -PathType Leaf)) {

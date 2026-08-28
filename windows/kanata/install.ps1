@@ -59,6 +59,10 @@ if (-not (Test-Path $cfgSrc)) {
 }
 $gameModeSources = @(
   @{
+    Name = "kanata-game.kbd"
+    Path = Join-Path $PSScriptRoot "kanata-game.kbd"
+  },
+  @{
     Name = "KanataGameMode.psm1"
     Path = Join-Path $PSScriptRoot "KanataGameMode.psm1"
   },
@@ -107,6 +111,7 @@ $rollbackDir = Join-Path $tmp "rollback"
 $managedFileNames = @(
   "kanata.exe",
   "kanata.kbd",
+  "kanata-game.kbd",
   "install.json",
   "KanataGameMode.psm1",
   "game-mode.ps1",

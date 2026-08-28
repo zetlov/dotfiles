@@ -13,7 +13,7 @@ validate_windows_component_flag() {
 
 validate_windows_additional_component() {
     case "$1" in
-        ""|glazewm|komorebi) ;;
+        ""|glazewm,monitor-profiles|komorebi) ;;
         *)
             echo "Unsupported additional Windows component: $1" >&2
             return 1
@@ -29,11 +29,11 @@ resolve_windows_components() {
     validate_windows_component_flag "GlazeWM flag" "$1" || return 1
     validate_windows_component_flag "Komorebi flag" "$2" || return 1
     if [ "$1" = "1" ] && [ "$2" = "1" ]; then
-        echo "Choose only one Windows window manager." >&2
+        echo "GlazeWM and Komorebi cannot be selected together." >&2
         return 1
     fi
     if [ "$1" = "1" ]; then
-        printf '%s\n' glazewm
+        printf '%s\n' glazewm,monitor-profiles
     elif [ "$2" = "1" ]; then
         printf '%s\n' komorebi
     fi

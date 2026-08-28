@@ -1,8 +1,7 @@
 # Komorebi
 
-> Status: inactive rollback configuration. GlazeWM is the currently managed
-> window manager. Keep this directory only until the public GlazeWM setup has
-> remained stable long enough to remove the fallback safely.
+> Status: inactive rollback configuration. GlazeWM is the active window
+> manager. Keep this directory only for a bounded rollback period.
 
 This directory installs and manages Komorebi on the Windows side of WSL. The
 runtime configuration is copied to `%USERPROFILE%\.config\komorebi`; startup
@@ -82,10 +81,12 @@ shortcuts.
 | `Super+F` | `Ctrl+Alt+F` | Toggle floating |
 | `Super+Shift+F` | `Ctrl+Alt+Shift+F` | Toggle monocle |
 | `Super+Shift+J` | `Ctrl+Alt+Shift+;` | Cycle layout |
-| `Super+M` | `Ctrl+Alt+M` | Cycle the configured audio outputs |
 | `Super+,/.` | `Ctrl+Alt+,/.` | Focus previous/next monitor |
 | `Super+Ctrl+,/.` | `Ctrl+Alt+Shift+,/.` | Move window to previous/next monitor |
 | `Super+Arrow keys` | `Ctrl+Alt+Arrow keys` | Resize the focused tile |
+
+Audio switching remains owned by the active audio component on held
+`F13/F15+M`; whkd intentionally has no competing audio binding.
 
 Raw `Ctrl+Alt` bindings for monitor moves, configuration reload, layout
 cycling, promotion, and pausing whkd remain available as Windows-only

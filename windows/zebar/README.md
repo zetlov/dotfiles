@@ -1,5 +1,7 @@
 # Zetshell Zebar
 
+> Status: active shared component managed by the GlazeWM installer.
+
 This widget pack adapts the Arch Zetshell Quickshell bar for Windows and
 GlazeWM. It uses Zebar's official providers and a bundled SolidJS application,
 so the running bar does not load JavaScript from a CDN.
@@ -35,13 +37,16 @@ tracked because Windows only needs Zebar and the static bundle at runtime.
 
 ## Deployment
 
-`windows/glazewm/install.ps1` calls `windows/zebar/install.ps1`, which installs
-the official `glzr-io.zebar` 3.3.1 WinGet package when needed and transactionally
-deploys the pack to `%USERPROFILE%\.glzr\zebar\zetshell`. GlazeWM then opens the
-`primary-monitor` preset during startup. The preset docks a 42 px bar to the top
-edge of the primary monitor and reserves that work area. GPU utilization and
-core temperature come from one persistent, argument-restricted `nvidia-smi`
-process. Before replacing Zebar, the installer stops the current exact managed
-process and its utilization-only predecessor so neither can retain the local
-asset-server socket across deployment. Installation succeeds only after the
-responding `zetshell / bar` widget window is present.
+The GlazeWM installer calls `windows/zebar/install.ps1` and starts the
+`primary-monitor` preset. The preset docks a 42 px bar to the top
+edge of the primary monitor and reserves that work area. Its normal z-order
+keeps the reserved bar visible beside ordinary windows while allowing a
+fullscreen window to cover it. GPU utilization and core temperature come from
+one persistent, argument-restricted `nvidia-smi` process. Before replacing
+Zebar assets, the installer stops the current exact managed process and its
+utilization-only predecessor. Installation succeeds only after the responding
+`zetshell / bar` widget window is present. Monitor-profile changes preserve a
+responding bar because Zebar 3.3.1 can orphan its local asset-server socket
+during an otherwise normal restart. If port 6124 is already orphaned, monitor
+sync keeps an existing reserved bar running and refuses a new start with an
+explicit sign-out or reboot requirement.

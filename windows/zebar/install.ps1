@@ -73,6 +73,65 @@ try {
 if ($pack.name -ne "zetshell" -or @($pack.widgets).Count -ne 1) {
   throw "Unexpected Zebar widget pack identity."
 }
+
+function Test-ZebarPackMatches {
+  param(
+    [Parameter(Mandatory = $true)][string]$SourceRoot,
+    [Parameter(Mandatory = $true)][string]$DestinationRoot
+  )
+
+  if (-not (Test-Path -LiteralPath $DestinationRoot -PathType Container)) {
+    return $false
+  }
+  foreach ($requiredPath in @(
+    (Join-Path $DestinationRoot "zpack.json"),
+    (Join-Path $DestinationRoot "dist")
+  )) {
+    if (-not (Test-Path -LiteralPath $requiredPath)) {
+      return $false
+    }
+  }
+  $sourceFiles = @(
+    Get-Item -LiteralPath (Join-Path $SourceRoot "zpack.json")
+    Get-ChildItem -LiteralPath (Join-Path $SourceRoot "dist") -File -Recurse
+  )
+  $destinationFiles = @(
+    Get-Item -LiteralPath (Join-Path $DestinationRoot "zpack.json")
+    Get-ChildItem -LiteralPath (Join-Path $DestinationRoot "dist") -File -Recurse
+  )
+  $sourceRelative = @($sourceFiles | ForEach-Object {
+    $_.FullName.Substring($SourceRoot.Length).TrimStart('\', '/')
+  } | Sort-Object)
+  $destinationRelative = @($destinationFiles | ForEach-Object {
+    $_.FullName.Substring($DestinationRoot.Length).TrimStart('\', '/')
+  } | Sort-Object)
+  if (($sourceRelative -join "`n") -ne ($destinationRelative -join "`n")) {
+    return $false
+  }
+  foreach ($relativePath in $sourceRelative) {
+    $sourceHash = (Get-FileHash `
+      -LiteralPath (Join-Path $SourceRoot $relativePath) `
+      -Algorithm SHA256).Hash
+    $destinationHash = (Get-FileHash `
+      -LiteralPath (Join-Path $DestinationRoot $relativePath) `
+      -Algorithm SHA256).Hash
+    if ($sourceHash -ne $destinationHash) {
+      return $false
+    }
+  }
+  return $true
+}
+
+if (Test-ZebarPackMatches `
+  -SourceRoot $PSScriptRoot `
+  -DestinationRoot $DestinationRoot
+) {
+  return [pscustomobject]@{
+    Pack = "zetshell"
+    Destination = $DestinationRoot
+    ZebarPath = $ZebarPath
+  }
+}
 . $sourceProcessHelpers
 
 $destinationParent = Split-Path -Parent $DestinationRoot

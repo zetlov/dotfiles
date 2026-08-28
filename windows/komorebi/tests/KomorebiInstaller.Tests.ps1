@@ -893,10 +893,10 @@ Context "Hyprland-compatible hotkeys" {
     }
   }
 
-  It "cycles audio outputs with the Super M transport chord" {
+  It "leaves the active audio hotkey to the audio component" {
     Assert-Equal $whkdrc.Contains(
       'ctrl + alt + m : & "$Env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$Env:KOMOREBI_CONFIG_HOME\switch-audio.ps1"'
-    ) $true
+    ) $false
   }
 }
 

@@ -76,7 +76,7 @@ Context "Get-KanataSteamCommonPaths" {
 }
 
 Context "Get-KanataGameModeSettings" {
-  It "contains the requested Steam fallbacks and Valorant executables" {
+  It "contains the requested game executable fallbacks" {
     $settings = Get-KanataGameModeSettings `
       -Path (Join-Path $PSScriptRoot "..\game-mode.json")
     $expected = @(
@@ -86,7 +86,11 @@ Context "Get-KanataGameModeSettings" {
       "ShadowverseWB.exe",
       "AimLab_tb.exe",
       "VALORANT.exe",
-      "VALORANT-Win64-Shipping.exe"
+      "VALORANT-Win64-Shipping.exe",
+      "GenshinImpact.exe",
+      "StarRail.exe",
+      "EscapeFromTarkov.exe",
+      "EscapeFromTarkov_BE.exe"
     )
 
     Assert-Equal (
@@ -123,7 +127,11 @@ Context "Get-KanataGameModeSettings" {
     "ShadowverseWB.exe",
     "AimLab_tb.exe",
     "VALORANT.exe",
-    "VALORANT-Win64-Shipping.exe"
+    "VALORANT-Win64-Shipping.exe",
+    "GenshinImpact.exe",
+    "StarRail.exe",
+    "EscapeFromTarkov.exe",
+    "EscapeFromTarkov_BE.exe"
   ]
 }
 '@
@@ -137,7 +145,7 @@ Context "Get-KanataGameModeSettings" {
     Assert-Equal $settings.DisableOnlyWhenGameForeground $true
     Assert-Equal $settings.SteamIgnoreExecutables.Count 2
     Assert-Equal $settings.SteamIgnoreDirectories.Count 1
-    Assert-Equal $settings.HardOffExecutables.Count 7
+    Assert-Equal $settings.HardOffExecutables.Count 11
   }
 
   It "accepts empty executable lists" {
@@ -197,7 +205,11 @@ Context "Test-KanataGameProcess" {
       "ShadowverseWB.exe",
       "AimLab_tb.exe",
       "VALORANT.exe",
-      "VALORANT-Win64-Shipping.exe"
+      "VALORANT-Win64-Shipping.exe",
+      "GenshinImpact.exe",
+      "StarRail.exe",
+      "EscapeFromTarkov.exe",
+      "EscapeFromTarkov_BE.exe"
     )
     $steamIgnore = @(
       "applicationwallpaperinject32.exe",
@@ -370,44 +382,44 @@ Context "Get-KanataGameModeDecision" {
     $now = [datetime]::Parse("2026-07-31T00:00:00Z").ToUniversalTime()
   }
 
-  It "waits for keyboard release before stopping Kanata" {
+  It "waits for keyboard release before switching to the game profile" {
     $held = Get-KanataGameModeDecision `
       -GameActive $true `
-      -KanataRunning $true `
+      -CurrentProfile "Normal" `
       -KeyboardKeyPressed $true `
       -ResumeKanataAt ([datetime]::MinValue) `
       -Now $now `
       -ResumeDelayMilliseconds 750
     $released = Get-KanataGameModeDecision `
       -GameActive $true `
-      -KanataRunning $true `
+      -CurrentProfile "Normal" `
       -KeyboardKeyPressed $false `
       -ResumeKanataAt ([datetime]::MinValue) `
       -Now $now `
       -ResumeDelayMilliseconds 750
 
     Assert-Equal $held.Action "None"
-    Assert-Equal $released.Action "Stop"
+    Assert-Equal $released.Action "SwitchToGame"
   }
 
-  It "starts Kanata only after the resume delay" {
+  It "switches back to the normal profile only after the resume delay" {
     $initial = Get-KanataGameModeDecision `
       -GameActive $false `
-      -KanataRunning $false `
+      -CurrentProfile "Game" `
       -KeyboardKeyPressed $false `
       -ResumeKanataAt ([datetime]::MinValue) `
       -Now $now `
       -ResumeDelayMilliseconds 750
     $early = Get-KanataGameModeDecision `
       -GameActive $false `
-      -KanataRunning $false `
+      -CurrentProfile "Game" `
       -KeyboardKeyPressed $false `
       -ResumeKanataAt $initial.ResumeKanataAt `
       -Now $now.AddMilliseconds(749) `
       -ResumeDelayMilliseconds 750
     $ready = Get-KanataGameModeDecision `
       -GameActive $false `
-      -KanataRunning $false `
+      -CurrentProfile "Game" `
       -KeyboardKeyPressed $false `
       -ResumeKanataAt $initial.ResumeKanataAt `
       -Now $now.AddMilliseconds(750) `
@@ -416,13 +428,26 @@ Context "Get-KanataGameModeDecision" {
     Assert-Equal $initial.Action "None"
     Assert-Equal $initial.ResumeKanataAt $now.AddMilliseconds(750)
     Assert-Equal $early.Action "None"
-    Assert-Equal $ready.Action "Start"
+    Assert-Equal $ready.Action "SwitchToNormal"
   }
 
-  It "cancels a pending resume when game focus returns" {
+  It "keeps the game profile while a game remains active" {
     $decision = Get-KanataGameModeDecision `
       -GameActive $true `
-      -KanataRunning $false `
+      -CurrentProfile "Game" `
+      -KeyboardKeyPressed $false `
+      -ResumeKanataAt ([datetime]::MinValue) `
+      -Now $now `
+      -ResumeDelayMilliseconds 750
+
+    Assert-Equal $decision.Action "None"
+    Assert-Equal $decision.ResumeKanataAt ([datetime]::MinValue)
+  }
+
+  It "cancels a pending resume when a game becomes active again" {
+    $decision = Get-KanataGameModeDecision `
+      -GameActive $true `
+      -CurrentProfile "Game" `
       -KeyboardKeyPressed $false `
       -ResumeKanataAt $now.AddMilliseconds(750) `
       -Now $now.AddMilliseconds(200) `
@@ -481,7 +506,7 @@ Context "Watcher lifecycle implementation" {
     Assert-Equal $watcherSource.Contains('$games = @(') $true
   }
 
-  It "waits for keyboard release before stopping Kanata" {
+  It "waits for keyboard release before switching Kanata profiles" {
     $watcherSource = Get-Content `
       -LiteralPath (Join-Path $PSScriptRoot "..\game-mode.ps1") `
       -Raw
@@ -491,12 +516,53 @@ Context "Watcher lifecycle implementation" {
     ) $true
   }
 
+  It "starts the IME-only game configuration" {
+    $watcherSource = Get-Content `
+      -LiteralPath (Join-Path $PSScriptRoot "..\game-mode.ps1") `
+      -Raw
+
+    Assert-Equal $watcherSource.Contains("kanata-game.kbd") $true
+    Assert-Equal $watcherSource.Contains('"SwitchToGame"') $true
+    Assert-Equal $watcherSource.Contains('"SwitchToNormal"') $true
+  }
+
   It "restarts Kanata without its default startup delay" {
     $moduleSource = Get-Content `
       -LiteralPath (Join-Path $PSScriptRoot "..\KanataGameMode.psm1") `
       -Raw
 
     Assert-Equal $moduleSource.Contains('--nodelay --cfg') $true
+  }
+
+  It "fails closed when a managed Kanata process cannot be stopped" {
+    Mock Get-KanataManagedProcesses {
+      [pscustomobject]@{ Id = 4242 }
+    } -ModuleName KanataGameMode
+    Mock Stop-Process {
+      throw [System.InvalidOperationException]::new("access denied")
+    } -ModuleName KanataGameMode
+
+    Assert-Throws {
+      Stop-KanataManagedProcesses -ExePath "C:\Kanata\kanata.exe"
+    }
+  }
+
+  It "verifies managed process exit and startup before changing profiles" {
+    $moduleSource = Get-Content `
+      -LiteralPath (Join-Path $PSScriptRoot "..\KanataGameMode.psm1") `
+      -Raw
+    $watcherSource = Get-Content `
+      -LiteralPath (Join-Path $PSScriptRoot "..\game-mode.ps1") `
+      -Raw
+
+    Assert-Equal $moduleSource.Contains(
+      "Timed out waiting for managed Kanata processes to stop."
+    ) $true
+    Assert-Equal $moduleSource.Contains('$process.Refresh()') $true
+    Assert-Equal $moduleSource.Contains('$process.HasExited') $true
+    Assert-Equal $watcherSource.Contains(
+      '$currentProfile = "Game"'
+    ) $true
   }
 }
 }

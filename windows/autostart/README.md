@@ -2,7 +2,7 @@
 
 This rollback-only component manages per-user Task Scheduler entries for the
 GUI apps listed in `apps.json`. It remains paired with the retained Komorebi
-rollback configuration and is not part of the active GlazeWM lifecycle.
+rollback configuration and is not part of the active Windows setup.
 Windows starts the apps after logon; Komorebi independently routes their
 windows according to `windows/komorebi/komorebi.json`.
 
