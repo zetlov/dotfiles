@@ -382,44 +382,44 @@ Context "Get-KanataGameModeDecision" {
     $now = [datetime]::Parse("2026-07-31T00:00:00Z").ToUniversalTime()
   }
 
-  It "waits for keyboard release before switching to the game profile" {
+  It "waits for keyboard release before enabling game mode" {
     $held = Get-KanataGameModeDecision `
       -GameActive $true `
-      -CurrentProfile "Normal" `
+      -GameModeEnabled $false `
       -KeyboardKeyPressed $true `
       -ResumeKanataAt ([datetime]::MinValue) `
       -Now $now `
       -ResumeDelayMilliseconds 750
     $released = Get-KanataGameModeDecision `
       -GameActive $true `
-      -CurrentProfile "Normal" `
+      -GameModeEnabled $false `
       -KeyboardKeyPressed $false `
       -ResumeKanataAt ([datetime]::MinValue) `
       -Now $now `
       -ResumeDelayMilliseconds 750
 
     Assert-Equal $held.Action "None"
-    Assert-Equal $released.Action "SwitchToGame"
+    Assert-Equal $released.Action "EnableGameMode"
   }
 
-  It "switches back to the normal profile only after the resume delay" {
+  It "disables game mode only after the resume delay" {
     $initial = Get-KanataGameModeDecision `
       -GameActive $false `
-      -CurrentProfile "Game" `
+      -GameModeEnabled $true `
       -KeyboardKeyPressed $false `
       -ResumeKanataAt ([datetime]::MinValue) `
       -Now $now `
       -ResumeDelayMilliseconds 750
     $early = Get-KanataGameModeDecision `
       -GameActive $false `
-      -CurrentProfile "Game" `
+      -GameModeEnabled $true `
       -KeyboardKeyPressed $false `
       -ResumeKanataAt $initial.ResumeKanataAt `
       -Now $now.AddMilliseconds(749) `
       -ResumeDelayMilliseconds 750
     $ready = Get-KanataGameModeDecision `
       -GameActive $false `
-      -CurrentProfile "Game" `
+      -GameModeEnabled $true `
       -KeyboardKeyPressed $false `
       -ResumeKanataAt $initial.ResumeKanataAt `
       -Now $now.AddMilliseconds(750) `
@@ -428,13 +428,13 @@ Context "Get-KanataGameModeDecision" {
     Assert-Equal $initial.Action "None"
     Assert-Equal $initial.ResumeKanataAt $now.AddMilliseconds(750)
     Assert-Equal $early.Action "None"
-    Assert-Equal $ready.Action "SwitchToNormal"
+    Assert-Equal $ready.Action "DisableGameMode"
   }
 
-  It "keeps the game profile while a game remains active" {
+  It "keeps game mode enabled while a game remains active" {
     $decision = Get-KanataGameModeDecision `
       -GameActive $true `
-      -CurrentProfile "Game" `
+      -GameModeEnabled $true `
       -KeyboardKeyPressed $false `
       -ResumeKanataAt ([datetime]::MinValue) `
       -Now $now `
@@ -447,7 +447,7 @@ Context "Get-KanataGameModeDecision" {
   It "cancels a pending resume when a game becomes active again" {
     $decision = Get-KanataGameModeDecision `
       -GameActive $true `
-      -CurrentProfile "Game" `
+      -GameModeEnabled $true `
       -KeyboardKeyPressed $false `
       -ResumeKanataAt $now.AddMilliseconds(750) `
       -Now $now.AddMilliseconds(200) `
@@ -455,6 +455,76 @@ Context "Get-KanataGameModeDecision" {
 
     Assert-Equal $decision.Action "None"
     Assert-Equal $decision.ResumeKanataAt ([datetime]::MinValue)
+  }
+}
+
+Context "Set-KanataGameModeState" {
+  BeforeAll {
+    if (-not ("KanataTcpTestServer" -as [type])) {
+      Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading.Tasks;
+
+public static class KanataTcpTestServer
+{
+    public static Task<string[]> Start(TcpListener listener)
+    {
+        return Task.Factory.StartNew(() =>
+        {
+            using (TcpClient client = listener.AcceptTcpClient())
+            using (NetworkStream stream = client.GetStream())
+            using (StreamReader reader = new StreamReader(stream, new UTF8Encoding(false)))
+            using (StreamWriter writer = new StreamWriter(stream, new UTF8Encoding(false)))
+            {
+                writer.NewLine = "\n";
+                writer.AutoFlush = true;
+                writer.WriteLine("{\"LayerChange\":{\"new\":\"us\"}}");
+                string[] messages = new string[3];
+                messages[0] = reader.ReadLine();
+                writer.WriteLine("{\"FakeKeyNames\":{\"names\":[\"game-mode\"]}}");
+                messages[1] = reader.ReadLine();
+                messages[2] = reader.ReadLine();
+                writer.WriteLine("{\"FakeKeyNames\":{\"names\":[\"game-mode\"]}}");
+                return messages;
+            }
+        });
+    }
+}
+'@
+    }
+  }
+
+  It "validates the endpoint and sends virtual key state changes as JSON" {
+    foreach ($case in @(
+      [pscustomobject]@{ Enabled = $true; Action = "Press" },
+      [pscustomobject]@{ Enabled = $false; Action = "Release" }
+    )) {
+      $listener = New-Object `
+        -TypeName System.Net.Sockets.TcpListener `
+        -ArgumentList @([System.Net.IPAddress]::Loopback, 0)
+      $listener.Start()
+      $port = ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port
+      $serverTask = [KanataTcpTestServer]::Start($listener)
+      try {
+        Set-KanataGameModeState `
+          -Enabled $case.Enabled `
+          -Port $port
+        $messages = $serverTask.GetAwaiter().GetResult()
+      } finally {
+        $listener.Stop()
+      }
+
+      $request = $messages[0] | ConvertFrom-Json
+      $action = $messages[1] | ConvertFrom-Json
+      $barrier = $messages[2] | ConvertFrom-Json
+      Assert-Equal ($null -ne $request.RequestFakeKeyNames) $true
+      Assert-Equal $action.ActOnFakeKey.name "game-mode"
+      Assert-Equal $action.ActOnFakeKey.action $case.Action
+      Assert-Equal ($null -ne $barrier.RequestFakeKeyNames) $true
+    }
   }
 }
 
@@ -506,7 +576,7 @@ Context "Watcher lifecycle implementation" {
     Assert-Equal $watcherSource.Contains('$games = @(') $true
   }
 
-  It "waits for keyboard release before switching Kanata profiles" {
+  It "waits for keyboard release before changing the game virtual key" {
     $watcherSource = Get-Content `
       -LiteralPath (Join-Path $PSScriptRoot "..\game-mode.ps1") `
       -Raw
@@ -516,22 +586,30 @@ Context "Watcher lifecycle implementation" {
     ) $true
   }
 
-  It "starts the IME-only game configuration" {
+  It "changes game mode through the Kanata TCP virtual key" {
     $watcherSource = Get-Content `
       -LiteralPath (Join-Path $PSScriptRoot "..\game-mode.ps1") `
       -Raw
 
-    Assert-Equal $watcherSource.Contains("kanata-game.kbd") $true
-    Assert-Equal $watcherSource.Contains('"SwitchToGame"') $true
-    Assert-Equal $watcherSource.Contains('"SwitchToNormal"') $true
+    Assert-Equal $watcherSource.Contains("kanata-game.kbd") $false
+    Assert-Equal $watcherSource.Contains('"EnableGameMode"') $true
+    Assert-Equal $watcherSource.Contains('"DisableGameMode"') $true
+    Assert-Equal $watcherSource.Contains("Set-KanataGameModeState") $true
   }
 
-  It "restarts Kanata without its default startup delay" {
+  It "starts one Kanata process with a loopback-only TCP server" {
     $moduleSource = Get-Content `
       -LiteralPath (Join-Path $PSScriptRoot "..\KanataGameMode.psm1") `
       -Raw
 
-    Assert-Equal $moduleSource.Contains('--nodelay --cfg') $true
+    Assert-Equal $moduleSource.Contains(
+      '$script:KanataTcpAddress = "127.0.0.1"'
+    ) $true
+    Assert-Equal $moduleSource.Contains('$script:KanataTcpPort = 5829') $true
+    Assert-Equal $moduleSource.Contains('"--nodelay --port $tcpEndpoint "') $true
+    Assert-Equal $moduleSource.Contains(
+      '"--cfg $(Get-KanataQuotedArgument -Value $ConfigPath)"'
+    ) $true
   }
 
   It "fails closed when a managed Kanata process cannot be stopped" {
@@ -547,7 +625,7 @@ Context "Watcher lifecycle implementation" {
     }
   }
 
-  It "verifies managed process exit and startup before changing profiles" {
+  It "does not restart Kanata when game focus changes" {
     $moduleSource = Get-Content `
       -LiteralPath (Join-Path $PSScriptRoot "..\KanataGameMode.psm1") `
       -Raw
@@ -555,14 +633,60 @@ Context "Watcher lifecycle implementation" {
       -LiteralPath (Join-Path $PSScriptRoot "..\game-mode.ps1") `
       -Raw
 
-    Assert-Equal $moduleSource.Contains(
-      "Timed out waiting for managed Kanata processes to stop."
-    ) $true
-    Assert-Equal $moduleSource.Contains('$process.Refresh()') $true
-    Assert-Equal $moduleSource.Contains('$process.HasExited') $true
+    $focusSwitch = [regex]::Match(
+      $watcherSource,
+      '(?s)switch \(\$decision\.Action\) \{(.*?)\n\s{6}\}\n\s{4}\} catch'
+    )
+    Assert-Equal $focusSwitch.Success $true
+    Assert-Equal $focusSwitch.Groups[1].Value.Contains(
+      "Stop-KanataManagedProcesses"
+    ) $false
+    Assert-Equal $watcherSource.Contains("Start-KanataManagedProcess") $true
+    Assert-Equal $watcherSource.Contains('$gameModeEnabled = $true') $true
+  }
+
+  It "restarts Kanata only when a new process has no valid TCP endpoint" {
+    $watcherSource = Get-Content `
+      -LiteralPath (Join-Path $PSScriptRoot "..\game-mode.ps1") `
+      -Raw
+
     Assert-Equal $watcherSource.Contains(
-      '$currentProfile = "Game"'
+      'if (Test-KanataAnyKeyboardKeyPressed) {'
     ) $true
+    Assert-Equal ($watcherSource -match (
+      '(?s)if \(\$managedKanataId -ne \$kanataProcess\.Id\).*?' +
+      'Set-KanataGameModeState -Enabled \$false.*?catch \{.*?' +
+      'Stop-KanataManagedProcesses -ExePath \$exePath'
+    )) $true
+  }
+
+  It "marks the current process for recovery when a state change fails" {
+    $watcherSource = Get-Content `
+      -LiteralPath (Join-Path $PSScriptRoot "..\game-mode.ps1") `
+      -Raw
+
+    Assert-Equal ($watcherSource -match (
+      '(?s)"EnableGameMode" \{.*?' +
+      'Set-KanataGameModeState -Enabled \$true.*?catch \{.*?' +
+      '\$managedKanataId = 0.*?\$gameModeEnabled = \$true'
+    )) $true
+    Assert-Equal ($watcherSource -match (
+      '(?s)"DisableGameMode" \{.*?' +
+      'Set-KanataGameModeState -Enabled \$false.*?catch \{.*?' +
+      '\$managedKanataId = 0.*?\$gameModeEnabled = \$false'
+    )) $true
+  }
+
+  It "rechecks the keyboard immediately before a recovery restart" {
+    $watcherSource = Get-Content `
+      -LiteralPath (Join-Path $PSScriptRoot "..\game-mode.ps1") `
+      -Raw
+
+    Assert-Equal ($watcherSource -match (
+      '(?s)Set-KanataGameModeState -Enabled \$false.*?catch \{.*?' +
+      'if \(Test-KanataAnyKeyboardKeyPressed\).*?' +
+      'Stop-KanataManagedProcesses -ExePath \$exePath'
+    )) $true
   }
 }
 }

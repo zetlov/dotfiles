@@ -20,11 +20,12 @@ $cfgDst = Join-Path $InstallDir "kanata.kbd"
 $exeDst = Join-Path $InstallDir "kanata.exe"
 $managedFiles = @(
   "kanata.kbd",
-  "kanata-game.kbd",
   "KanataGameMode.psm1",
   "game-mode.ps1",
   "game-mode.json"
 )
+$legacyManagedFiles = @("kanata-game.kbd")
+$rollbackFileNames = @($managedFiles + $legacyManagedFiles)
 
 foreach ($name in $managedFiles) {
   $sourcePath = Join-Path $sourceDir $name
@@ -46,7 +47,7 @@ $backupDir = Join-Path $env:TEMP (
   "kanata_update_" + [guid]::NewGuid().ToString("N")
 )
 $previousFiles = @{}
-foreach ($name in $managedFiles) {
+foreach ($name in $rollbackFileNames) {
   $previousFiles[$name] = Test-Path `
     -LiteralPath (Join-Path $InstallDir $name) `
     -PathType Leaf
@@ -76,7 +77,7 @@ $changesStarted = $false
 
 try {
   New-Item -ItemType Directory -Path $backupDir | Out-Null
-  foreach ($name in $managedFiles) {
+  foreach ($name in $rollbackFileNames) {
     $destinationPath = Join-Path $InstallDir $name
     if ([bool]$previousFiles[$name]) {
       Copy-Item `
@@ -98,6 +99,12 @@ try {
       -Destination (Join-Path $InstallDir $name) `
       -Force
   }
+  foreach ($name in $legacyManagedFiles) {
+    $legacyPath = Join-Path $InstallDir $name
+    if (Test-Path -LiteralPath $legacyPath -PathType Leaf) {
+      Remove-Item -LiteralPath $legacyPath -Force
+    }
+  }
   Set-KanataGameModeRunEntry -InstallDir $InstallDir
 
   if ($Restart -or $watcherWasRunning) {
@@ -113,7 +120,7 @@ try {
     try {
       Stop-KanataGameModeWatcher -InstallDir $InstallDir
       Stop-KanataManagedProcesses -ExePath $exeDst
-      foreach ($name in $managedFiles) {
+      foreach ($name in $rollbackFileNames) {
         $backupPath = Join-Path $backupDir $name
         $destinationPath = Join-Path $InstallDir $name
         if (Test-Path -LiteralPath $backupPath -PathType Leaf) {

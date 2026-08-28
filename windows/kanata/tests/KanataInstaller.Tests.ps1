@@ -77,31 +77,15 @@ Context "Resolve-KanataDefenderExclusionPath" {
 }
 
 Context "Keyboard modifier configuration" {
-  It "passes only the dedicated IME keys through in the game profile" {
-    $configPath = Join-Path $PSScriptRoot "..\kanata-game.kbd"
+  It "disables only the Space layer while game mode is active" {
+    $configPath = Join-Path $PSScriptRoot "..\kanata.kbd"
     $config = Get-Content -LiteralPath $configPath -Raw
 
-    Assert-Equal ($config -match "(?ms)^\(defsrc\s+f13\s+f15\s*\)") $true
-    Assert-Equal ($config -match "(?ms)^\(deflayer\s+game\s+_\s+_\s*\)") $true
-    Assert-Equal $config.Contains("layer-while-held") $false
-    Assert-Equal $config.Contains("C-A-") $false
-
-    $activeConfig = [regex]::Replace($config, "(?m);;.*$", "")
-    $defsrc = [regex]::Match(
-      $activeConfig,
-      "(?ms)^\(defsrc\s+(.*?)^\)\s*$"
-    )
-    $gameLayer = [regex]::Match(
-      $activeConfig,
-      "(?ms)^\(deflayer\s+game\s+(.*?)^\)\s*$"
-    )
-    Assert-Equal $defsrc.Success $true
-    Assert-Equal $gameLayer.Success $true
-    $sourceTokens = @($defsrc.Groups[1].Value -split "\s+" | Where-Object { $_ })
-    $gameTokens = @($gameLayer.Groups[1].Value -split "\s+" | Where-Object { $_ })
-    Assert-Equal $gameTokens.Count $sourceTokens.Count
-
-    Assert-Equal ($config -match "(?i)\b(?:lmet|rmet|lalt|ralt)\b") $false
+    Assert-Equal ($config -match "(?ms)^\(defvirtualkeys\s+game-mode\s+nop0\s*\)") $true
+    Assert-Equal $config.Contains("((input virtual game-mode)) spc break") $true
+    Assert-Equal $config.Contains(
+      "() (tap-hold-press `$tap `$hold spc (layer-while-held nav)) break"
+    ) $true
   }
 
   It "turns IME off after sending Escape from Space+Q" {
@@ -198,14 +182,18 @@ Context "Keyboard modifier configuration" {
     Assert-Equal ($activeConfig -match "(?i)(?<!\S)M-(?:down|up)(?!\S)") $false
   }
 
-  It "passes Win and Alt through in the IME-only game profile" {
-    $configPath = Join-Path $PSScriptRoot "..\kanata-game.kbd"
+  It "keeps the F13 and F15 shortcut layer available during games" {
+    $configPath = Join-Path $PSScriptRoot "..\kanata.kbd"
     $config = Get-Content -LiteralPath $configPath -Raw
 
-    Assert-Equal ($config -match "(?ms)^\(defsrc\s+f13\s+f15\s*\)") $true
-    Assert-Equal ($config -match "(?ms)^\(deflayer\s+game\s+_\s+_\s*\)") $true
-    Assert-Equal ($config -match "(?i)\b(?:lmet|rmet|lalt|ralt)\b") $false
-    Assert-Equal ($config -match "layer-while-held") $false
+    Assert-Equal $config.Contains(
+      "imeoffmod (tap-hold-press 120 180 f13 (layer-while-held wm))"
+    ) $true
+    Assert-Equal $config.Contains(
+      "imeonmod (tap-hold-press 120 180 f15 (layer-while-held wm))"
+    ) $true
+    Assert-Equal ($config -match "(?m)^\(deflayer\s+wm\b") $true
+    Assert-Equal $config.Contains("C-A-f12") $true
   }
 }
 
@@ -239,7 +227,6 @@ Context "Game mode installer integration" {
 
   It "installs and starts the game mode watcher" {
     foreach ($name in @(
-      "kanata-game.kbd",
       "KanataGameMode.psm1",
       "game-mode.ps1",
       "game-mode.json"
@@ -252,7 +239,6 @@ Context "Game mode installer integration" {
   It "lets the watcher restart Kanata after config updates" {
     foreach ($name in @(
       "kanata.kbd",
-      "kanata-game.kbd",
       "KanataGameMode.psm1",
       "game-mode.ps1",
       "game-mode.json"
@@ -261,6 +247,12 @@ Context "Game mode installer integration" {
     }
     Assert-Equal $updateScript.Contains("Start-KanataGameModeWatcher") $true
     Assert-Equal $updateScript.Contains("Set-KanataGameModeRunEntry") $true
+    Assert-Equal $updateScript.Contains(
+      '$legacyManagedFiles = @("kanata-game.kbd")'
+    ) $true
+    Assert-Equal $updateScript.Contains(
+      "Remove-Item -LiteralPath `$legacyPath -Force"
+    ) $true
   }
 
   It "stops and unregisters the watcher during uninstall" {

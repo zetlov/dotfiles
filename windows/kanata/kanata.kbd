@@ -7,9 +7,16 @@
   hold 220
 )
 
+(defvirtualkeys
+  game-mode nop0
+)
+
 (defalias
-  ;; Space: tap=space / hold=navigation layer.
-  spcnav (tap-hold-press $tap $hold spc (layer-while-held nav))
+  ;; Space is plain while a foreground game is active. Otherwise, tap=space
+  ;; and hold=navigation layer.
+  spcnav (switch
+    ((input virtual game-mode)) spc break
+    () (tap-hold-press $tap $hold spc (layer-while-held nav)) break)
 
   ;; Dedicated physical keys beside Space: tap=IME / hold=GlazeWM layer.
   imeoffmod (tap-hold-press 120 180 f13 (layer-while-held wm))

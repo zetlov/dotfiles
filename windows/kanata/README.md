@@ -44,12 +44,16 @@ keys without adding that original key to `defsrc`.
 
 ## Game mode
 
-The installer starts a user-level watcher alongside Kanata. When a detected
-game process is running, the watcher switches Kanata from the normal
-`kanata.kbd` configuration to the IME-only `kanata-game.kbd` configuration.
-The game profile maps only `F13` and `F15`, which continue to reach Windows as
-the IME Off/On keys. Win, Alt, navigation, and every other key pass through;
-all window-manager and custom shortcut layers are disabled.
+The installer starts a user-level watcher alongside Kanata. Kanata listens only
+on loopback TCP port `5829`, and the watcher presses or releases its private
+`game-mode` virtual key when a detected game gains or loses foreground focus.
+Kanata is not restarted on focus changes, which prevents synthesized modifiers
+from being left pressed during a profile restart.
+
+While game mode is active, Space is a plain Space key: holding it does not open
+the navigation layer, so `Space+Q` and the other Space-layer shortcuts are
+disabled. The physical `F13`/`F15` keys still provide IME Off/On on tap and the
+full GlazeWM shortcut layer on hold. Native Win and Alt remain unchanged.
 
 Every executable under a detected Steam `steamapps\common` directory is
 detected. Executable-name fallbacks cover Street Fighter 6, Satisfactory,
@@ -71,9 +75,8 @@ Entire Steam application directories can be excluded with
 helper executables such as `winrtutil64.exe`, while Steam itself remains
 outside `steamapps\common` and is never classified as a game.
 
-Switching profiles restarts the user-mode Kanata process, so Kanata remains
-active during games, and compatibility with every anti-cheat system is not
-guaranteed.
+Kanata remains active while games are running, and compatibility with every
+anti-cheat system is not guaranteed.
 Follow each game's anti-cheat policy; driver and input-tool restrictions may
 change independently of this configuration.
 

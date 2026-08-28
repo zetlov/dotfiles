@@ -1,5 +1,8 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+$script:KanataTcpAddress = "127.0.0.1"
+$script:KanataTcpPort = 5829
+$script:KanataGameModeVirtualKey = "game-mode"
 
 function ConvertTo-KanataExecutableList {
   param(
@@ -436,8 +439,7 @@ function Get-KanataGameModeDecision {
     [bool]$GameActive,
 
     [Parameter(Mandatory = $true)]
-    [ValidateSet("Normal", "Game", "Stopped", "Unknown")]
-    [string]$CurrentProfile,
+    [bool]$GameModeEnabled,
 
     [Parameter(Mandatory = $true)]
     [bool]$KeyboardKeyPressed,
@@ -454,17 +456,17 @@ function Get-KanataGameModeDecision {
   )
 
   if ($GameActive) {
-    $action = if ($CurrentProfile -eq "Game" -or $KeyboardKeyPressed) {
+    $action = if ($GameModeEnabled -or $KeyboardKeyPressed) {
       "None"
     } else {
-      "SwitchToGame"
+      "EnableGameMode"
     }
     return [pscustomobject]@{
       Action = $action
       ResumeKanataAt = [datetime]::MinValue
     }
   }
-  if ($CurrentProfile -eq "Normal") {
+  if (-not $GameModeEnabled) {
     return [pscustomobject]@{
       Action = "None"
       ResumeKanataAt = [datetime]::MinValue
@@ -478,7 +480,7 @@ function Get-KanataGameModeDecision {
   }
   if ($Now -ge $ResumeKanataAt -and -not $KeyboardKeyPressed) {
     return [pscustomobject]@{
-      Action = "SwitchToNormal"
+      Action = "DisableGameMode"
       ResumeKanataAt = [datetime]::MinValue
     }
   }
@@ -669,7 +671,11 @@ function Start-KanataManagedProcess {
       throw "Required Kanata file not found: $path"
     }
   }
-  $arguments = "--nodelay --cfg $(Get-KanataQuotedArgument -Value $ConfigPath)"
+  $tcpEndpoint = "${script:KanataTcpAddress}:${script:KanataTcpPort}"
+  $arguments = (
+    "--nodelay --port $tcpEndpoint " +
+    "--cfg $(Get-KanataQuotedArgument -Value $ConfigPath)"
+  )
   $process = Start-Process `
     -FilePath $ExePath `
     -ArgumentList $arguments `
@@ -684,6 +690,124 @@ function Start-KanataManagedProcess {
     )
   }
   return $process
+}
+
+function Read-KanataTcpMessage {
+  param(
+    [Parameter(Mandatory = $true)]
+    [System.IO.StreamReader]$Reader,
+
+    [Parameter(Mandatory = $true)]
+    [string]$Description
+  )
+
+  $line = $Reader.ReadLine()
+  if ([string]::IsNullOrWhiteSpace($line)) {
+    throw "Kanata TCP server returned no ${Description}."
+  }
+  try {
+    return ($line | ConvertFrom-Json)
+  } catch {
+    throw "Kanata TCP server returned invalid JSON for ${Description}."
+  }
+}
+
+function Confirm-KanataGameModeEndpoint {
+  param(
+    [Parameter(Mandatory = $true)]
+    [System.IO.StreamReader]$Reader,
+
+    [Parameter(Mandatory = $true)]
+    [System.IO.StreamWriter]$Writer,
+
+    [switch]$ReadGreeting
+  )
+
+  if ($ReadGreeting) {
+    $greeting = Read-KanataTcpMessage `
+      -Reader $Reader `
+      -Description "initial layer message"
+    if (-not $greeting.PSObject.Properties["LayerChange"]) {
+      throw "Unexpected service is listening on the Kanata TCP endpoint."
+    }
+  }
+
+  $Writer.WriteLine('{"RequestFakeKeyNames":{}}')
+  $response = Read-KanataTcpMessage `
+    -Reader $Reader `
+    -Description "fake key list"
+  $fakeKeys = $response.PSObject.Properties["FakeKeyNames"]
+  $names = if ($fakeKeys) { @($fakeKeys.Value.names) } else { @() }
+  if ($names -notcontains $script:KanataGameModeVirtualKey) {
+    throw "Kanata configuration does not define the game mode virtual key."
+  }
+}
+
+function Set-KanataGameModeState {
+  param(
+    [Parameter(Mandatory = $true)]
+    [bool]$Enabled,
+
+    [ValidateRange(1, 65535)]
+    [int]$Port = $script:KanataTcpPort,
+
+    [ValidateRange(100, 5000)]
+    [int]$TimeoutMilliseconds = 1000
+  )
+
+  $action = if ($Enabled) { "Press" } else { "Release" }
+  $payload = @{
+    ActOnFakeKey = @{
+      name = $script:KanataGameModeVirtualKey
+      action = $action
+    }
+  } | ConvertTo-Json -Compress
+  $client = New-Object System.Net.Sockets.TcpClient
+  $asyncResult = $null
+  $reader = $null
+  $writer = $null
+  try {
+    $asyncResult = $client.BeginConnect(
+      $script:KanataTcpAddress,
+      $Port,
+      $null,
+      $null
+    )
+    if (-not $asyncResult.AsyncWaitHandle.WaitOne($TimeoutMilliseconds)) {
+      throw "Timed out connecting to the Kanata TCP server."
+    }
+    $client.EndConnect($asyncResult)
+    $stream = $client.GetStream()
+    $stream.ReadTimeout = $TimeoutMilliseconds
+    $stream.WriteTimeout = $TimeoutMilliseconds
+    $encoding = New-Object System.Text.UTF8Encoding($false)
+    $reader = New-Object System.IO.StreamReader($stream, $encoding)
+    $writer = New-Object System.IO.StreamWriter($stream, $encoding)
+    $writer.NewLine = "`n"
+    $writer.AutoFlush = $true
+
+    Confirm-KanataGameModeEndpoint `
+      -Reader $reader `
+      -Writer $writer `
+      -ReadGreeting
+    $writer.WriteLine($payload)
+    # A response to the following request proves that the preceding action was
+    # processed on this ordered TCP connection.
+    Confirm-KanataGameModeEndpoint -Reader $reader -Writer $writer
+  } catch {
+    throw "Failed to set Kanata game mode to ${action}: $($_.Exception.Message)"
+  } finally {
+    if ($asyncResult) {
+      $asyncResult.AsyncWaitHandle.Dispose()
+    }
+    if ($writer) {
+      $writer.Dispose()
+    }
+    if ($reader) {
+      $reader.Dispose()
+    }
+    $client.Dispose()
+  }
 }
 
 function Get-KanataManagedProcesses {
@@ -852,6 +976,7 @@ Export-ModuleMember -Function `
   Test-KanataOwnedRunValue, `
   Set-KanataGameModeRunEntry, `
   Start-KanataManagedProcess, `
+  Set-KanataGameModeState, `
   Get-KanataManagedProcesses, `
   Stop-KanataManagedProcesses, `
   Start-KanataGameModeWatcher, `

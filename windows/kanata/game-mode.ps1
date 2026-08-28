@@ -13,7 +13,6 @@ $paths = Get-KanataWatcherPaths -InstallDir $InstallDir
 $settings = Get-KanataGameModeSettings -Path $paths.Settings
 $exePath = Join-Path $InstallDir "kanata.exe"
 $configPath = Join-Path $InstallDir "kanata.kbd"
-$gameConfigPath = Join-Path $InstallDir "kanata-game.kbd"
 $mutex = New-Object `
   -TypeName System.Threading.Mutex `
   -ArgumentList @($false, "Local\DotfilesKanataGameMode")
@@ -67,7 +66,8 @@ try {
   $steamCommonPaths = @()
   $steamRefreshAt = [datetime]::MinValue
   $resumeKanataAt = [datetime]::MinValue
-  $currentProfile = "Stopped"
+  $gameModeEnabled = $false
+  $managedKanataId = 0
 
   while (-not $stopEvent.WaitOne(0)) {
     try {
@@ -115,22 +115,50 @@ try {
       )
 
       if ($kanataProcesses.Count -eq 0) {
-        $currentProfile = "Stopped"
-      } elseif ($currentProfile -eq "Stopped") {
-        $currentProfile = "Unknown"
+        $kanataProcess = Start-KanataManagedProcess `
+          -ExePath $exePath `
+          -ConfigPath $configPath
+        $kanataProcesses = @($kanataProcess)
+      } elseif ($kanataProcesses.Count -gt 1) {
+        throw "Multiple managed Kanata processes are running."
       }
 
-      $profileMismatch = (
-        ($games.Count -gt 0 -and $currentProfile -ne "Game") -or
-        ($games.Count -eq 0 -and $currentProfile -ne "Normal")
-      )
+      $kanataProcess = $kanataProcesses[0]
+      if ($managedKanataId -ne $kanataProcess.Id) {
+        if (Test-KanataAnyKeyboardKeyPressed) {
+          [void]$stopEvent.WaitOne($settings.PollIntervalMilliseconds)
+          continue
+        }
+        try {
+          Set-KanataGameModeState -Enabled $false
+        } catch {
+          $endpointError = $_.Exception.Message
+          $managedKanataId = 0
+          if (Test-KanataAnyKeyboardKeyPressed) {
+            throw (
+              "Postponing Kanata TCP endpoint recovery until all keyboard " +
+              "keys are released: $endpointError"
+            )
+          }
+          Stop-KanataManagedProcesses -ExePath $exePath
+          throw (
+            "Restarting Kanata after TCP endpoint validation failed: " +
+            $endpointError
+          )
+        }
+        $managedKanataId = $kanataProcess.Id
+        $gameModeEnabled = $false
+        $resumeKanataAt = [datetime]::MinValue
+      }
+
+      $gameStateMismatch = (($games.Count -gt 0) -ne $gameModeEnabled)
       $keyboardKeyPressed = (
-        $profileMismatch -and
+        $gameStateMismatch -and
         (Test-KanataAnyKeyboardKeyPressed)
       )
       $decision = Get-KanataGameModeDecision `
         -GameActive ($games.Count -gt 0) `
-        -CurrentProfile $currentProfile `
+        -GameModeEnabled $gameModeEnabled `
         -KeyboardKeyPressed $keyboardKeyPressed `
         -ResumeKanataAt $resumeKanataAt `
         -Now ([datetime]::UtcNow) `
@@ -138,24 +166,26 @@ try {
       $resumeKanataAt = $decision.ResumeKanataAt
 
       switch ($decision.Action) {
-        "SwitchToGame" {
+        "EnableGameMode" {
           if (-not (Test-KanataAnyKeyboardKeyPressed)) {
-            Stop-KanataManagedProcesses -ExePath $exePath
-            $currentProfile = "Stopped"
-            Start-KanataManagedProcess `
-              -ExePath $exePath `
-              -ConfigPath $gameConfigPath | Out-Null
-            $currentProfile = "Game"
+            try {
+              Set-KanataGameModeState -Enabled $true
+            } catch {
+              $managedKanataId = 0
+              throw
+            }
+            $gameModeEnabled = $true
           }
         }
-        "SwitchToNormal" {
+        "DisableGameMode" {
           if (-not (Test-KanataAnyKeyboardKeyPressed)) {
-            Stop-KanataManagedProcesses -ExePath $exePath
-            $currentProfile = "Stopped"
-            Start-KanataManagedProcess `
-              -ExePath $exePath `
-              -ConfigPath $configPath | Out-Null
-            $currentProfile = "Normal"
+            try {
+              Set-KanataGameModeState -Enabled $false
+            } catch {
+              $managedKanataId = 0
+              throw
+            }
+            $gameModeEnabled = $false
           }
         }
       }

@@ -59,10 +59,6 @@ if (-not (Test-Path $cfgSrc)) {
 }
 $gameModeSources = @(
   @{
-    Name = "kanata-game.kbd"
-    Path = Join-Path $PSScriptRoot "kanata-game.kbd"
-  },
-  @{
     Name = "KanataGameMode.psm1"
     Path = Join-Path $PSScriptRoot "KanataGameMode.psm1"
   },
@@ -111,6 +107,7 @@ $rollbackDir = Join-Path $tmp "rollback"
 $managedFileNames = @(
   "kanata.exe",
   "kanata.kbd",
+  # Retained for rollback while removing the obsolete split game profile.
   "kanata-game.kbd",
   "install.json",
   "KanataGameMode.psm1",
@@ -197,6 +194,10 @@ try {
       -LiteralPath $source.Path `
       -Destination (Join-Path $InstallDir $source.Name) `
       -Force
+  }
+  $legacyGameConfig = Join-Path $InstallDir "kanata-game.kbd"
+  if (Test-Path -LiteralPath $legacyGameConfig -PathType Leaf) {
+    Remove-Item -LiteralPath $legacyGameConfig -Force
   }
   $meta = @{
     cpu = $cpuResolved
