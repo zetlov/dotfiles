@@ -20,13 +20,20 @@ and reviewing `yay` separately:
 ```bash
 ./install.sh --dry-run
 ./install.sh
-./install.sh --with-tex
-./install.sh --with-glazewm
+./install.sh --without-tex
+./install.sh --without-glazewm
 ./install.sh --with-monitor-profiles
 ./install.sh --with-komorebi
 ./install.sh --with-nvidia
 ./install.sh --system-upgrade
 ```
+
+The default full bootstrap includes TeX and, on WSL, GlazeWM with its managed
+Zebar bar. Use `--without-tex` or `--without-glazewm` to omit them. Monitor
+profiles remain machine-specific and require `--with-monitor-profiles`.
+Selecting the rollback-only `--with-komorebi` replaces GlazeWM for that run.
+`--minimal` is the aggregate opt-out: it also omits TeX and GlazeWM unless a
+legacy `--with-tex` or `--with-glazewm` flag explicitly re-enables one.
 
 The full bootstrap installs missing official/AUR packages without upgrading
 unrelated installed packages. Add `--system-upgrade` to run a full system and
@@ -182,10 +189,11 @@ Wallpaper assets are local. The default directory is
 
 ## Windows and WSL
 
-The WSL bootstrap deploys WezTerm and Kanata. GlazeWM and its managed Zebar bar
-are selected with `--with-glazewm`. The machine-specific three-display profiles
-are selected independently with `--with-monitor-profiles`; when installed,
-display changes reconcile the bar and workspace locations.
+The WSL bootstrap deploys WezTerm, audio, Kanata, GlazeWM, and its managed Zebar
+bar by default. Use `--without-glazewm` to omit the window manager and bar. The
+machine-specific three-display profiles are selected independently with
+`--with-monitor-profiles`; when installed, display changes reconcile the bar
+and workspace locations.
 Komorebi and the standalone Task Scheduler component remain only as an explicit
 rollback path.
 
@@ -195,7 +203,7 @@ rollback path.
 | wezterm | active | Terminal configuration and user-scoped fonts through `windows/wezterm/install.ps1` |
 | kanata | active | Keyboard service configuration and lifecycle through `windows/kanata/install.ps1` |
 | monitor-profiles | active | Optional verified display profiles selected with `--with-monitor-profiles` |
-| glazewm | active | Optional tiling window manager selected with `--with-glazewm` |
+| glazewm | active | Default WSL tiling window manager; omitted with `--without-glazewm` |
 | zebar | shared | Bar deployed and supervised by the GlazeWM component |
 | komorebi | rollback-only | Previous window-manager configuration retained for a bounded rollback period |
 | autostart | rollback-only | Per-user scheduled tasks retained with the Komorebi rollback path |
@@ -209,10 +217,10 @@ the only authoritative source for lifecycle and selection policy.
 `windows/components.json` is the machine-readable lifecycle and entrypoint
 catalog. The root `windows/install.ps1` validates that catalog, resolves a
 deterministic plan, preflights every selected entrypoint, and then runs the
-existing component installers sequentially. Its default plan contains the
-required WezTerm, audio, and Kanata components. GlazeWM and monitor profiles are
-independent opt-ins and can be selected together with
-`./install.sh --with-glazewm --with-monitor-profiles`.
+existing component installers sequentially. Its catalog default plan contains
+the required WezTerm, audio, and Kanata components. The WSL bootstrap adds
+GlazeWM by default; monitor profiles remain an independent opt-in and can be
+added with `./install.sh --with-monitor-profiles`.
 
 The WSL bootstrap resolves that selection once and applies it through a single
 PowerShell 7 orchestrator invocation. It uses scalar CSV parameters because

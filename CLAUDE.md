@@ -13,7 +13,7 @@ package. HOME-facing files are restricted to `stow/base`, `stow/desktop`, and
 ```bash
 ./install.sh --link-only
 ./install.sh
-./install.sh --with-tex
+./install.sh --without-tex
 ./scripts/stow-dotfiles.sh
 mise run check
 ```

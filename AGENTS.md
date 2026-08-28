@@ -18,7 +18,7 @@ Common commands:
 ```bash
 ./install.sh
 ./install.sh --link-only
-./install.sh --with-tex
+./install.sh --without-tex
 ./scripts/tex-install-missing.sh paper.tex [--update-list] [--dry-run] [--yes]
 ./scripts/stow-dotfiles.sh
 mise run check

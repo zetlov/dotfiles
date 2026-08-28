@@ -17,54 +17,13 @@ source "${DOTFILES_DIR}/scripts/install/dotfiles.sh"
 # shellcheck source=scripts/install/wsl-extras.sh
 # shellcheck disable=SC1091
 source "${DOTFILES_DIR}/scripts/install/wsl-extras.sh"
+# shellcheck source=scripts/install/options.sh
+# shellcheck disable=SC1091
+source "${DOTFILES_DIR}/scripts/install/options.sh"
 
 # --- 0. 引数パース ---
 
-WITH_TEX=0
-MINIMAL=0
-WITH_GLAZEWM=0
-WITH_KOMOREBI=0
-WITH_MONITOR_PROFILES=0
-WITH_NVIDIA=0
-LINK_ONLY=0
-DRY_RUN=0
-SYSTEM_UPGRADE=0
-CONTAINER_BACKEND=auto
-STOW_PROFILE=auto
-for arg in "$@"; do
-    case "$arg" in
-        --with-tex) WITH_TEX=1 ;;
-        --minimal) MINIMAL=1 ;;
-        --with-glazewm) WITH_GLAZEWM=1 ;;
-        --with-komorebi) WITH_KOMOREBI=1 ;;
-        --with-monitor-profiles) WITH_MONITOR_PROFILES=1 ;;
-        --with-nvidia) WITH_NVIDIA=1 ;;
-        --link-only) LINK_ONLY=1 ;;
-        --dry-run) DRY_RUN=1 ;;
-        --system-upgrade) SYSTEM_UPGRADE=1 ;;
-        --container-backend=auto) CONTAINER_BACKEND=auto ;;
-        --container-backend=desktop) CONTAINER_BACKEND=desktop ;;
-        --container-backend=native) CONTAINER_BACKEND=native ;;
-        --container-backend=none) CONTAINER_BACKEND=none ;;
-        --profile=auto) STOW_PROFILE=auto ;;
-        --profile=desktop) STOW_PROFILE=desktop ;;
-        --profile=wsl) STOW_PROFILE=wsl ;;
-        --profile=*)
-            echo "Stow profile must be auto, desktop, or wsl." >&2
-            exit 1
-            ;;
-        --container-backend=*)
-            echo "Container backend must be auto, desktop, native, or none." >&2
-            exit 1
-            ;;
-        *) echo "Unknown option: $arg" >&2; exit 1 ;;
-    esac
-done
-
-if [ "${WITH_KOMOREBI}" -eq 1 ] && [ "${WITH_GLAZEWM}" -eq 1 ]; then
-    echo "Choose only one Windows window manager." >&2
-    exit 1
-fi
+parse_install_options "$@"
 
 if [ "${LINK_ONLY}" -eq 1 ] && [ "${STOW_PROFILE}" = "auto" ]; then
     STOW_PROFILE=desktop

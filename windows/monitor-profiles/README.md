@@ -30,8 +30,11 @@ Install or update it from WSL through the Windows component orchestrator:
 It can be combined with GlazeWM on the managed three-display workstation:
 
 ```bash
-./install.sh --with-glazewm --with-monitor-profiles
+./install.sh --with-monitor-profiles
 ```
+
+GlazeWM is part of the default WSL bootstrap. To install only the monitor
+profiles without GlazeWM, add `--without-glazewm`.
 
 Or invoke only the Windows component directly:
 

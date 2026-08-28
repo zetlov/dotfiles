@@ -6,8 +6,13 @@ SCRIPT_DIR=$(CDPATH= cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(CDPATH= cd "${SCRIPT_DIR}/../.." && pwd)
 VALIDATOR="${REPO_ROOT}/scripts/validate-install-target.sh"
 BOOTSTRAP="${REPO_ROOT}/scripts/install/bootstrap.sh"
+OPTIONS="${REPO_ROOT}/scripts/install/options.sh"
 TEST_ROOT=$(mktemp -d)
 trap 'rm -rf "${TEST_ROOT}"' EXIT
+
+# shellcheck source=../install/options.sh
+# shellcheck disable=SC1091
+source "${OPTIONS}"
 
 assert_contains() {
     local pattern="$1"
@@ -56,6 +61,41 @@ assert_profile_plan() {
         "${environment}" 0 "${backend}" 0 0 >"${output}"
 }
 
+assert_option_state() {
+    local expected="$1"
+    shift
+    parse_install_options "$@"
+    local actual
+    actual="${WITH_TEX}:${WITH_GLAZEWM}:${WITH_KOMOREBI}:"
+    actual+="${WITH_MONITOR_PROFILES}:${WITH_NVIDIA}:${MINIMAL}"
+    if [ "${actual}" != "${expected}" ]; then
+        echo "FAIL: options '$*' should resolve to ${expected}, got ${actual}" >&2
+        exit 1
+    fi
+}
+
+assert_option_state "1:1:0:0:0:0"
+assert_option_state "0:0:0:0:0:0" --without-tex --without-glazewm
+assert_option_state "1:1:0:1:0:0" --with-monitor-profiles
+assert_option_state "1:1:0:0:1:0" --with-nvidia
+assert_option_state "0:0:0:0:0:1" --minimal
+assert_option_state "1:1:0:0:0:1" --minimal --with-tex --with-glazewm
+assert_option_state "1:0:1:0:0:0" --with-komorebi
+assert_option_state "1:0:1:0:0:0" --without-glazewm --with-komorebi
+assert_option_state "1:0:1:0:0:0" --with-komorebi --without-glazewm
+if parse_install_options --with-glazewm --with-komorebi >/dev/null 2>&1; then
+    echo "FAIL: explicit dual window-manager selection should be rejected" >&2
+    exit 1
+fi
+if parse_install_options --with-komorebi --with-glazewm >/dev/null 2>&1; then
+    echo "FAIL: reversed dual window-manager selection should be rejected" >&2
+    exit 1
+fi
+if parse_install_options --with-tex --without-tex >/dev/null 2>&1; then
+    echo "FAIL: contradictory TeX selection should be rejected" >&2
+    exit 1
+fi
+
 if "${VALIDATOR}" desktop aarch64 0 0 \
     >"${TEST_ROOT}/stdout" 2>"${TEST_ROOT}/stderr"; then
     echo "FAIL: native ARM full bootstrap should be rejected" >&2
@@ -76,23 +116,6 @@ for package in libva-nvidia-driver nvidia-open nvidia-settings nvidia-utils olla
         exit 1
     fi
 done
-if ! rg -q -- '--with-nvidia' "${BOOTSTRAP}"; then
-    echo "FAIL: NVIDIA packages should require an explicit install flag" >&2
-    exit 1
-fi
-if ! rg -q -- '--with-glazewm' "${BOOTSTRAP}"; then
-    echo "FAIL: GlazeWM should require an explicit install flag" >&2
-    exit 1
-fi
-if ! rg -q -- '--with-monitor-profiles' "${BOOTSTRAP}"; then
-    echo "FAIL: monitor profiles should require an explicit install flag" >&2
-    exit 1
-fi
-if ! rg -q 'Choose only one Windows window manager' "${BOOTSTRAP}"; then
-    echo "FAIL: the installer should reject selecting both window managers" >&2
-    exit 1
-fi
-
 for package in docker docker-compose; do
     if rg -x -q "${package}" "${REPO_ROOT}/packages/common.txt"; then
         echo "FAIL: ${package} must not be part of the cross-platform common profile" >&2
@@ -146,6 +169,26 @@ if (
         --dry-run --container-backend=none >"${TEST_ROOT}/dry-run-plan"
     assert_contains '^Container backend: none$' "${TEST_ROOT}/dry-run-plan" \
         "dry-run should report an explicit container opt-out"
+    assert_contains '^Package profile: tex.txt$' "${TEST_ROOT}/dry-run-plan" \
+        "default dry-run should include TeX"
+    if rg -q '^Environment: wsl$' "${TEST_ROOT}/dry-run-plan"; then
+        assert_contains '^Additional Windows component: glazewm$' \
+            "${TEST_ROOT}/dry-run-plan" \
+            "default WSL dry-run should include GlazeWM"
+        assert_not_contains 'monitor-profiles' "${TEST_ROOT}/dry-run-plan" \
+            "default WSL dry-run should omit monitor profiles"
+    fi
+
+    HOME="${dry_run_home}" "${REPO_ROOT}/install.sh" \
+        --dry-run --container-backend=none \
+        --without-tex --without-glazewm \
+        >"${TEST_ROOT}/opt-out-plan"
+    assert_not_contains '^Package profile: tex.txt$' \
+        "${TEST_ROOT}/opt-out-plan" \
+        "TeX opt-out should remove the TeX profile"
+    assert_not_contains '^Additional Windows component: glazewm$' \
+        "${TEST_ROOT}/opt-out-plan" \
+        "GlazeWM opt-out should remove the Windows component"
     if find "${dry_run_home}" -mindepth 1 -print -quit | rg -q .; then
         echo "FAIL: install --dry-run must not mutate HOME" >&2
         exit 1

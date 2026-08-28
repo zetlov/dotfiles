@@ -31,6 +31,9 @@ From WSL:
 ./install.sh --with-komorebi
 ```
 
+This explicit rollback selection replaces the default GlazeWM component for
+that bootstrap run.
+
 Or run only the Windows setup through the root orchestrator:
 
 ```bash

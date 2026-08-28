@@ -10,12 +10,13 @@ GlazeTiler. The helper uses only GlazeWM's local IPC CLI.
 From WSL:
 
 ```bash
-./install.sh --with-glazewm
+./install.sh
 ```
 
 Add `--with-monitor-profiles` only on the machine with the managed three-display
 topology. Zebar hides its monitor-profile selector when that component is not
-installed.
+installed. Use `--without-glazewm` when the WSL bootstrap should omit both
+GlazeWM and its managed Zebar bar.
 
 Or run only the Windows setup through the root orchestrator:
 
