@@ -177,6 +177,12 @@ if (
             "default WSL dry-run should include GlazeWM"
         assert_not_contains 'monitor-profiles' "${TEST_ROOT}/dry-run-plan" \
             "default WSL dry-run should omit monitor profiles"
+        HOME="${dry_run_home}" "${REPO_ROOT}/install.sh" \
+            --dry-run --container-backend=desktop \
+            >"${TEST_ROOT}/docker-desktop-plan"
+        assert_contains '^Windows prerequisite component: docker-desktop$' \
+            "${TEST_ROOT}/docker-desktop-plan" \
+            "Docker Desktop mode should plan the Windows application"
     fi
 
     HOME="${dry_run_home}" "${REPO_ROOT}/install.sh" \

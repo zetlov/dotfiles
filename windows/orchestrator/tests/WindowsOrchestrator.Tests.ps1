@@ -17,6 +17,8 @@ Describe "Windows component orchestrator" {
 
   It "keeps the lifecycle manifest authoritative" {
     $expected = @{
+      "docker-desktop" = "active|optional"
+      onepassword = "active|required"
       "monitor-profiles" = "active|optional"
       audio = "active|required"
       wezterm = "active|required"
@@ -118,8 +120,14 @@ Describe "Windows component orchestrator" {
         -WindowsRoot $windowsRoot
     )
 
-    @($plan.Name) | Should -Be @("wezterm", "audio", "kanata")
+    @($plan.Name) | Should -Be @(
+      "onepassword",
+      "wezterm",
+      "audio",
+      "kanata"
+    )
     @($plan.Entrypoint) | Should -Be @(
+      "onepassword/install.ps1",
       "wezterm/install.ps1",
       "audio/install.ps1",
       "kanata/install.ps1"
@@ -134,8 +142,14 @@ Describe "Windows component orchestrator" {
         -WindowsRoot $windowsRoot
     )
 
-    @($plan.Name) | Should -Be @("wezterm", "audio", "kanata")
+    @($plan.Name) | Should -Be @(
+      "onepassword",
+      "wezterm",
+      "audio",
+      "kanata"
+    )
     @($plan.Entrypoint) | Should -Be @(
+      "onepassword/install.ps1",
       "wezterm/update-config.ps1",
       "audio/install.ps1",
       "kanata/update-config.ps1"
@@ -165,6 +179,19 @@ Describe "Windows component orchestrator" {
 
     @($plan.Name) | Should -Be @("audio")
     $plan[0].Entrypoint | Should -Be "audio/install.ps1"
+  }
+
+  It "allows direct Docker Desktop component selection" {
+    $plan = @(
+      Resolve-WindowsComponentPlan `
+        -Catalog $catalog `
+        -Mode Install `
+        -Component "docker-desktop" `
+        -WindowsRoot $windowsRoot
+    )
+
+    @($plan.Name) | Should -Be @("docker-desktop")
+    $plan[0].Entrypoint | Should -Be "docker-desktop/install.ps1"
   }
 
   It "selects GlazeWM directly while keeping Zebar manager-owned" {
@@ -584,6 +611,8 @@ Describe "Windows component orchestrator" {
     $components = @(& $rootInstallerPath -ListComponents)
 
     @($components.Name) | Should -Be @(
+      "docker-desktop",
+      "onepassword",
       "wezterm",
       "audio",
       "kanata",
@@ -596,6 +625,8 @@ Describe "Windows component orchestrator" {
     @($components | ForEach-Object {
       "$($_.Name)|$($_.Lifecycle)|$($_.SelectionPolicy)"
     }) | Should -Be @(
+      "docker-desktop|active|optional",
+      "onepassword|active|required",
       "wezterm|active|required",
       "audio|active|required",
       "kanata|active|required",
@@ -633,7 +664,7 @@ Describe "Windows component orchestrator" {
     )
 
     @($plan.Name) | Should -Be @(
-      "wezterm", "audio", "kanata", "monitor-profiles"
+      "onepassword", "wezterm", "audio", "kanata", "monitor-profiles"
     )
   }
 

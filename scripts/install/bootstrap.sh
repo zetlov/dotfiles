@@ -67,11 +67,7 @@ if [ "${STOW_PROFILE}" = "auto" ]; then
 fi
 
 WINDOWS_ADDITIONAL_COMPONENT=""
-if [ "${ENV}" = "wsl" ]; then
-    WINDOWS_ADDITIONAL_COMPONENT=$(resolve_windows_components \
-        "${WITH_GLAZEWM}" "${WITH_KOMOREBI}" \
-        "${WITH_MONITOR_PROFILES}")
-fi
+WINDOWS_PREREQUISITE_COMPONENT=""
 
 echo "Detected environment: ${PRETTY_NAME:-Arch Linux} (${ENV})"
 
@@ -81,6 +77,13 @@ ARCHITECTURE=$(uname -m)
 
 CONTAINER_BACKEND=$("${DOTFILES_DIR}/scripts/resolve-container-backend.sh" \
     "${ENV}" "${CONTAINER_BACKEND}")
+if [ "${ENV}" = "wsl" ]; then
+    WINDOWS_ADDITIONAL_COMPONENT=$(resolve_windows_components \
+        "${WITH_GLAZEWM}" "${WITH_KOMOREBI}" \
+        "${WITH_MONITOR_PROFILES}")
+    WINDOWS_PREREQUISITE_COMPONENT=$(resolve_windows_prerequisite_component \
+        "${CONTAINER_BACKEND}")
+fi
 
 profile_output=$("${DOTFILES_DIR}/scripts/resolve-package-profiles.sh" \
     "${ENV}" "${MINIMAL}" "${CONTAINER_BACKEND}" \
@@ -110,6 +113,9 @@ if [ "${DRY_RUN}" -eq 1 ]; then
     echo "Dotfile profile: ${STOW_PROFILE}"
     if [ "${ENV}" = "wsl" ]; then
         echo "Windows integration: required catalog components"
+        if [ -n "${WINDOWS_PREREQUISITE_COMPONENT}" ]; then
+            echo "Windows prerequisite component: ${WINDOWS_PREREQUISITE_COMPONENT}"
+        fi
         if [ -n "${WINDOWS_ADDITIONAL_COMPONENT}" ]; then
             echo "Additional Windows component: ${WINDOWS_ADDITIONAL_COMPONENT}"
         fi
@@ -118,13 +124,24 @@ if [ "${DRY_RUN}" -eq 1 ]; then
 fi
 
 if [ "${ENV}" = "wsl" ]; then
+    ensure_windows_powershell "${WINDOWS_PWSH_BIN}"
+    if [ -n "${WINDOWS_PREREQUISITE_COMPONENT}" ]; then
+        preflight_windows_prerequisite_component \
+            "${DOTFILES_DIR}" \
+            "${WINDOWS_PREREQUISITE_COMPONENT}"
+    fi
     preflight_windows_components \
         "${DOTFILES_DIR}" \
         "${WINDOWS_ADDITIONAL_COMPONENT}"
+    if [ -n "${WINDOWS_PREREQUISITE_COMPONENT}" ]; then
+        apply_windows_prerequisite_component \
+            "${DOTFILES_DIR}" \
+            "${WINDOWS_PREREQUISITE_COMPONENT}"
+    fi
 fi
 
 "${DOTFILES_DIR}/scripts/validate-container-backend.sh" \
-    "${ENV}" "${CONTAINER_BACKEND}"
+    "${ENV}" "${CONTAINER_BACKEND}" "/var/lib/pacman/local" 120
 preflight_dotfiles "${DOTFILES_DIR}" "${STOW_PROFILE}"
 
 # --- 2. パッケージインストール (common + 環境固有) ---

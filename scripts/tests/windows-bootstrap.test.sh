@@ -45,6 +45,15 @@ assert_equals "komorebi" \
 assert_equals "komorebi,monitor-profiles" \
     "$(resolve_windows_components 0 1 1)" \
     "Komorebi and monitor profile selection"
+assert_equals "docker-desktop" \
+    "$(resolve_windows_prerequisite_component desktop)" \
+    "Docker Desktop prerequisite selection"
+assert_equals "" \
+    "$(resolve_windows_prerequisite_component native)" \
+    "native container prerequisite selection"
+assert_equals "" \
+    "$(resolve_windows_prerequisite_component none)" \
+    "disabled container prerequisite selection"
 
 if resolve_windows_components yes 0 0 >/dev/null 2>&1; then
     fail "resolver accepted a non-boolean flag"
@@ -54,6 +63,9 @@ if resolve_windows_components 0 0 yes >/dev/null 2>&1; then
 fi
 if resolve_windows_components 1 1 0 >/dev/null 2>&1; then
     fail "resolver accepted both window managers"
+fi
+if resolve_windows_prerequisite_component invalid >/dev/null 2>&1; then
+    fail "prerequisite resolver accepted an invalid container backend"
 fi
 
 if rg -q '\bjq\b|components\.json' "${helper}"; then
@@ -187,6 +199,49 @@ assert_equals "${expected_combined_apply_argv}" "$(cat "${pwsh_log}")" \
     "combined rollback apply argv"
 assert_equals "4" "$(wc -l <"${pwsh_count}")" \
     "two preflight and two apply invocations"
+
+preflight_windows_prerequisite_component \
+    "${fake_repo}" \
+    "docker-desktop" \
+    "${fake_wslpath}" \
+    "${fake_pwsh}" >/dev/null
+
+expected_prerequisite_preflight_argv=$(cat <<'EOF'
+-NoProfile
+-ExecutionPolicy
+Bypass
+-File
+C:\dotfiles\windows\install.ps1
+-Mode
+Install
+-Preflight
+-ComponentCsv
+docker-desktop
+EOF
+)
+assert_equals "${expected_prerequisite_preflight_argv}" "$(cat "${pwsh_log}")" \
+    "Docker Desktop prerequisite preflight argv"
+
+apply_windows_prerequisite_component \
+    "${fake_repo}" \
+    "docker-desktop" \
+    "${fake_wslpath}" \
+    "${fake_pwsh}"
+
+expected_prerequisite_apply_argv=$(cat <<'EOF'
+-NoProfile
+-ExecutionPolicy
+Bypass
+-File
+C:\dotfiles\windows\install.ps1
+-Mode
+Install
+-ComponentCsv
+docker-desktop
+EOF
+)
+assert_equals "${expected_prerequisite_apply_argv}" "$(cat "${pwsh_log}")" \
+    "Docker Desktop prerequisite apply argv"
 assert_equals "-w
 ${fake_repo}/windows/install.ps1" "$(cat "${wslpath_log}")" \
     "wslpath argv"
@@ -202,6 +257,12 @@ for invalid_component in \
         fail "helper accepted invalid addition: ${invalid_component}"
     fi
 done
+
+if apply_windows_prerequisite_component \
+    "${fake_repo}" "wezterm" \
+    "${fake_wslpath}" "${fake_pwsh}" >/dev/null 2>&1; then
+    fail "prerequisite bridge accepted a non-prerequisite component"
+fi
 
 rm -f "${pwsh_log}" "${pwsh_count}" "${wslpath_log}"
 if apply_windows_components \
@@ -238,6 +299,32 @@ if ! rg -Fq \
     fail "missing PowerShell 7 error lacks the official fixed-path recovery"
 fi
 
+fake_windows_powershell="${test_root}/powershell.exe"
+bootstrapped_pwsh="${test_root}/PowerShell/7/pwsh.exe"
+windows_powershell_log="${test_root}/windows-powershell.log"
+mkdir -p "$(dirname "${bootstrapped_pwsh}")"
+cat >"${fake_windows_powershell}" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$@" >"${windows_powershell_log}"
+touch "${bootstrapped_pwsh}"
+EOF
+chmod +x "${fake_windows_powershell}"
+
+ensure_windows_powershell \
+    "${bootstrapped_pwsh}" \
+    "${fake_windows_powershell}"
+if ! rg -Fq 'Microsoft.PowerShell' "${windows_powershell_log}"; then
+    fail "PowerShell bootstrap did not request the official WinGet package"
+fi
+
+rm -f "${windows_powershell_log}"
+ensure_windows_powershell \
+    "${bootstrapped_pwsh}" \
+    "${fake_windows_powershell}"
+if [ -e "${windows_powershell_log}" ]; then
+    fail "PowerShell bootstrap was not idempotent"
+fi
+
 if [ "$(rg -c '^    apply_windows_components[[:space:]]' \
     "${bootstrap}")" -ne 1 ]; then
     fail "install.sh must invoke the Windows component bridge exactly once"
@@ -246,12 +333,26 @@ if [ "$(rg -c '^    preflight_windows_components[[:space:]]' \
     "${bootstrap}")" -ne 1 ]; then
     fail "install.sh must invoke the Windows preflight exactly once"
 fi
+if [ "$(rg -c '^        preflight_windows_prerequisite_component[[:space:]]' \
+    "${bootstrap}")" -ne 1 ]; then
+    fail "install.sh must preflight the Windows prerequisite once"
+fi
+if [ "$(rg -c '^        apply_windows_prerequisite_component[[:space:]]' \
+    "${bootstrap}")" -ne 1 ]; then
+    fail "install.sh must apply the Windows prerequisite once"
+fi
 preflight_line=$(rg -n '^    preflight_windows_components[[:space:]]' \
+    "${bootstrap}" | cut -d: -f1)
+prerequisite_apply_line=$(rg -n \
+    '^        apply_windows_prerequisite_component[[:space:]]' \
     "${bootstrap}" | cut -d: -f1)
 container_validation_line=$(rg -n '^"\$\{DOTFILES_DIR\}/scripts/validate-container-backend\.sh"' \
     "${bootstrap}" | cut -d: -f1)
 if [ "${preflight_line}" -ge "${container_validation_line}" ]; then
     fail "Windows preflight must run before container validation"
+fi
+if [ "${prerequisite_apply_line}" -ge "${container_validation_line}" ]; then
+    fail "Docker Desktop installation must run before container validation"
 fi
 for legacy_installer in wezterm kanata komorebi glazewm; do
     if rg -Fq "windows/${legacy_installer}/install.ps1" \

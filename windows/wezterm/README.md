@@ -17,9 +17,10 @@ is not currently present and is not loaded by the Windows WezTerm config;
 dynamic theme synchronization can be added separately.
 
 Japanese glyphs use `Noto Sans Mono CJK JP`, matching the monospace fallback
-configured for Arch. `install.ps1` installs the required Windows user fonts and
-deploys the managed config. It installs these faces only when their Windows
-font registrations are missing:
+configured for Arch. `install.ps1` first installs the official `wez.wezterm`
+WinGet package when WezTerm is missing, then installs the required Windows user
+fonts and deploys the managed config. It installs these faces only when their
+Windows font registrations are missing:
 
 - JetBrains Mono Nerd Font Regular, Bold, Italic, and Bold Italic
 - Noto Sans Mono CJK JP Regular and Bold
@@ -31,12 +32,19 @@ files into `%LOCALAPPDATA%\Microsoft\Windows\Fonts`. It registers them under
 system registrations are preserved. The WSL branch of the repository-level
 `install.sh` runs this setup automatically.
 
+The official WinGet package currently provides an x64 Windows build only. On
+Windows 11 ARM, the installer explicitly selects that x64 build and Windows
+runs it through its built-in x64 application emulation. Docker Desktop and the
+other architecture-aware components continue to use native ARM64 builds where
+available. Native Windows ARM WezTerm releases can replace this fallback once
+the upstream package publishes them.
+
 The Kitty keyboard protocol remains disabled because the installed Windows
 WezTerm version disrupts Shift and IME confirmation input when it is enabled.
 The Codex keymap keeps Enter for submission. WezTerm maps only Shift+Enter to
 Ctrl+J, which Codex uses for newlines without changing other Shift or IME input.
 
-Install missing fonts and deploy the managed config to
+Install WezTerm, missing fonts, and deploy the managed config to
 `%USERPROFILE%\.config\wezterm\wezterm.lua` from WSL:
 
 ```bash

@@ -63,10 +63,12 @@ daemon inside the distribution. Override this explicitly when needed:
 Accepted container backends are `auto`, `desktop`, `native`, and `none`.
 `desktop` is valid only under WSL; `native` installs the reviewed packages in
 `packages/container-native.txt`. Before a full WSL bootstrap uses `desktop`,
-Docker Desktop must be running with integration enabled for that distribution;
-the installer verifies the Docker client/server connection before upgrading or
-installing Linux packages. Following Docker's WSL guidance, distro-managed
-Docker Engine, Docker-compatible CLI providers, and `docker-compose` must be
+the installer installs and starts Docker Desktop, then verifies the Docker
+client/server connection before upgrading or installing Linux packages. A
+non-default WSL distribution can still require one manual enablement under
+Docker Desktop's WSL Integration settings. Following Docker's WSL guidance,
+distro-managed Docker Engine, Docker-compatible CLI providers, and
+`docker-compose` must be
 removed before using this backend; the preflight rejects them instead of
 silently using a native daemon.
 
@@ -189,8 +191,9 @@ Wallpaper assets are local. The default directory is
 
 ## Windows and WSL
 
-The WSL bootstrap deploys WezTerm, audio, Kanata, GlazeWM, and its managed Zebar
-bar by default. Use `--without-glazewm` to omit the window manager and bar. The
+The WSL bootstrap installs 1Password, WezTerm, Docker Desktop for the default
+container backend, audio, Kanata, GlazeWM, and its managed Zebar bar. Use
+`--without-glazewm` to omit the window manager and bar. The
 machine-specific three-display profiles are selected independently with
 `--with-monitor-profiles`; when installed, display changes reconcile the bar
 and workspace locations.
@@ -199,8 +202,10 @@ rollback path.
 
 | Component | Status | Ownership and deployment |
 | --- | --- | --- |
+| onepassword | active | Required official WinGet application; account setup remains manual |
 | audio | active | Audio output switcher on held `F13/F15+M` through `windows/audio/install.ps1` |
-| wezterm | active | Terminal configuration and user-scoped fonts through `windows/wezterm/install.ps1` |
+| docker-desktop | active | Optional Windows container backend selected automatically by WSL `desktop` mode |
+| wezterm | active | WinGet application, terminal configuration, and user-scoped fonts through `windows/wezterm/install.ps1` |
 | kanata | active | Keyboard service configuration and lifecycle through `windows/kanata/install.ps1` |
 | monitor-profiles | active | Optional verified display profiles selected with `--with-monitor-profiles` |
 | glazewm | active | Default WSL tiling window manager; omitted with `--without-glazewm` |
@@ -222,28 +227,33 @@ the required WezTerm, audio, and Kanata components. The WSL bootstrap adds
 GlazeWM by default; monitor profiles remain an independent opt-in and can be
 added with `./install.sh --with-monitor-profiles`.
 
-The WSL bootstrap resolves that selection once and applies it through a single
-PowerShell 7 orchestrator invocation. It uses scalar CSV parameters because
+The WSL bootstrap installs the optional Docker Desktop prerequisite before
+validating container integration, then applies the normal Windows selection
+through the orchestrator. It uses scalar CSV parameters because
 native `pwsh -File` callers cannot bind an array-valued script parameter. The
 wrapper validates and converts the comma-separated lower-case names before
 calling the orchestrator module. Windows PowerShell 5.1 remains a supported
 compatibility and component-runtime target.
 
-PowerShell 7 is therefore a WSL bootstrap prerequisite. Install it on the
-Windows host with WinGet before running the full bootstrap:
+PowerShell 7 is the Windows orchestration runtime. When it is missing, the WSL
+bootstrap installs the official `Microsoft.PowerShell` package first through
+Windows PowerShell and WinGet. The equivalent manual recovery command is:
 
 ```powershell
 winget install --id Microsoft.PowerShell --source winget --installer-type wix
 ```
 
-After dry-run planning, the bootstrap performs an early Windows `-Preflight`
-before container validation, package upgrades, or other mutations.
+After dry-run planning and PowerShell runtime setup, the bootstrap performs an
+early Windows `-Preflight` before container validation or Linux package
+changes.
 Unlike pure `-PlanOnly`, `-Preflight` also checks the Windows host, selection
 policy, running processes, startup registrations, and scheduled-task probes
 without invoking component entrypoints.
-The later apply remains a separate single orchestrator invocation. Required
+Docker Desktop is then applied and started before container validation. The
+later normal apply remains a separate orchestrator invocation. Required
 components and their order are read from `windows/components.json`; the Bash
-bridge passes only the supported GlazeWM, monitor-profile, and Komorebi opt-ins.
+bridge passes only Docker Desktop as a prerequisite and the supported GlazeWM,
+monitor-profile, and Komorebi opt-ins.
 
 From a PowerShell prompt at the repository root, inspect a plan before applying
 it:

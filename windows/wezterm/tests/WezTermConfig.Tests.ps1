@@ -337,6 +337,9 @@ Context "Windows font installation" {
     Assert-Matches $fontInstallScript "Get-WezTermFontPackages"
     Assert-Matches $installScript ([regex]::Escape("install-fonts.ps1"))
     Assert-Matches $installScript ([regex]::Escape("update-config.ps1"))
+    Assert-Matches $installScript ([regex]::Escape("wez.wezterm"))
+    Assert-Matches $installScript "Install-WinGetPackage"
+    Assert-Matches $installScript "Resolve-WindowsNativeArchitecture"
     Assert-Matches $bootstrapScript (
       'source\s+"\$\{DOTFILES_DIR\}/scripts/install/windows-components\.sh"'
     )

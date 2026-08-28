@@ -2,6 +2,32 @@
   "schemaVersion": 1,
   "components": [
     {
+      "name": "docker-desktop",
+      "lifecycle": "active",
+      "selectionPolicy": "optional",
+      "order": 5,
+      "managedBy": [],
+      "conflictsWith": [],
+      "requiresSelection": [],
+      "entrypoints": {
+        "install": "docker-desktop/install.ps1",
+        "update": "docker-desktop/install.ps1"
+      }
+    },
+    {
+      "name": "onepassword",
+      "lifecycle": "active",
+      "selectionPolicy": "required",
+      "order": 7,
+      "managedBy": [],
+      "conflictsWith": [],
+      "requiresSelection": [],
+      "entrypoints": {
+        "install": "onepassword/install.ps1",
+        "update": "onepassword/install.ps1"
+      }
+    },
+    {
       "name": "monitor-profiles",
       "lifecycle": "active",
       "selectionPolicy": "optional",
