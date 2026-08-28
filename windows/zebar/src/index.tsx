@@ -14,7 +14,7 @@ import {
   Wifi,
   WifiOff,
 } from 'lucide-solid';
-import { createSignal, For, onCleanup, Show } from 'solid-js';
+import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { render } from 'solid-js/web';
 import * as zebar from 'zebar';
@@ -30,6 +30,7 @@ import {
   createMonitorProfileCommand,
   getMonitorProfileForCount,
   monitorProfiles,
+  probeMonitorProfiles,
   type MonitorProfileName,
 } from './monitor-profiles';
 
@@ -63,11 +64,18 @@ function App() {
     createSignal<MonitorProfileName | null>(null);
   const [monitorProfileError, setMonitorProfileError] =
     createSignal<string | null>(null);
+  const [monitorProfilesAvailable, setMonitorProfilesAvailable] =
+    createSignal(false);
   providers.onOutput(outputMap => setOutput(outputMap));
   onCleanup(startGpuMonitor(
     setGpuMetrics,
     (program, args) => zebar.shellSpawn(program, [...args]),
   ));
+  onMount(() => {
+    void probeMonitorProfiles(
+      (program, args) => zebar.shellExec(program, [...args]),
+    ).then(setMonitorProfilesAvailable);
+  });
 
   const adjustVolume = (delta: number) => {
     const volume = output.audio?.defaultPlaybackDevice?.volume;
@@ -131,26 +139,28 @@ function App() {
           )}
         </Show>
 
-        <div
-          class="island monitor-profile-card"
-          classList={{ error: monitorProfileError() !== null }}
-          title={monitorProfileError() ?? 'Monitor profile'}
-          aria-busy={pendingMonitorProfile() !== null}
-        >
-          <Monitor size={14} />
-          <select
-            class="monitor-profile-select"
-            aria-label="Monitor profile"
-            value={pendingMonitorProfile() ?? currentMonitorProfile() ?? ''}
-            disabled={pendingMonitorProfile() !== null}
-            onChange={event => void switchMonitorProfile(event.currentTarget.value)}
+        <Show when={monitorProfilesAvailable()}>
+          <div
+            class="island monitor-profile-card"
+            classList={{ error: monitorProfileError() !== null }}
+            title={monitorProfileError() ?? 'Monitor profile'}
+            aria-busy={pendingMonitorProfile() !== null}
           >
-            <option value="" disabled>Unknown layout</option>
-            <For each={monitorProfiles}>
-              {profile => <option value={profile.name}>{profile.label}</option>}
-            </For>
-          </select>
-        </div>
+            <Monitor size={14} />
+            <select
+              class="monitor-profile-select"
+              aria-label="Monitor profile"
+              value={pendingMonitorProfile() ?? currentMonitorProfile() ?? ''}
+              disabled={pendingMonitorProfile() !== null}
+              onChange={event => void switchMonitorProfile(event.currentTarget.value)}
+            >
+              <option value="" disabled>Unknown layout</option>
+              <For each={monitorProfiles}>
+                {profile => <option value={profile.name}>{profile.label}</option>}
+              </For>
+            </select>
+          </div>
+        </Show>
 
         <Show when={output.media?.currentSession}>
           {session => (

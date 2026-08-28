@@ -13,6 +13,10 @@ From WSL:
 ./install.sh --with-glazewm
 ```
 
+Add `--with-monitor-profiles` only on the machine with the managed three-display
+topology. Zebar hides its monitor-profile selector when that component is not
+installed.
+
 Or run only the Windows setup through the root orchestrator:
 
 ```bash

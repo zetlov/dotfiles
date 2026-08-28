@@ -13,7 +13,7 @@ validate_windows_component_flag() {
 
 validate_windows_additional_component() {
     case "$1" in
-        ""|glazewm,monitor-profiles|komorebi) ;;
+        ""|glazewm|monitor-profiles|glazewm,monitor-profiles|komorebi|komorebi,monitor-profiles) ;;
         *)
             echo "Unsupported additional Windows component: $1" >&2
             return 1
@@ -21,21 +21,39 @@ validate_windows_additional_component() {
     esac
 }
 
+is_windows_rollback_component_selected() {
+    case "$1" in
+        komorebi|komorebi,monitor-profiles) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 resolve_windows_components() {
-    if [ "$#" -ne 2 ]; then
-        echo "resolve_windows_components requires GlazeWM and Komorebi flags." >&2
+    if [ "$#" -ne 3 ]; then
+        echo "resolve_windows_components requires GlazeWM, Komorebi, and monitor profile flags." >&2
         return 1
     fi
     validate_windows_component_flag "GlazeWM flag" "$1" || return 1
     validate_windows_component_flag "Komorebi flag" "$2" || return 1
+    validate_windows_component_flag "Monitor profile flag" "$3" || return 1
     if [ "$1" = "1" ] && [ "$2" = "1" ]; then
         echo "GlazeWM and Komorebi cannot be selected together." >&2
         return 1
     fi
+    local window_manager=""
     if [ "$1" = "1" ]; then
-        printf '%s\n' glazewm,monitor-profiles
+        window_manager="glazewm"
     elif [ "$2" = "1" ]; then
-        printf '%s\n' komorebi
+        window_manager="komorebi"
+    fi
+    if [ "$3" = "1" ]; then
+        if [ -n "${window_manager}" ]; then
+            printf '%s\n' "${window_manager},monitor-profiles"
+        else
+            printf '%s\n' monitor-profiles
+        fi
+    elif [ -n "${window_manager}" ]; then
+        printf '%s\n' "${window_manager}"
     fi
 }
 
@@ -86,7 +104,7 @@ preflight_windows_components() {
     if [ -n "${additional_component}" ]; then
         argv+=(-AdditionalComponentCsv "${additional_component}")
     fi
-    if [ "${additional_component}" = "komorebi" ]; then
+    if is_windows_rollback_component_selected "${additional_component}"; then
         argv+=(-AllowRollbackOnly)
     fi
     "${pwsh_bin}" "${argv[@]}"
@@ -115,7 +133,7 @@ apply_windows_components() {
     if [ -n "${additional_component}" ]; then
         argv+=(-AdditionalComponentCsv "${additional_component}")
     fi
-    if [ "${additional_component}" = "komorebi" ]; then
+    if is_windows_rollback_component_selected "${additional_component}"; then
         argv+=(-AllowRollbackOnly)
     fi
     if [ "${add_defender_exclusion}" = "1" ]; then

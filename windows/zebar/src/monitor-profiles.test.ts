@@ -3,8 +3,10 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   createMonitorProfileCommand,
+  createMonitorProfileProbeCommand,
   getMonitorProfileForCount,
   monitorProfiles,
+  probeMonitorProfiles,
 } from './monitor-profiles';
 
 test('getMonitorProfileForCount recognizes only managed topologies', () => {
@@ -46,12 +48,72 @@ test('createMonitorProfileCommand rejects arbitrary profile names', () => {
   );
 });
 
+test('createMonitorProfileProbeCommand checks the managed switch script', () => {
+  assert.deepEqual(createMonitorProfileProbeCommand(), {
+    program:
+      'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+    args: [
+      '-NoProfile',
+      '-NonInteractive',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-Command',
+      'if (Test-Path -LiteralPath ' +
+        '"$env:LOCALAPPDATA\\dotfiles\\monitor-profiles\\' +
+        'Switch-MonitorProfile.ps1" -PathType Leaf) ' +
+        '{ exit 0 } else { exit 1 }',
+    ],
+  });
+});
+
+test('probeMonitorProfiles returns true only for a successful probe', async () => {
+  assert.equal(
+    await probeMonitorProfiles(async () => ({ code: 0 })),
+    true,
+  );
+  assert.equal(
+    await probeMonitorProfiles(async () => ({ code: 1 })),
+    false,
+  );
+  assert.equal(
+    await probeMonitorProfiles(async () => ({ code: null })),
+    false,
+  );
+});
+
+test('probeMonitorProfiles treats execution errors as unavailable', async () => {
+  assert.equal(
+    await probeMonitorProfiles(async () => {
+      throw new Error('unavailable');
+    }),
+    false,
+  );
+});
+
 test('the generated command matches the Zebar shell allowlist', () => {
   const pack = JSON.parse(
     readFileSync(new URL('../zpack.json', import.meta.url), 'utf8'),
   );
-  const allowedCommand = pack.widgets[0].privileges.shellCommands[1];
+  const allowedCommand = pack.widgets[0].privileges.shellCommands.find(
+    (entry: { argsRegex: string }) => entry.argsRegex.includes('-Name'),
+  );
   const command = createMonitorProfileCommand('right-only');
+
+  assert.equal(command.program, allowedCommand.program);
+  assert.match(
+    command.args.join(' '),
+    new RegExp(allowedCommand.argsRegex),
+  );
+});
+
+test('the probe command matches the Zebar shell allowlist', () => {
+  const pack = JSON.parse(
+    readFileSync(new URL('../zpack.json', import.meta.url), 'utf8'),
+  );
+  const allowedCommand = pack.widgets[0].privileges.shellCommands.find(
+    (entry: { argsRegex: string }) => entry.argsRegex.includes('Test-Path'),
+  );
+  const command = createMonitorProfileProbeCommand();
 
   assert.equal(command.program, allowedCommand.program);
   assert.match(

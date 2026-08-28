@@ -22,6 +22,7 @@ and reviewing `yay` separately:
 ./install.sh
 ./install.sh --with-tex
 ./install.sh --with-glazewm
+./install.sh --with-monitor-profiles
 ./install.sh --with-komorebi
 ./install.sh --with-nvidia
 ./install.sh --system-upgrade
@@ -182,8 +183,9 @@ Wallpaper assets are local. The default directory is
 ## Windows and WSL
 
 The WSL bootstrap deploys WezTerm and Kanata. GlazeWM and its managed Zebar bar
-are selected with `--with-glazewm`; monitor profiles are installed with that
-selection so display changes can reconcile the bar and workspace locations.
+are selected with `--with-glazewm`. The machine-specific three-display profiles
+are selected independently with `--with-monitor-profiles`; when installed,
+display changes reconcile the bar and workspace locations.
 Komorebi and the standalone Task Scheduler component remain only as an explicit
 rollback path.
 
@@ -192,7 +194,7 @@ rollback path.
 | audio | active | Audio output switcher on held `F13/F15+M` through `windows/audio/install.ps1` |
 | wezterm | active | Terminal configuration and user-scoped fonts through `windows/wezterm/install.ps1` |
 | kanata | active | Keyboard service configuration and lifecycle through `windows/kanata/install.ps1` |
-| monitor-profiles | active | Verified display profiles with GlazeWM and Zebar reconciliation |
+| monitor-profiles | active | Optional verified display profiles selected with `--with-monitor-profiles` |
 | glazewm | active | Optional tiling window manager selected with `--with-glazewm` |
 | zebar | shared | Bar deployed and supervised by the GlazeWM component |
 | komorebi | rollback-only | Previous window-manager configuration retained for a bounded rollback period |
@@ -209,7 +211,8 @@ catalog. The root `windows/install.ps1` validates that catalog, resolves a
 deterministic plan, preflights every selected entrypoint, and then runs the
 existing component installers sequentially. Its default plan contains the
 required WezTerm, audio, and Kanata components. GlazeWM and monitor profiles are
-selected together by `./install.sh --with-glazewm`.
+independent opt-ins and can be selected together with
+`./install.sh --with-glazewm --with-monitor-profiles`.
 
 The WSL bootstrap resolves that selection once and applies it through a single
 PowerShell 7 orchestrator invocation. It uses scalar CSV parameters because
@@ -232,7 +235,7 @@ policy, running processes, startup registrations, and scheduled-task probes
 without invoking component entrypoints.
 The later apply remains a separate single orchestrator invocation. Required
 components and their order are read from `windows/components.json`; the Bash
-bridge can pass only the explicit Komorebi rollback addition.
+bridge passes only the supported GlazeWM, monitor-profile, and Komorebi opt-ins.
 
 From a PowerShell prompt at the repository root, inspect a plan before applying
 it:

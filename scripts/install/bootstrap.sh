@@ -24,6 +24,7 @@ WITH_TEX=0
 MINIMAL=0
 WITH_GLAZEWM=0
 WITH_KOMOREBI=0
+WITH_MONITOR_PROFILES=0
 WITH_NVIDIA=0
 LINK_ONLY=0
 DRY_RUN=0
@@ -36,6 +37,7 @@ for arg in "$@"; do
         --minimal) MINIMAL=1 ;;
         --with-glazewm) WITH_GLAZEWM=1 ;;
         --with-komorebi) WITH_KOMOREBI=1 ;;
+        --with-monitor-profiles) WITH_MONITOR_PROFILES=1 ;;
         --with-nvidia) WITH_NVIDIA=1 ;;
         --link-only) LINK_ONLY=1 ;;
         --dry-run) DRY_RUN=1 ;;
@@ -108,7 +110,8 @@ fi
 WINDOWS_ADDITIONAL_COMPONENT=""
 if [ "${ENV}" = "wsl" ]; then
     WINDOWS_ADDITIONAL_COMPONENT=$(resolve_windows_components \
-        "${WITH_GLAZEWM}" "${WITH_KOMOREBI}")
+        "${WITH_GLAZEWM}" "${WITH_KOMOREBI}" \
+        "${WITH_MONITOR_PROFILES}")
 fi
 
 echo "Detected environment: ${PRETTY_NAME:-Arch Linux} (${ENV})"

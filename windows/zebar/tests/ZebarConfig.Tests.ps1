@@ -82,12 +82,12 @@ Describe "Zetshell Zebar configuration" {
     $source | Assert-Match -Not "https?://"
   }
 
-  It "allows only pinned GPU monitoring and managed monitor profile switching" {
+  It "allows only pinned GPU monitoring and managed monitor profile commands" {
     $pack = Get-Content -LiteralPath $packPath -Raw | ConvertFrom-Json
     $widget = @($pack.widgets)[0]
     $commands = @($widget.privileges.shellCommands)
 
-    $commands.Count | Assert-Equal 2
+    $commands.Count | Assert-Equal 3
     $commands[0].program | Assert-Equal "C:\Windows\System32\nvidia-smi.exe"
     $commands[0].argsRegex | Assert-Equal (
       '^--query-gpu=utilization\.gpu,temperature\.gpu ' +
@@ -98,6 +98,16 @@ Describe "Zetshell Zebar configuration" {
       "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
     )
     $commands[1].argsRegex | Assert-Equal (
+      '^-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ' +
+      'if \(Test-Path -LiteralPath ' +
+      '"\$env:LOCALAPPDATA\\dotfiles\\monitor-profiles\\' +
+      'Switch-MonitorProfile\.ps1" -PathType Leaf\) ' +
+      '\{ exit 0 \} else \{ exit 1 \}$'
+    )
+    $commands[2].program | Assert-Equal (
+      "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+    )
+    $commands[2].argsRegex | Assert-Equal (
       '^-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ' +
       '& "\$env:LOCALAPPDATA\\dotfiles\\monitor-profiles\\' +
       'Switch-MonitorProfile\.ps1" -Name ' +
@@ -112,6 +122,8 @@ Describe "Zetshell Zebar configuration" {
     $source | Assert-Match 'class="[^"]*\bmonitor-profile-card\b[^"]*"'
     $source | Assert-Match 'aria-label="Monitor profile"'
     $source | Assert-Match 'createMonitorProfileCommand'
+    $source | Assert-Match 'probeMonitorProfiles'
+    $source | Assert-Match 'when=\{monitorProfilesAvailable\(\)\}'
     $source | Assert-Match 'allMonitors\.length'
     $style | Assert-Match '\.monitor-profile-card\s*\{'
     $style | Assert-Match '\.monitor-profile-select\s*\{'

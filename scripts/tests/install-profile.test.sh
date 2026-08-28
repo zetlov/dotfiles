@@ -84,6 +84,10 @@ if ! rg -q -- '--with-glazewm' "${BOOTSTRAP}"; then
     echo "FAIL: GlazeWM should require an explicit install flag" >&2
     exit 1
 fi
+if ! rg -q -- '--with-monitor-profiles' "${BOOTSTRAP}"; then
+    echo "FAIL: monitor profiles should require an explicit install flag" >&2
+    exit 1
+fi
 if ! rg -q 'Choose only one Windows window manager' "${BOOTSTRAP}"; then
     echo "FAIL: the installer should reject selecting both window managers" >&2
     exit 1

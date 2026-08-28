@@ -24,6 +24,18 @@ under LocalAppData and are not tracked in this repository.
 Install or update it from WSL through the Windows component orchestrator:
 
 ```bash
+./install.sh --with-monitor-profiles
+```
+
+It can be combined with GlazeWM on the managed three-display workstation:
+
+```bash
+./install.sh --with-glazewm --with-monitor-profiles
+```
+
+Or invoke only the Windows component directly:
+
+```bash
 /init /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe \
   -NoProfile -ExecutionPolicy Bypass \
   -File "$(wslpath -w "$PWD/windows/install.ps1")" \

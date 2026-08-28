@@ -28,19 +28,31 @@ assert_equals() {
 }
 
 assert_equals "" \
-    "$(resolve_windows_components 0 0)" \
+    "$(resolve_windows_components 0 0 0)" \
     "default selection"
-assert_equals "glazewm,monitor-profiles" \
-    "$(resolve_windows_components 1 0)" \
+assert_equals "glazewm" \
+    "$(resolve_windows_components 1 0 0)" \
     "GlazeWM selection"
+assert_equals "monitor-profiles" \
+    "$(resolve_windows_components 0 0 1)" \
+    "monitor profile selection"
+assert_equals "glazewm,monitor-profiles" \
+    "$(resolve_windows_components 1 0 1)" \
+    "GlazeWM and monitor profile selection"
 assert_equals "komorebi" \
-    "$(resolve_windows_components 0 1)" \
+    "$(resolve_windows_components 0 1 0)" \
     "Komorebi selection"
+assert_equals "komorebi,monitor-profiles" \
+    "$(resolve_windows_components 0 1 1)" \
+    "Komorebi and monitor profile selection"
 
-if resolve_windows_components yes 0 >/dev/null 2>&1; then
+if resolve_windows_components yes 0 0 >/dev/null 2>&1; then
     fail "resolver accepted a non-boolean flag"
 fi
-if resolve_windows_components 1 1 >/dev/null 2>&1; then
+if resolve_windows_components 0 0 yes >/dev/null 2>&1; then
+    fail "resolver accepted a non-boolean monitor profile flag"
+fi
+if resolve_windows_components 1 1 0 >/dev/null 2>&1; then
     fail "resolver accepted both window managers"
 fi
 
@@ -127,6 +139,54 @@ assert_equals "${expected_apply_argv}" "$(cat "${pwsh_log}")" \
     "PowerShell 7 apply argv"
 assert_equals "2" "$(wc -l <"${pwsh_count}")" \
     "one preflight and one apply invocation"
+
+preflight_windows_components \
+    "${fake_repo}" \
+    "komorebi,monitor-profiles" \
+    "${fake_wslpath}" \
+    "${fake_pwsh}" >/dev/null
+
+expected_combined_preflight_argv=$(cat <<'EOF'
+-NoProfile
+-ExecutionPolicy
+Bypass
+-File
+C:\dotfiles\windows\install.ps1
+-Mode
+Install
+-Preflight
+-AdditionalComponentCsv
+komorebi,monitor-profiles
+-AllowRollbackOnly
+EOF
+)
+assert_equals "${expected_combined_preflight_argv}" "$(cat "${pwsh_log}")" \
+    "combined rollback preflight argv"
+
+apply_windows_components \
+    "${fake_repo}" \
+    "komorebi,monitor-profiles" \
+    0 \
+    "${fake_wslpath}" \
+    "${fake_pwsh}"
+
+expected_combined_apply_argv=$(cat <<'EOF'
+-NoProfile
+-ExecutionPolicy
+Bypass
+-File
+C:\dotfiles\windows\install.ps1
+-Mode
+Install
+-AdditionalComponentCsv
+komorebi,monitor-profiles
+-AllowRollbackOnly
+EOF
+)
+assert_equals "${expected_combined_apply_argv}" "$(cat "${pwsh_log}")" \
+    "combined rollback apply argv"
+assert_equals "4" "$(wc -l <"${pwsh_count}")" \
+    "two preflight and two apply invocations"
 assert_equals "-w
 ${fake_repo}/windows/install.ps1" "$(cat "${wslpath_log}")" \
     "wslpath argv"
@@ -134,8 +194,8 @@ ${fake_repo}/windows/install.ps1" "$(cat "${wslpath_log}")" \
 for invalid_component in \
     "wezterm" \
     "autostart" \
-    "glazewm" \
-    "glazewm,komorebi"; do
+    "glazewm,komorebi" \
+    "monitor-profiles,glazewm"; do
     if apply_windows_components \
         "${fake_repo}" "${invalid_component}" 0 \
         "${fake_wslpath}" "${fake_pwsh}" >/dev/null 2>&1; then
