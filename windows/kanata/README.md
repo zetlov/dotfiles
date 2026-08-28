@@ -29,7 +29,7 @@ registry update, and Kanata process run with normal user privileges.
 | Shortcut | Action |
 | --- | --- |
 | `F13/F15+H/J/K/L` | Focus the GlazeWM window left/down/up/right |
-| `F13/F15+Ctrl+H/J/K/L` | Move the focused window |
+| `F13/F15+Ctrl+H/J/K/L` | Move the focused window; keep the mods held to repeat |
 | `F13/F15+1..0,-,=` | Focus workspace 1..12 |
 | Add `Shift` to a workspace binding | Move and follow the active window |
 | `F13/F15+Q` | Close the active window |

@@ -105,7 +105,7 @@ below. Native Win and Alt are not used as GlazeWM modifiers.
 | Physical binding | Action |
 | --- | --- |
 | `F13/F15+H/J/K/L` | Focus left/down/up/right |
-| `F13/F15+Ctrl+H/J/K/L` | Move the focused window |
+| `F13/F15+Ctrl+H/J/K/L` | Move the focused window; keep the mods held to repeat |
 | `F13/F15+1..0` | Focus workspace 1..10 |
 | `F13/F15+-/=` | Focus workspace 11/12 |
 | Add `Shift` to a workspace binding | Move and follow the window |

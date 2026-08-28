@@ -39,11 +39,12 @@
   wmminus (switch ((or (input real lsft) (input real rsft))) C-A-S-- break () C-A-- break)
   wmequal (switch ((or (input real lsft) (input real rsft))) C-A-S-= break () C-A-= break)
 
-  ;; Private function keys prevent GlazeWM navigation from leaking text input.
-  wmh (switch ((or (input real lctl) (input real rctl))) f20 break () f16 break)
-  wmj (switch ((or (input real lctl) (input real rctl))) f21 break () f17 break)
-  wmk (switch ((or (input real lctl) (input real rctl))) f22 break () f18 break)
-  wml (switch ((or (input real lctl) (input real rctl))) f23 break () f19 break)
+  ;; Temporarily release a held Ctrl while emitting private move keys. Ctrl is
+  ;; restored after each key release, so H/J/K/L can be tapped repeatedly.
+  wmh (switch ((or (input real lctl) (input real rctl))) (unmod (lctl rctl) f20) break () f16 break)
+  wmj (switch ((or (input real lctl) (input real rctl))) (unmod (lctl rctl) f21) break () f17 break)
+  wmk (switch ((or (input real lctl) (input real rctl))) (unmod (lctl rctl) f22) break () f18 break)
+  wml (switch ((or (input real lctl) (input real rctl))) (unmod (lctl rctl) f23) break () f19 break)
   wmf (switch ((or (input real lsft) (input real rsft))) C-A-S-f break () C-A-f break)
   wmcomma (switch ((or (input real lctl) (input real rctl))) C-A-S-, break () C-A-, break)
   wmperiod (switch ((or (input real lctl) (input real rctl))) C-A-S-. break () C-A-. break)

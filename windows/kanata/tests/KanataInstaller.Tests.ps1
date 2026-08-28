@@ -166,7 +166,10 @@ Context "Keyboard modifier configuration" {
       "f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23", "f24",
       "C-A-f12", "A-tab", "A-spc"
     )) {
-      Assert-Equal ($activeConfig -match "(?i)(?<!\S)$([regex]::Escape($binding))(?!\S)") $true
+      $bindingPattern = "(?i)(?:^|[\s(])" +
+        [regex]::Escape($binding) +
+        "(?=$|[\s)])"
+      Assert-Equal ($activeConfig -match $bindingPattern) $true
     }
 
     $wmLayer = [regex]::Match(
@@ -180,6 +183,27 @@ Context "Keyboard modifier configuration" {
     Assert-Equal $tokens[48] "C-A-f12"
     Assert-Equal ($activeConfig -match "(?i)\bwindowstate\b") $false
     Assert-Equal ($activeConfig -match "(?i)(?<!\S)M-(?:down|up)(?!\S)") $false
+  }
+
+  It "allows repeated move keys while either physical Ctrl remains held" {
+    $configPath = Join-Path $PSScriptRoot "..\kanata.kbd"
+    $config = Get-Content -LiteralPath $configPath -Raw
+    $moveAliases = [ordered]@{
+      wmh = [pscustomobject]@{ Move = "f20"; Focus = "f16" }
+      wmj = [pscustomobject]@{ Move = "f21"; Focus = "f17" }
+      wmk = [pscustomobject]@{ Move = "f22"; Focus = "f18" }
+      wml = [pscustomobject]@{ Move = "f23"; Focus = "f19" }
+    }
+
+    foreach ($entry in $moveAliases.GetEnumerator()) {
+      $expected = (
+        "$($entry.Key) (switch " +
+        "((or (input real lctl) (input real rctl))) " +
+        "(unmod (lctl rctl) $($entry.Value.Move)) break " +
+        "() $($entry.Value.Focus) break)"
+      )
+      Assert-Equal $config.Contains($expected) $true
+    }
   }
 
   It "keeps the F13 and F15 shortcut layer available during games" {
