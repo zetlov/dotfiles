@@ -206,6 +206,17 @@ Context "Keyboard modifier configuration" {
     }
   }
 
+  It "keeps monitor navigation from moving whole workspaces" {
+    $configPath = Join-Path $PSScriptRoot "..\kanata.kbd"
+    $config = Get-Content -LiteralPath $configPath -Raw
+
+    Assert-Equal $config.Contains("wmcomma C-A-,") $true
+    Assert-Equal $config.Contains("wmperiod C-A-.") $true
+    Assert-Equal ($config -match "(?m)^\s*wmcomma\s+\(switch\b") $false
+    Assert-Equal ($config -match "(?m)^\s*wmperiod\s+\(switch\b") $false
+    Assert-Equal ($config -match "(?i)C-A-S-[,.]") $false
+  }
+
   It "emits monitor profile shortcuts only while physical Shift is held" {
     $configPath = Join-Path $PSScriptRoot "..\kanata.kbd"
     $config = Get-Content -LiteralPath $configPath -Raw

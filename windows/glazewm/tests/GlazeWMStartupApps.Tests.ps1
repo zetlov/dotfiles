@@ -51,4 +51,20 @@ Describe "GlazeWM startup applications" {
     )
     $script | Should -Match "Invoke-GlazeWorkspaceGrid"
   }
+
+  It "reconciles workspace monitors after startup placement and grids" {
+    $script = Get-Content -LiteralPath $scriptPath -Raw
+    $placementIndex = $script.LastIndexOf(
+      "Invoke-GlazeStartupWorkspacePlacement"
+    )
+    $gridIndex = $script.LastIndexOf("Invoke-GlazeWorkspaceGrid")
+    $syncIndex = $script.LastIndexOf("Invoke-GlazeWorkspaceMonitorSync")
+    $stateIndex = $script.LastIndexOf("WorkspaceSynchronized")
+
+    $script | Should -Match "GlazeWMMonitorSync\.psm1"
+    $placementIndex -ge 0 | Should -Be $true
+    $gridIndex -gt $placementIndex | Should -Be $true
+    $syncIndex -gt $gridIndex | Should -Be $true
+    $stateIndex -gt $syncIndex | Should -Be $true
+  }
 }

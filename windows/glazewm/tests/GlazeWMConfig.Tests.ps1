@@ -117,6 +117,23 @@ Describe "GlazeWM managed configuration" {
     $script | Should -Match '(?s)\$PreserveZebarRuntime.+?\$deployedMonitorSyncScript'
   }
 
+  It "can preserve current app placement during a live config update" {
+    $script = Get-Content -LiteralPath $startPath -Raw
+
+    $script | Should -Match '\[switch\]\$SkipStartupApps'
+    $script | Should -Match (
+      '(?s)\$SkipStartupApps.+?requires.+?\$PreserveZebarRuntime'
+    )
+    $script | Should -Match (
+      'if \(-not \$SkipStartupApps\) \{[\s\S]*?' +
+      '\$startupAppsProcess = Start-HiddenPowerShellScript'
+    )
+    $script | Should -Match (
+      'if \(-not \$SkipStartupApps\) \{[\s\S]*?' +
+      '\$startupAppsDeadline = \(Get-Date\)'
+    )
+  }
+
   It "leaves audio lifecycle to the active audio component" {
     $script = Get-Content -LiteralPath $startPath -Raw
 
@@ -242,6 +259,7 @@ Describe "GlazeWM managed configuration" {
     $script | Should -Match 'StartupAppsTimeoutSeconds'
     $script | Should -Match 'ConvertFrom-Json'
     $script | Should -Match 'Remove-Item `[\s\S]*-LiteralPath \$startupStatePath'
+    $script | Should -Match 'WorkspaceSynchronized'
   }
 
   It "restores managed files and autostart when installation fails" {
@@ -282,5 +300,19 @@ Describe "GlazeWM managed configuration" {
     $config | Should -Match "focus --monitor 0"
     $config | Should -Match "focus --monitor 1"
     $config | Should -Not -Match "focus --monitor (left|right)"
+  }
+
+  It "never moves a numeric workspace through monitor navigation" {
+    $config = Get-Content -LiteralPath $configPath -Raw
+
+    $config | Should -Not -Match "move-workspace"
+    $config | Should -Match (
+      "(?ms)commands: \['focus --monitor 0'\].+?" +
+      "bindings: \['ctrl\+alt\+,', 'ctrl\+alt\+shift\+,'\]"
+    )
+    $config | Should -Match (
+      "(?ms)commands: \['focus --monitor 2'\].+?" +
+      "bindings: \['ctrl\+alt\+\.', 'ctrl\+alt\+shift\+\.'\]"
+    )
   }
 }

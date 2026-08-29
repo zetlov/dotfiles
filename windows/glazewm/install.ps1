@@ -28,7 +28,9 @@ param(
   [ValidateRange(1, 300)]
   [int]$StartupAppsTimeoutSeconds = 150,
 
-  [switch]$PreserveZebarRuntime
+  [switch]$PreserveZebarRuntime,
+
+  [switch]$SkipStartupApps
 )
 
 Set-StrictMode -Version Latest
@@ -264,6 +266,12 @@ if ($managerWasRunning) {
     throw "The running GlazeWM manager is not reachable through IPC."
   }
 }
+if ($SkipStartupApps -and -not $PreserveZebarRuntime) {
+  throw "SkipStartupApps requires PreserveZebarRuntime."
+}
+if ($SkipStartupApps -and -not $managerWasRunning) {
+  throw "SkipStartupApps requires an already-running GlazeWM manager."
+}
 
 $rollbackRoot = Join-Path (
   [IO.Path]::GetTempPath()
@@ -414,8 +422,10 @@ try {
   if ($managerWasRunning) {
     $startedDaemonProcess = Start-HiddenPowerShellScript `
       -ScriptPath $deployedDaemon
-    $startupAppsProcess = Start-HiddenPowerShellScript `
-      -ScriptPath $deployedStartupScript
+    if (-not $SkipStartupApps) {
+      $startupAppsProcess = Start-HiddenPowerShellScript `
+        -ScriptPath $deployedStartupScript
+    }
     if ($PreserveZebarRuntime) {
       & $deployedMonitorSyncScript `
         -GlazeWMPath $GlazeWMPath | Out-Null
@@ -465,32 +475,41 @@ try {
     }
   }
 
-  $startupAppsDeadline = (Get-Date).AddSeconds($StartupAppsTimeoutSeconds)
-  do {
-    Start-Sleep -Milliseconds 250
-    if (Test-Path -LiteralPath $startupErrorPath -PathType Leaf) {
-      throw "The startup application helper failed. See: $startupErrorPath"
-    }
-  } while (
-    -not (Test-Path -LiteralPath $startupStatePath -PathType Leaf) -and
-    (Get-Date) -lt $startupAppsDeadline
-  )
-
-  if (-not (Test-Path -LiteralPath $startupStatePath -PathType Leaf)) {
-    throw (
-      "Startup applications did not complete within " +
-      "$StartupAppsTimeoutSeconds seconds."
+  if (-not $SkipStartupApps) {
+    $startupAppsDeadline = (Get-Date).AddSeconds($StartupAppsTimeoutSeconds)
+    do {
+      Start-Sleep -Milliseconds 250
+      if (Test-Path -LiteralPath $startupErrorPath -PathType Leaf) {
+        throw "The startup application helper failed. See: $startupErrorPath"
+      }
+    } while (
+      -not (Test-Path -LiteralPath $startupStatePath -PathType Leaf) -and
+      (Get-Date) -lt $startupAppsDeadline
     )
-  }
 
-  try {
-    $startupState = Get-Content -LiteralPath $startupStatePath -Raw |
-      ConvertFrom-Json
-  } catch {
-    throw "The startup application state is invalid: $startupStatePath"
-  }
-  if ([int]$startupState.ApplicationCount -lt 1) {
-    throw "The startup application state contains no applications."
+    if (-not (Test-Path -LiteralPath $startupStatePath -PathType Leaf)) {
+      throw (
+        "Startup applications did not complete within " +
+        "$StartupAppsTimeoutSeconds seconds."
+      )
+    }
+
+    try {
+      $startupState = Get-Content -LiteralPath $startupStatePath -Raw |
+        ConvertFrom-Json
+    } catch {
+      throw "The startup application state is invalid: $startupStatePath"
+    }
+    if ([int]$startupState.ApplicationCount -lt 1) {
+      throw "The startup application state contains no applications."
+    }
+    if (
+      $startupState.PSObject.Properties.Name -notcontains
+        "WorkspaceSynchronized" -or
+      -not [bool]$startupState.WorkspaceSynchronized
+    ) {
+      throw "Startup workspace monitor synchronization did not complete."
+    }
   }
 
   if (-not (Test-Path -LiteralPath $runKey)) {

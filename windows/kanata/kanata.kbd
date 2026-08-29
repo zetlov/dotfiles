@@ -50,8 +50,9 @@
   wmprofileall (switch ((or (input real lsft) (input real rsft))) S-f16 break () nop0 break)
   wmprofileleftcenter (switch ((or (input real lsft) (input real rsft))) S-f17 break () nop0 break)
   wmprofileright (switch ((or (input real lsft) (input real rsft))) S-f18 break () nop0 break)
-  wmcomma (switch ((or (input real lctl) (input real rctl))) C-A-S-, break () C-A-, break)
-  wmperiod (switch ((or (input real lctl) (input real rctl))) C-A-S-. break () C-A-. break)
+  ;; Monitor navigation never moves a workspace, regardless of physical Ctrl.
+  wmcomma C-A-,
+  wmperiod C-A-.
 
   to-us  (layer-switch us)
   to-jis (layer-switch jis)

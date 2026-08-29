@@ -31,10 +31,14 @@ try {
 }
 
 $modulePath = Join-Path $PSScriptRoot "GlazeWMAutoTile.psm1"
-if (-not (Test-Path -LiteralPath $modulePath -PathType Leaf)) {
-  throw "GlazeWM layout module is missing: $modulePath"
+$monitorSyncModulePath = Join-Path $PSScriptRoot "GlazeWMMonitorSync.psm1"
+foreach ($requiredModulePath in @($modulePath, $monitorSyncModulePath)) {
+  if (-not (Test-Path -LiteralPath $requiredModulePath -PathType Leaf)) {
+    throw "GlazeWM helper module is missing: $requiredModulePath"
+  }
 }
 Import-Module $modulePath -Force -ErrorAction Stop
+Import-Module $monitorSyncModulePath -Force -ErrorAction Stop
 
 $waitSeconds = [int]$config.managerWaitSeconds
 $intervalMilliseconds = [int]$config.launchIntervalMilliseconds
@@ -161,7 +165,13 @@ foreach ($grid in @($config.workspaceGrids)) {
     -WaitSeconds $workspaceGridWaitSeconds
 }
 
+# Startup app placement can activate a workspace on whichever monitor is
+# focused at that moment. Reconcile only the workspace-to-monitor mapping after
+# every placement has finished; this path intentionally does not touch Zebar.
+Invoke-GlazeWorkspaceMonitorSync -GlazeWMPath $GlazeWMPath | Out-Null
+
 [pscustomobject]@{
   CompletedAt = (Get-Date).ToString("o")
   ApplicationCount = $applications.Count
+  WorkspaceSynchronized = $true
 } | ConvertTo-Json | Set-Content -LiteralPath $statePath -Encoding UTF8

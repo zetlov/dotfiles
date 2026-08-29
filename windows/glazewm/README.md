@@ -42,14 +42,19 @@ or relaunch Zebar, use an already-running GlazeWM manager:
 ```bash
 pwsh.exe -NoProfile -ExecutionPolicy Bypass \
   -File "$(wslpath -w ~/dotfiles/windows/glazewm/install.ps1)" \
-  -PreserveZebarRuntime
+  -PreserveZebarRuntime \
+  -SkipStartupApps
 ```
+
+`-SkipStartupApps` is limited to this live, runtime-preserving update mode. It
+keeps current application workspace placement unchanged while the installer
+reloads the managed config and reconciles workspace monitors.
 
 The installer deploys the configuration to `%USERPROFILE%\.glzr\glazewm`,
 deploys helper scripts under `%LOCALAPPDATA%\dotfiles\glazewm`, registers the
-official manager in the current user's Run key, and restarts GlazeWM. Existing
-live configuration is timestamp-backed up before replacement. GlazeWM may
-show a UAC prompt when it starts.
+official manager in the current user's Run key, and reloads an existing manager
+or starts it when absent. Existing live configuration is timestamp-backed up
+before replacement. GlazeWM may show a UAC prompt when it starts.
 
 The managed configuration keeps the Komorebi-era 8 px inner gaps, 10 px outer
 gaps, Catppuccin borders, opaque windows, keyboard focus, twelve primary
@@ -112,6 +117,11 @@ startup. Zen has no persistent window rule, so browser windows opened later
 stay on the currently active workspace. GlazeWM window rules continue to route
 the other listed applications.
 
+After startup placement and workspace-grid reconciliation finish, the same
+helper reruns workspace-to-monitor synchronization without invoking Zebar.
+This final pass prevents a numeric workspace created during startup from
+remaining on whichever monitor happened to be focused during app placement.
+
 ## Key bindings
 
 Kanata translates either held physical `F13`/`F15` key to the private bindings
@@ -135,9 +145,10 @@ below. Native Win and Alt are not used as GlazeWM modifiers.
 | `F13/F15+Shift+C` | Enable the left and center displays |
 | `F13/F15+Shift+R` | Enable only the right display |
 
-GlazeWM can move a whole workspace between monitors but does not expose the
-same direct single-window monitor command as Komorebi. The shifted monitor
-bindings therefore move the current workspace.
+Monitor navigation only changes the focused monitor. Physical Ctrl does not
+change this action, and the shifted fallback bindings also focus a monitor
+instead of moving the current workspace. This preserves the invariant that
+numeric workspaces 1 through 12 stay on the primary monitor.
 
 ## Rollback
 
