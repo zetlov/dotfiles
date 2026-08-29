@@ -37,6 +37,9 @@ registry update, and Kanata process run with normal user privileges.
 | `F13/F15+Tab` | Switch windows with `Alt+Tab` |
 | `F13/F15+Space` | Open the launcher bound to `Alt+Space` |
 | `F13/F15+F / Shift+F` | Toggle floating/fullscreen |
+| `F13/F15+Shift+A` | Enable all managed displays |
+| `F13/F15+Shift+C` | Enable the left and center displays |
+| `F13/F15+Shift+R` | Enable only the right display |
 
 The firmware mapping is outside this repository. Kanata can validate and use
 `F13`/`F15`, but it cannot make a different hardware scancode become those

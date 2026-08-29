@@ -38,11 +38,18 @@ Import-Module $modulePath -Force -ErrorAction Stop
 
 $waitSeconds = [int]$config.managerWaitSeconds
 $intervalMilliseconds = [int]$config.launchIntervalMilliseconds
+$workspacePlacementWaitSeconds = [int]$config.workspacePlacementWaitSeconds
 if ($waitSeconds -lt 1 -or $waitSeconds -gt 300) {
   throw "managerWaitSeconds must be between 1 and 300."
 }
 if ($intervalMilliseconds -lt 0 -or $intervalMilliseconds -gt 10000) {
   throw "launchIntervalMilliseconds must be between 0 and 10000."
+}
+if (
+  $workspacePlacementWaitSeconds -lt 1 -or
+  $workspacePlacementWaitSeconds -gt 300
+) {
+  throw "workspacePlacementWaitSeconds must be between 1 and 300."
 }
 
 $applications = @($config.applications)
@@ -59,6 +66,15 @@ foreach ($app in $applications) {
   }
   if ([string]::IsNullOrWhiteSpace($startAppName)) {
     throw "A startup application has an empty Start Apps name."
+  }
+  if ($app.PSObject.Properties.Name -contains "startupWorkspace") {
+    $startupWorkspace = [string]$app.startupWorkspace
+    if (
+      [string]::IsNullOrWhiteSpace($startupWorkspace) -or
+      $startupWorkspace -notmatch '^[A-Za-z0-9._ -]+$'
+    ) {
+      throw "Invalid startup workspace for $($app.name): $startupWorkspace"
+    }
   }
 
   $normalized = $processName.ToLowerInvariant()
@@ -112,6 +128,17 @@ foreach ($app in $applications) {
 if ($failures.Count -gt 0) {
   $failedNames = @($failures | Sort-Object -Unique)
   throw "Could not start: $($failedNames -join ', ')"
+}
+
+foreach ($app in $applications) {
+  if (-not ($app.PSObject.Properties.Name -contains "startupWorkspace")) {
+    continue
+  }
+  Invoke-GlazeStartupWorkspacePlacement `
+    -GlazeWMPath $GlazeWMPath `
+    -ProcessName ([string]$app.processName) `
+    -WorkspaceName ([string]$app.startupWorkspace) `
+    -WaitSeconds $workspacePlacementWaitSeconds
 }
 
 $workspaceGridWaitSeconds = [int]$config.workspaceGridWaitSeconds

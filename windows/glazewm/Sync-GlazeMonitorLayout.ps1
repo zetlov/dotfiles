@@ -6,7 +6,9 @@ param(
 
   [string]$ZebarPath = "",
 
-  [switch]$RestartZebar
+  [switch]$RestartZebar,
+
+  [switch]$AllowZebarWidgetRelaunch
 )
 
 Set-StrictMode -Version Latest
@@ -29,4 +31,5 @@ Import-Module $modulePath -Force -ErrorAction Stop
 Invoke-GlazeMonitorProfileRefresh `
   -GlazeWMPath $GlazeWMPath `
   -ZebarPath $ZebarPath `
-  -RestartZebar:$RestartZebar
+  -RestartZebar:$RestartZebar `
+  -AllowZebarWidgetRelaunch:$AllowZebarWidgetRelaunch

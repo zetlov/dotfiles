@@ -63,9 +63,15 @@ Profiles are applied from PowerShell with the commands above. After a verified
 apply or explicit recovery, an installed GlazeWM runtime is synchronized:
 workspaces 1 through 12 return to the Windows primary display, `left` and
 `vert` follow the active outer displays, and the existing primary Zebar preset
-is preserved and verified (or started when absent). If that desktop refresh fails, the already verified
-Windows display profile remains applied and the command reports the refresh
-error instead of silently hiding it.
+is preserved when it still reserves the primary display. GlazeWM is reloaded
+once when its monitor topology is stale and can take up to 30 seconds to
+observe a display removal. A missing primary reservation triggers an orderly
+failure without closing the widget. A widget relaunch requires the explicit
+`-AllowZebarWidgetRelaunch` switch after user approval. The Zebar runtime is
+never force-stopped during a profile change because Zebar 3.3.1 can leave port
+6124 orphaned after process exit. If that desktop refresh fails, the already
+verified Windows display profile remains applied and the command reports the
+refresh error instead of silently hiding it.
 
 Every switch validates the saved topology with Windows, captures the current
 configuration, applies without persistence, verifies active displays, primary,

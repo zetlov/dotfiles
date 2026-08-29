@@ -46,6 +46,10 @@
   wmk (switch ((or (input real lctl) (input real rctl))) (unmod (lctl rctl) f22) break () f18 break)
   wml (switch ((or (input real lctl) (input real rctl))) (unmod (lctl rctl) f23) break () f19 break)
   wmf (switch ((or (input real lsft) (input real rsft))) C-A-S-f break () C-A-f break)
+  ;; Monitor profiles require physical Shift so unshifted letters stay blocked.
+  wmprofileall (switch ((or (input real lsft) (input real rsft))) S-f16 break () nop0 break)
+  wmprofileleftcenter (switch ((or (input real lsft) (input real rsft))) S-f17 break () nop0 break)
+  wmprofileright (switch ((or (input real lsft) (input real rsft))) S-f18 break () nop0 break)
   wmcomma (switch ((or (input real lctl) (input real rctl))) C-A-S-, break () C-A-, break)
   wmperiod (switch ((or (input real lctl) (input real rctl))) C-A-S-. break () C-A-. break)
 
@@ -98,9 +102,9 @@
 ;; Hold either dedicated IME key for GlazeWM and retained Windows shortcuts.
 (deflayer wm
   XX   @wm1 @wm2 @wm3 @wm4 @wm5 @wm6 @wm7 @wm8 @wm9 @wm0 @wmminus @wmequal XX
-  A-tab C-A-q XX XX XX XX XX XX XX XX pp XX XX XX
-  XX   XX   M-S-s XX @wmf XX @wmh @wmj @wmk @wml XX XX C-A-t
-  XX   XX   XX   XX   XX   C-A-b XX C-A-f12 @wmcomma @wmperiod f24 XX XX
+  A-tab C-A-q XX XX @wmprofileright XX XX XX XX XX pp XX XX XX
+  XX   @wmprofileall M-S-s XX @wmf XX @wmh @wmj @wmk @wml XX XX C-A-t
+  XX   XX   XX   @wmprofileleftcenter XX C-A-b XX C-A-f12 @wmcomma @wmperiod f24 XX XX
   _    _    _              A-spc          _    _    _
   C-A-left C-A-down C-A-up C-A-rght
   XX   XX

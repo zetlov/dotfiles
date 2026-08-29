@@ -10,7 +10,7 @@ param(
   [Parameter(ParameterSetName = "Apply")]
   [switch]$ValidateOnly,
 
-  [string]$InstallRoot = $PSScriptRoot
+  [string]$InstallRoot = ""
 )
 
 Set-StrictMode -Version Latest
@@ -22,6 +22,9 @@ if ($env:OS -ne "Windows_NT") {
 
 $modulePath = Join-Path $PSScriptRoot "MonitorProfiles.psm1"
 Import-Module $modulePath -Force -ErrorAction Stop
+if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
+  $InstallRoot = $PSScriptRoot
+}
 $InstallRoot = Resolve-MonitorProfileInstallRoot -Path $InstallRoot
 
 function Invoke-ManagedDesktopRefresh {

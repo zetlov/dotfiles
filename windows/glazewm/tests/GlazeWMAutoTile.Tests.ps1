@@ -293,6 +293,84 @@ Describe "GlazeWM automatic tiling" {
     $module | Should -Not -Match '@\("11", "12"\)'
   }
 
+  It "moves every matching startup window to the requested workspace" {
+    $script:placementInvocations = @()
+    $script:placementQueryCount = 0
+    $invoker = {
+      param($request)
+      $arguments = @($request.Arguments)
+      $script:placementInvocations += , @($arguments)
+      if ($arguments[0] -eq "query") {
+        $script:placementQueryCount++
+        $workspaceName = if ($script:placementQueryCount -eq 1) { "3" } else { "1" }
+        $response = @{
+          success = $true
+          data = @{
+            workspaces = @(
+              @{
+                type = "workspace"
+                name = $workspaceName
+                children = @(
+                  @{ type = "window"; id = "zen-a"; processName = "zen"; children = @() },
+                  @{ type = "window"; id = "zen-b"; processName = "zen"; children = @() }
+                )
+              }
+            )
+          }
+        } | ConvertTo-Json -Depth 8 -Compress
+        return [pscustomobject]@{ Output = @($response); ExitCode = 0 }
+      }
+      return [pscustomobject]@{ Output = @(); ExitCode = 0 }
+    }
+
+    Invoke-GlazeStartupWorkspacePlacement `
+      -GlazeWMPath "fake-glazewm.exe" `
+      -ProcessName "zen" `
+      -WorkspaceName "1" `
+      -WaitSeconds 5 `
+      -CommandInvoker $invoker
+
+    @($script:placementInvocations | ForEach-Object { $_ -join " " }) -join "|" |
+      Should -Be (
+        "query workspaces|command --id zen-a move --workspace 1|" +
+        "command --id zen-b move --workspace 1|query workspaces"
+      )
+  }
+
+  It "does not move startup windows that are already in the requested workspace" {
+    $script:placementInvocations = @()
+    $invoker = {
+      param($request)
+      $arguments = @($request.Arguments)
+      $script:placementInvocations += , @($arguments)
+      $response = @{
+        success = $true
+        data = @{
+          workspaces = @(
+            @{
+              type = "workspace"
+              name = "1"
+              children = @(
+                @{ type = "window"; id = "zen-a"; processName = "zen"; children = @() }
+              )
+            }
+          )
+        }
+      } | ConvertTo-Json -Depth 8 -Compress
+      return [pscustomobject]@{ Output = @($response); ExitCode = 0 }
+    }
+
+    Invoke-GlazeStartupWorkspacePlacement `
+      -GlazeWMPath "fake-glazewm.exe" `
+      -ProcessName "zen" `
+      -WorkspaceName "1" `
+      -WaitSeconds 1 `
+      -CommandInvoker $invoker
+
+    $script:placementInvocations.Count | Should -Be 1
+    $script:placementInvocations[0] -join " " | Should -Be "query workspaces"
+  }
+
   It "pairs the two leftmost windows from a four-column layout" {
     $windows = @(
       [pscustomobject]@{ id = "a"; x = 0; y = 0; processName = "Zotero"; state = [pscustomobject]@{ type = "tiling" } },

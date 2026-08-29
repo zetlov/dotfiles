@@ -26,7 +26,9 @@ param(
   [int]$ZebarStartupTimeoutSeconds = 30,
 
   [ValidateRange(1, 300)]
-  [int]$StartupAppsTimeoutSeconds = 150
+  [int]$StartupAppsTimeoutSeconds = 150,
+
+  [switch]$PreserveZebarRuntime
 )
 
 Set-StrictMode -Version Latest
@@ -333,7 +335,17 @@ $daemonWasRunning = $false
 $startedDaemonProcess = $null
 $startupAppsProcess = $null
 try {
-  $zebarState = & $sourceZebarInstaller | Select-Object -Last 1
+  if ($PreserveZebarRuntime -and -not $managerWasRunning) {
+    throw (
+      "Preserving Zebar requires an already-running GlazeWM manager because " +
+      "manager startup executes configured startup commands."
+    )
+  }
+  if ($PreserveZebarRuntime) {
+    $zebarState = $null
+  } else {
+    $zebarState = & $sourceZebarInstaller | Select-Object -Last 1
+  }
   Copy-Item -LiteralPath $sourceConfig -Destination $liveConfig -Force
   foreach ($deployment in $runtimeDeployments) {
     Copy-Item `
@@ -404,10 +416,15 @@ try {
       -ScriptPath $deployedDaemon
     $startupAppsProcess = Start-HiddenPowerShellScript `
       -ScriptPath $deployedStartupScript
-    & $deployedMonitorSyncScript `
-      -GlazeWMPath $GlazeWMPath `
-      -ZebarPath $zebarState.ZebarPath `
-      -RestartZebar | Out-Null
+    if ($PreserveZebarRuntime) {
+      & $deployedMonitorSyncScript `
+        -GlazeWMPath $GlazeWMPath | Out-Null
+    } else {
+      & $deployedMonitorSyncScript `
+        -GlazeWMPath $GlazeWMPath `
+        -ZebarPath $zebarState.ZebarPath `
+        -RestartZebar | Out-Null
+    }
   }
 
   $daemonDeadline = (Get-Date).AddSeconds($StartupTimeoutSeconds)
@@ -436,14 +453,16 @@ try {
     throw "The automatic tiling helper exited during startup."
   }
 
-  $zebarDeadline = (Get-Date).AddSeconds($ZebarStartupTimeoutSeconds)
-  $zebarProcess = $null
-  do {
-    Start-Sleep -Milliseconds 250
-    $zebarProcess = Get-ZetshellZebarProcess
-  } while ($null -eq $zebarProcess -and (Get-Date) -lt $zebarDeadline)
-  if ($null -eq $zebarProcess) {
-    throw "Zebar did not start within $ZebarStartupTimeoutSeconds seconds."
+  if (-not $PreserveZebarRuntime) {
+    $zebarDeadline = (Get-Date).AddSeconds($ZebarStartupTimeoutSeconds)
+    $zebarProcess = $null
+    do {
+      Start-Sleep -Milliseconds 250
+      $zebarProcess = Get-ZetshellZebarProcess
+    } while ($null -eq $zebarProcess -and (Get-Date) -lt $zebarDeadline)
+    if ($null -eq $zebarProcess) {
+      throw "Zebar did not start within $ZebarStartupTimeoutSeconds seconds."
+    }
   }
 
   $startupAppsDeadline = (Get-Date).AddSeconds($StartupAppsTimeoutSeconds)

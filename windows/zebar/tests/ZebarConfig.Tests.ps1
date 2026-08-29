@@ -231,4 +231,11 @@ Describe "Zetshell Zebar configuration" {
     $installer | Assert-Match '\. \$sourceProcessHelpers'
     $installer | Assert-Match '(?s)Get-ZetshellGpuMonitorProcess.+?Stop-Process.+?Get-Process -Name "zebar".+?Stop-Process'
   }
+
+  It "requires explicit authorization before stopping a running Zebar" {
+    $installer = Get-Content -LiteralPath $installerPath -Raw
+
+    $installer | Assert-Match '\[switch\]\$AllowRuntimeStop'
+    $installer | Assert-Match '(?s)\$zebarWasRunning.+?-not \$AllowRuntimeStop.+?explicit authorization'
+  }
 }

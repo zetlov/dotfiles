@@ -108,6 +108,95 @@ Describe "GlazeWM monitor profile synchronization" {
       -PrimaryBounds $primary).Count | Should -Be 0
   }
 
+  It "normalizes a single monitor response into a collection" {
+    $fakeCli = Join-Path $TestDrive "glazewm.ps1"
+    @'
+param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
+$global:LASTEXITCODE = 0
+'{"success":true,"data":{"monitors":{"type":"monitor","id":"right","x":0,"y":0,"width":1920,"height":1080,"children":[]}}}'
+'@ | Set-Content -LiteralPath $fakeCli -Encoding UTF8
+
+    InModuleScope GlazeWMMonitorSync -Parameters @{ FakeCli = $fakeCli } {
+      $monitors = @(Get-GlazeMonitors -GlazeWMPath $FakeCli)
+
+      $monitors.Count | Should -Be 1
+      $monitors[0].id | Should -Be "right"
+    }
+  }
+
+  It "reloads GlazeWM once and tolerates slow monitor removal" {
+    $fakeCli = Join-Path $TestDrive "glazewm-reload.ps1"
+    $reloadMarker = Join-Path $TestDrive "reloaded.txt"
+    @'
+param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
+$global:LASTEXITCODE = 0
+if ($Arguments -join " " -eq "command wm-reload-config") {
+  Set-Content -LiteralPath $env:GLAZE_TEST_RELOAD_MARKER -Value "reloaded"
+  '{"success":true,"data":null,"error":null}'
+}
+'@ | Set-Content -LiteralPath $fakeCli -Encoding UTF8
+
+    InModuleScope GlazeWMMonitorSync -Parameters @{
+      FakeCli = $fakeCli
+      ReloadMarker = $reloadMarker
+    } {
+      $env:GLAZE_TEST_RELOAD_MARKER = $ReloadMarker
+      $script:GlazeTestMonitorPolls = 0
+      $script:GlazeTestDateCalls = 0
+      Mock Get-WindowsScreenBounds {
+        @(
+          [pscustomobject]@{ X = -1920; Y = 495; Width = 1920; Height = 1080 }
+          [pscustomobject]@{ X = 0; Y = 0; Width = 3840; Height = 2160 }
+          [pscustomobject]@{ X = 3840; Y = 430; Width = 1920; Height = 1080 }
+        )
+      }
+      Mock Get-GlazeMonitors {
+        $null = $script:GlazeTestMonitorPolls++
+        if ($script:GlazeTestMonitorPolls -gt 1) {
+          return @(
+            [pscustomobject]@{
+              id = "left"; x = -1920; y = 495
+              width = 1920; height = 1080; children = @()
+            }
+            [pscustomobject]@{
+              id = "center"; x = 0; y = 0
+              width = 3840; height = 2160; children = @()
+            }
+            [pscustomobject]@{
+              id = "right"; x = 3840; y = 430
+              width = 1920; height = 1080; children = @()
+            }
+          )
+        }
+        return @(
+          [pscustomobject]@{
+            id = "right"; x = 0; y = 0
+            width = 1920; height = 1080; children = @()
+          }
+        )
+      }
+      Mock Get-Date {
+        $null = $script:GlazeTestDateCalls++
+        $start = [datetime]"2026-08-29T12:00:00"
+        if ($script:GlazeTestDateCalls -eq 1) {
+          return $start
+        }
+        return $start.AddSeconds(20)
+      }
+      Mock Start-Sleep {}
+
+      try {
+        $monitors = @(Wait-GlazeMonitorTopology `
+          -GlazeWMPath $FakeCli)
+
+        $monitors.Count | Should -Be 3
+        Test-Path -LiteralPath $ReloadMarker | Should -BeTrue
+      } finally {
+        Remove-Item Env:GLAZE_TEST_RELOAD_MARKER -ErrorAction SilentlyContinue
+      }
+    }
+  }
+
   It "fails closed when Windows primary cannot be matched to GlazeWM" {
     $monitors = @(
       New-TestMonitor "left" 0 0 1920 1080 @((New-TestWorkspace "1"))
@@ -126,20 +215,20 @@ Describe "GlazeWM monitor profile synchronization" {
     } | Should -Throw "*primary monitor*"
   }
 
-  It "preserves an existing Zebar process and verifies the AppBar" {
+  It "verifies the asset server and AppBar before preserving a bar" {
     $module = Get-Content -LiteralPath $modulePath -Raw
 
     $module | Should -Match 'Get-NetTCPConnection[\s\S]*6124'
     $module | Should -Match 'Get-Process[\s\S]+OwningProcess'
     $module | Should -Match 'existingBar'
-    $module | Should -Not -Match 'CloseMainWindow'
-    $module | Should -Not -Match 'Stop-ManagedZebar'
+    $module | Should -Match 'CloseMainWindow'
+    $module | Should -Not -Match 'Stop-Process.+zebar'
     $module | Should -Match 'start-widget-preset'
     $module | Should -Match 'ReservedTop'
     $module | Should -Match 'ListenerOwningProcess'
   }
 
-  It "keeps a visible reserved bar when its listener is orphaned" {
+  It "rejects a visible reserved bar when its listener is orphaned" {
     Mock Test-Path { $true } -ModuleName GlazeWMMonitorSync
     Mock Get-Process {
       param($Name, $Id)
@@ -159,15 +248,86 @@ Describe "GlazeWM monitor profile synchronization" {
     Mock Start-Process {} -ModuleName GlazeWMMonitorSync
     Mock Start-Sleep {} -ModuleName GlazeWMMonitorSync
 
-    $result = Ensure-GlazeZebar `
-      -ZebarPath "C:\Zebar\zebar.exe" `
-      -TimeoutSeconds 1
-
-    $result.ProcessId | Should -Be 123
-    $result.ListenerOwningProcess | Should -Be 999
-    $result.ListenerOwnerExists | Should -BeFalse
-    $result.ListenerOwnedByBar | Should -BeFalse
+    {
+      Ensure-GlazeZebar `
+        -ZebarPath "C:\Zebar\zebar.exe" `
+        -TimeoutSeconds 1
+    } | Should -Throw "*orphaned*sign out or reboot*"
     Should -Invoke Start-Process -ModuleName GlazeWMMonitorSync -Times 0
+  }
+
+  It "requires authorization before relaunching only the Zebar widget" {
+    $global:GlazeTestZebarClosed = $false
+    $global:GlazeTestZebarStarted = $false
+    $barProcess = [pscustomobject]@{
+      Id = 123
+      Responding = $true
+      MainWindowTitle = "Zebar - zetshell / bar"
+    }
+    $barProcess | Add-Member -MemberType ScriptMethod -Name CloseMainWindow -Value {
+      $global:GlazeTestZebarClosed = $true
+      return $true
+    }
+    Mock Test-Path { $true } -ModuleName GlazeWMMonitorSync
+    Mock Get-Process {
+      param($Name, $Id)
+      if ($null -ne $Name) {
+        if ($global:GlazeTestZebarClosed -and -not $global:GlazeTestZebarStarted) {
+          return [pscustomobject]@{
+            Id = 123
+            Responding = $true
+            MainWindowTitle = ""
+          }
+        }
+        return $barProcess
+      }
+      if ($Id -eq 123) {
+        return [pscustomobject]@{ Id = 123 }
+      }
+      return $null
+    } -ModuleName GlazeWMMonitorSync
+    Mock Get-ZebarListener {
+      return [pscustomobject]@{ OwningProcess = 123 }
+    } -ModuleName GlazeWMMonitorSync
+    Mock Get-PrimaryReservedTop {
+      if ($global:GlazeTestZebarStarted) { return 42 }
+      return 0
+    } -ModuleName GlazeWMMonitorSync
+    Mock Start-Process {
+      $global:GlazeTestZebarStarted = $true
+    } -ModuleName GlazeWMMonitorSync
+    Mock Stop-Process {} -ModuleName GlazeWMMonitorSync
+    Mock Start-Sleep {} -ModuleName GlazeWMMonitorSync
+
+    try {
+      {
+        Ensure-GlazeZebar `
+          -ZebarPath "C:\Zebar\zebar.exe" `
+          -TimeoutSeconds 1
+      } | Should -Throw "*explicit authorization*"
+      $global:GlazeTestZebarClosed | Should -BeFalse
+      Should -Invoke Start-Process -ModuleName GlazeWMMonitorSync -Times 0
+
+      $result = Ensure-GlazeZebar `
+        -ZebarPath "C:\Zebar\zebar.exe" `
+        -TimeoutSeconds 1 `
+        -AllowWidgetRelaunch
+
+      $result.ProcessId | Should -Be 123
+      $result.ReservedTop | Should -Be 42
+      $global:GlazeTestZebarClosed | Should -BeTrue
+      Should -Invoke Start-Process -ModuleName GlazeWMMonitorSync -Times 1
+      Should -Invoke Stop-Process -ModuleName GlazeWMMonitorSync -Times 0
+    } finally {
+      Remove-Variable `
+        GlazeTestZebarClosed `
+        -Scope Global `
+        -ErrorAction SilentlyContinue
+      Remove-Variable `
+        GlazeTestZebarStarted `
+        -Scope Global `
+        -ErrorAction SilentlyContinue
+    }
   }
 
   It "fails fast without restarting when only an orphaned listener remains" {

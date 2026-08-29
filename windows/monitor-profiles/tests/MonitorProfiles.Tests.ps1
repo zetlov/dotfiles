@@ -202,6 +202,17 @@ Context "Managed scripts" {
     $source | Should -Match '-RestartZebar'
   }
 
+  It "resolves the default install root after File parameter binding" {
+    $source = Get-Content -LiteralPath $switchScriptPath -Raw
+
+    $source | Should -Match '\[string\]\$InstallRoot = ""'
+    $source | Should -Match (
+      '(?s)IsNullOrWhiteSpace\(\$InstallRoot\).+?' +
+      '\$InstallRoot = \$PSScriptRoot.+?' +
+      'Resolve-MonitorProfileInstallRoot'
+    )
+  }
+
   It "installs fixed-name shortcut scripts without arbitrary profile input" {
     $installer = Get-Content -LiteralPath $installScriptPath -Raw
     foreach ($shortcut in @(

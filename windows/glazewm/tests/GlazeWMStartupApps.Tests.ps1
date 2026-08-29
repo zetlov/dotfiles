@@ -28,6 +28,18 @@ Describe "GlazeWM startup applications" {
     $script | Should -Match 'Remove-Item -LiteralPath \$statePath'
   }
 
+  It "places Zen on workspace 1 only from the startup helper" {
+    $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+    $script = Get-Content -LiteralPath $scriptPath -Raw
+    $zen = @($config.applications | Where-Object {
+      $_.processName -eq "zen"
+    })[0]
+
+    $zen.startupWorkspace | Should -Be "1"
+    [int]$config.workspacePlacementWaitSeconds | Should -BeGreaterThan 0
+    $script | Should -Match "Invoke-GlazeStartupWorkspacePlacement"
+  }
+
   It "arranges the four workspace 2 applications as a guarded grid" {
     $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
     $script = Get-Content -LiteralPath $scriptPath -Raw

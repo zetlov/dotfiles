@@ -521,6 +521,96 @@ function Get-GlazeWorkspaceGridRebuildPlan {
   }
 }
 
+function Invoke-GlazeStartupWorkspacePlacement {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$GlazeWMPath,
+
+    [Parameter(Mandatory = $true)]
+    [string]$ProcessName,
+
+    [Parameter(Mandatory = $true)]
+    [string]$WorkspaceName,
+
+    [ValidateRange(1, 300)]
+    [int]$WaitSeconds = 60,
+
+    [scriptblock]$CommandInvoker
+  )
+
+  $deadline = (Get-Date).AddSeconds($WaitSeconds)
+  $movedWindowIds = @{}
+  do {
+    $queryResult = Invoke-GlazeWMIPC `
+      -GlazeWMPath $GlazeWMPath `
+      -Arguments @("query", "workspaces") `
+      -CommandInvoker $CommandInvoker
+    if ($queryResult.ExitCode -ne 0) {
+      throw "GlazeWM could not query startup windows for $ProcessName."
+    }
+    $response = $queryResult.Output |
+      Out-String |
+      ConvertFrom-Json -ErrorAction Stop
+    if (
+      -not ($response.PSObject.Properties.Name -contains "success") -or
+      -not $response.success -or
+      -not ($response.PSObject.Properties.Name -contains "data") -or
+      $null -eq $response.data -or
+      -not ($response.data.PSObject.Properties.Name -contains "workspaces")
+    ) {
+      throw "GlazeWM returned an invalid workspace response."
+    }
+
+    $targets = @(
+      foreach ($workspace in @($response.data.workspaces)) {
+        foreach ($window in @(Get-GlazeWindowsInContainer -Container $workspace)) {
+          if (
+            $window.PSObject.Properties.Name -contains "processName" -and
+            [string]$window.processName -eq $ProcessName
+          ) {
+            [pscustomobject]@{
+              Window = $window
+              WorkspaceName = [string]$workspace.name
+            }
+          }
+        }
+      }
+    )
+    if (
+      $targets.Count -gt 0 -and
+      @($targets | Where-Object { $_.WorkspaceName -ne $WorkspaceName }).Count -eq 0
+    ) {
+      return
+    }
+
+    foreach ($target in @($targets | Where-Object {
+      $_.WorkspaceName -ne $WorkspaceName
+    })) {
+      if (-not ($target.Window.PSObject.Properties.Name -contains "id")) {
+        throw "GlazeWM returned a startup window without an ID."
+      }
+      $windowId = [string]$target.Window.id
+      if ($movedWindowIds.ContainsKey($windowId)) {
+        continue
+      }
+      $commandResult = Invoke-GlazeWMIPC `
+        -GlazeWMPath $GlazeWMPath `
+        -Arguments @(
+          "command", "--id", $windowId, "move", "--workspace", $WorkspaceName
+        ) `
+        -CommandInvoker $CommandInvoker
+      if ($commandResult.ExitCode -ne 0) {
+        throw "GlazeWM could not place startup window for $ProcessName."
+      }
+      $movedWindowIds[$windowId] = $true
+    }
+    Start-Sleep -Milliseconds 500
+  } while ((Get-Date) -lt $deadline)
+
+  throw "Startup window for $ProcessName did not reach workspace $WorkspaceName."
+}
+
 function Invoke-GlazeWorkspaceGrid {
   [CmdletBinding()]
   param(
@@ -787,6 +877,7 @@ Export-ModuleMember -Function @(
   "Get-GlazeWorkspaceGridPlan",
   "Get-GlazeWorkspaceGridRebuildPlan",
   "Invoke-GlazeGameWorkspaceReconcile",
+  "Invoke-GlazeStartupWorkspacePlacement",
   "Invoke-GlazeWorkspaceGrid",
   "Start-GlazeAutoTile",
   "Test-GlazeContainerContainsId",

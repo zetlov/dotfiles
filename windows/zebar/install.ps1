@@ -9,7 +9,9 @@ param(
   ),
 
   [ValidatePattern('^\d+\.\d+\.\d+$')]
-  [string]$RequiredVersion = "3.3.1"
+  [string]$RequiredVersion = "3.3.1",
+
+  [switch]$AllowRuntimeStop
 )
 
 Set-StrictMode -Version Latest
@@ -146,6 +148,12 @@ $hadExisting = Test-Path -LiteralPath $DestinationRoot -PathType Container
 $zebarWasRunning = @(
   Get-Process -Name "zebar" -ErrorAction SilentlyContinue
 ).Count -gt 0
+if ($zebarWasRunning -and -not $AllowRuntimeStop) {
+  throw (
+    "Replacing a running Zebar pack requires explicit authorization. " +
+    "Rerun with -AllowRuntimeStop only after user approval."
+  )
+}
 $installed = $false
 try {
   Get-ZetshellGpuMonitorProcess |

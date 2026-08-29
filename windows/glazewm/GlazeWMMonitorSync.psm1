@@ -149,7 +149,7 @@ function Get-GlazeMonitors {
   } else {
     @($response)
   }
-  if ($monitors.Count -lt 1) {
+  if (@($monitors).Count -lt 1) {
     throw "GlazeWM returned no active monitors."
   }
   return $monitors
@@ -211,11 +211,12 @@ function Wait-GlazeMonitorTopology {
   [CmdletBinding()]
   param(
     [Parameter(Mandatory = $true)][string]$GlazeWMPath,
-    [ValidateRange(1, 60)][int]$TimeoutSeconds = 15
+    [ValidateRange(1, 60)][int]$TimeoutSeconds = 30
   )
 
   $windowsBounds = @(Get-WindowsScreenBounds)
   $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  $reloadAttempted = $false
   do {
     $monitors = @(Get-GlazeMonitors -GlazeWMPath $GlazeWMPath)
     if (Test-GlazeMonitorTopologyMatchesWindows `
@@ -223,6 +224,13 @@ function Wait-GlazeMonitorTopology {
       -WindowsBounds $windowsBounds
     ) {
       return $monitors
+    }
+    if (-not $reloadAttempted) {
+      Invoke-GlazeCliCommand `
+        -GlazeWMPath $GlazeWMPath `
+        -Arguments @("command", "wm-reload-config") |
+        Out-Null
+      $reloadAttempted = $true
     }
     Start-Sleep -Milliseconds 250
   } while ((Get-Date) -lt $deadline)
@@ -374,65 +382,69 @@ function Get-PrimaryReservedTop {
   return [int]($screen.WorkingArea.Y - $screen.Bounds.Y)
 }
 
-function Ensure-GlazeZebar {
-  [CmdletBinding()]
+function Assert-ZebarAssetServerHealthy {
   param(
-    [Parameter(Mandatory = $true)][string]$ZebarPath,
-    [ValidateRange(1, 60)][int]$TimeoutSeconds = 30,
-    [ValidateRange(1, 200)][int]$ExpectedReservedTop = 42
+    [object]$Listener,
+    [object[]]$Processes
   )
 
-  if (-not (Test-Path -LiteralPath $ZebarPath -PathType Leaf)) {
-    throw "Zebar executable not found: $ZebarPath"
+  if ($null -eq $Listener) {
+    if ($Processes.Count -eq 0) {
+      return
+    }
+    throw (
+      "Zebar is running without its port 6124 asset server; sign out or " +
+      "reboot before starting the bar."
+    )
   }
-  # Zebar 3.3.1 can orphan port 6124 even after a normal exit (upstream #285).
-  # Preserve a responding reserved bar and start the preset only when absent.
-  $existingBar = Get-Process -Name "zebar" -ErrorAction SilentlyContinue |
-    Where-Object {
-      $_.Responding -and $_.MainWindowTitle -eq "Zebar - zetshell / bar"
-    } |
-    Select-Object -First 1
-  if ($null -ne $existingBar) {
-    $listener = Get-ZebarListener
-    $listenerOwner = if ($null -ne $listener) {
-      Get-Process -Id $listener.OwningProcess -ErrorAction SilentlyContinue
-    } else {
-      $null
-    }
-    $listenerOwningProcess = if ($null -ne $listener) {
-      [int]$listener.OwningProcess
-    } else {
-      $null
-    }
-    $reservedTop = Get-PrimaryReservedTop
-    if ($reservedTop -ne $ExpectedReservedTop) {
-      throw "Zebar ReservedTop is $reservedTop; expected $ExpectedReservedTop."
-    }
-    return [pscustomobject]@{
-      ProcessId = $existingBar.Id
-      ListenerOwningProcess = $listenerOwningProcess
-      ListenerOwnerExists = $null -ne $listenerOwner
-      ListenerOwnedByBar = (
-        $null -ne $listener -and
-        [int]$listener.OwningProcess -eq [int]$existingBar.Id
-      )
-      ReservedTop = $reservedTop
-    }
+  $owner = Get-Process `
+    -Id $Listener.OwningProcess `
+    -ErrorAction SilentlyContinue
+  if ($null -eq $owner) {
+    throw (
+      "Port 6124 has an orphaned listener; sign out or reboot before " +
+      "starting Zebar."
+    )
   }
-
-  $blockedListener = Get-ZebarListener
-  if ($null -ne $blockedListener) {
-    $blockedOwner = Get-Process `
-      -Id $blockedListener.OwningProcess `
-      -ErrorAction SilentlyContinue
-    if ($null -eq $blockedOwner) {
-      throw (
-        "Port 6124 has an orphaned listener; sign out or reboot before " +
-        "starting Zebar."
-      )
-    }
+  if ([int]$Listener.OwningProcess -notin @($Processes.Id)) {
     throw "Port 6124 is owned by another live process."
   }
+}
+
+function Close-GlazeZebarWidget {
+  param(
+    [Parameter(Mandatory = $true)][object]$Bar,
+    [ValidateRange(1, 60)][int]$TimeoutSeconds
+  )
+
+  if (-not $Bar.CloseMainWindow()) {
+    throw "The managed Zebar widget did not accept an orderly close request."
+  }
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  do {
+    $remainingBars = @(
+      Get-Process -Name "zebar" -ErrorAction SilentlyContinue |
+        Where-Object {
+          $_.Responding -and $_.MainWindowTitle -eq "Zebar - zetshell / bar"
+        }
+    )
+    if ($remainingBars.Count -eq 0) {
+      # Allow Zebar's window-destroyed event to remove the old preset state.
+      Start-Sleep -Milliseconds 250
+      return
+    }
+    Start-Sleep -Milliseconds 250
+  } while ((Get-Date) -lt $deadline)
+  throw "The managed Zebar widget did not close before the timeout."
+}
+
+function Start-GlazeZebarPrimaryPreset {
+  param(
+    [string]$ZebarPath,
+    [ValidateRange(1, 60)][int]$TimeoutSeconds,
+    [ValidateRange(1, 200)][int]$ExpectedReservedTop
+  )
+
   Start-Process -FilePath $ZebarPath -ArgumentList @(
     "start-widget-preset",
     "--pack", "zetshell",
@@ -477,12 +489,77 @@ function Ensure-GlazeZebar {
   }
 }
 
+function Ensure-GlazeZebar {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true)][string]$ZebarPath,
+    [ValidateRange(1, 60)][int]$TimeoutSeconds = 30,
+    [ValidateRange(1, 200)][int]$ExpectedReservedTop = 42,
+    [switch]$AllowWidgetRelaunch
+  )
+
+  if (-not (Test-Path -LiteralPath $ZebarPath -PathType Leaf)) {
+    throw "Zebar executable not found: $ZebarPath"
+  }
+  # Zebar 3.3.1 can orphan port 6124 after process exit (upstream #285). Never
+  # terminate its runtime for a monitor change; relaunch only the widget inside
+  # the live process so the asset-server socket remains owned.
+  $zebarProcesses = @(Get-Process `
+    -Name "zebar" `
+    -ErrorAction SilentlyContinue)
+  $listener = Get-ZebarListener
+  Assert-ZebarAssetServerHealthy `
+    -Listener $listener `
+    -Processes $zebarProcesses
+  $existingBar = $zebarProcesses |
+    Where-Object {
+      $_.Responding -and $_.MainWindowTitle -eq "Zebar - zetshell / bar"
+    } |
+    Select-Object -First 1
+  if ($null -ne $existingBar) {
+    $reservedTop = Get-PrimaryReservedTop
+    if (
+      $null -ne $listener -and
+      [int]$listener.OwningProcess -eq [int]$existingBar.Id -and
+      $reservedTop -eq $ExpectedReservedTop
+    ) {
+      return [pscustomobject]@{
+        ProcessId = $existingBar.Id
+        ListenerOwningProcess = [int]$listener.OwningProcess
+        ListenerOwnerExists = $true
+        ListenerOwnedByBar = $true
+        ReservedTop = $reservedTop
+      }
+    }
+    if (
+      $null -eq $listener -or
+      [int]$listener.OwningProcess -ne [int]$existingBar.Id
+    ) {
+      throw "The visible Zebar bar does not own port 6124."
+    }
+    if (-not $AllowWidgetRelaunch) {
+      throw (
+        "Zebar widget relaunch requires explicit authorization. " +
+        "Rerun with -AllowWidgetRelaunch only after user approval."
+      )
+    }
+    Close-GlazeZebarWidget `
+      -Bar $existingBar `
+      -TimeoutSeconds $TimeoutSeconds
+  }
+  return Start-GlazeZebarPrimaryPreset `
+    -ZebarPath $ZebarPath `
+    -TimeoutSeconds $TimeoutSeconds `
+    -ExpectedReservedTop $ExpectedReservedTop
+}
+
 function Invoke-GlazeMonitorProfileRefresh {
   [CmdletBinding()]
   param(
     [Parameter(Mandatory = $true)][string]$GlazeWMPath,
     [string]$ZebarPath = "",
-    [switch]$RestartZebar
+    [switch]$RestartZebar,
+    [switch]$AllowZebarWidgetRelaunch
   )
 
   if (-not (Test-Path -LiteralPath $GlazeWMPath -PathType Leaf)) {
@@ -494,7 +571,9 @@ function Invoke-GlazeMonitorProfileRefresh {
   }
   $moves = @(Invoke-GlazeWorkspaceMonitorSync -GlazeWMPath $GlazeWMPath)
   $zebar = if ($RestartZebar) {
-    Ensure-GlazeZebar -ZebarPath $ZebarPath
+    Ensure-GlazeZebar `
+      -ZebarPath $ZebarPath `
+      -AllowWidgetRelaunch:$AllowZebarWidgetRelaunch
   } else {
     $null
   }

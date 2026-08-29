@@ -1,6 +1,7 @@
 {
   "managerWaitSeconds": 90,
   "launchIntervalMilliseconds": 1500,
+  "workspacePlacementWaitSeconds": 60,
   "workspaceGridWaitSeconds": 60,
   "workspaceGrids": [
     {
@@ -17,7 +18,8 @@
     {
       "name": "Zen Browser",
       "processName": "zen",
-      "startAppName": "Zen"
+      "startAppName": "Zen",
+      "startupWorkspace": "1"
     },
     {
       "name": "Zotero",

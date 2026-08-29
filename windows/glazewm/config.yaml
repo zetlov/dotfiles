@@ -77,9 +77,6 @@ workspaces:
     keep_alive: true
 
 window_rules:
-  - commands: ['move --workspace 1']
-    match:
-      - window_process: { equals: 'zen' }
   - commands: ['move --workspace 2']
     match:
       - window_process: { equals: 'zotero' }
@@ -156,6 +153,12 @@ keybindings:
     bindings: ['ctrl+alt+t']
   - commands: ['shell-exec zen']
     bindings: ['ctrl+alt+b']
+  - commands: ['shell-exec --hide-window powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "%LOCALAPPDATA%\dotfiles\monitor-profiles\Switch-MonitorProfile.ps1" -Name all']
+    bindings: ['shift+f16']
+  - commands: ['shell-exec --hide-window powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "%LOCALAPPDATA%\dotfiles\monitor-profiles\Switch-MonitorProfile.ps1" -Name left-center']
+    bindings: ['shift+f17']
+  - commands: ['shell-exec --hide-window powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "%LOCALAPPDATA%\dotfiles\monitor-profiles\Switch-MonitorProfile.ps1" -Name right-only']
+    bindings: ['shift+f18']
   - commands: ['toggle-floating --centered']
     bindings: ['ctrl+alt+f']
   - commands: ['toggle-fullscreen']

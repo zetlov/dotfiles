@@ -179,7 +179,7 @@ Context "Keyboard modifier configuration" {
     Assert-Equal $wmLayer.Success $true
     $tokens = @($wmLayer.Groups[1].Value -split "\s+" | Where-Object { $_ })
     Assert-Equal $tokens.Count 67
-    Assert-Equal $tokens[29] "XX"
+    Assert-Equal $tokens[29] "@wmprofileall"
     Assert-Equal $tokens[48] "C-A-f12"
     Assert-Equal ($activeConfig -match "(?i)\bwindowstate\b") $false
     Assert-Equal ($activeConfig -match "(?i)(?<!\S)M-(?:down|up)(?!\S)") $false
@@ -204,6 +204,36 @@ Context "Keyboard modifier configuration" {
       )
       Assert-Equal $config.Contains($expected) $true
     }
+  }
+
+  It "emits monitor profile shortcuts only while physical Shift is held" {
+    $configPath = Join-Path $PSScriptRoot "..\kanata.kbd"
+    $config = Get-Content -LiteralPath $configPath -Raw
+    $activeConfig = [regex]::Replace($config, "(?m);;.*$", "")
+    $aliases = [ordered]@{
+      wmprofileall = "S-f16"
+      wmprofileleftcenter = "S-f17"
+      wmprofileright = "S-f18"
+    }
+
+    foreach ($entry in $aliases.GetEnumerator()) {
+      $expected = (
+        "$($entry.Key) (switch " +
+        "((or (input real lsft) (input real rsft))) " +
+        "$($entry.Value) break () nop0 break)"
+      )
+      Assert-Equal $config.Contains($expected) $true
+    }
+
+    $wmLayer = [regex]::Match(
+      $activeConfig,
+      "(?ms)^\(deflayer\s+wm\s+(.*?)^\)\s*$"
+    )
+    Assert-Equal $wmLayer.Success $true
+    $tokens = @($wmLayer.Groups[1].Value -split "\s+" | Where-Object { $_ })
+    Assert-Equal $tokens[18] "@wmprofileright"
+    Assert-Equal $tokens[29] "@wmprofileall"
+    Assert-Equal $tokens[44] "@wmprofileleftcenter"
   }
 
   It "keeps the F13 and F15 shortcut layer available during games" {

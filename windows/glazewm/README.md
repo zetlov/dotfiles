@@ -36,6 +36,15 @@ pwsh.exe -NoProfile -ExecutionPolicy Bypass \
   -File "$(wslpath -w ~/dotfiles/windows/glazewm/install.ps1)"
 ```
 
+For a configuration-only update that must not install, validate, stop, start,
+or relaunch Zebar, use an already-running GlazeWM manager:
+
+```bash
+pwsh.exe -NoProfile -ExecutionPolicy Bypass \
+  -File "$(wslpath -w ~/dotfiles/windows/glazewm/install.ps1)" \
+  -PreserveZebarRuntime
+```
+
 The installer deploys the configuration to `%USERPROFILE%\.glzr\glazewm`,
 deploys helper scripts under `%LOCALAPPDATA%\dotfiles\glazewm`, registers the
 official manager in the current user's Run key, and restarts GlazeWM. Existing
@@ -76,13 +85,16 @@ same display bounds as Windows, then routes workspaces 1 through 12 to the
 Windows primary display, `left` to the leftmost display, and `vert` to the
 rightmost display. With fewer displays, auxiliary workspaces collapse onto the
 available edge or the sole primary display. An existing Zebar process is kept
-alive across profile changes to avoid Zebar 3.3.1's orphaned-port bug; Zebar is
-started only when absent. The helper verifies the visible managed bar, listener
-ownership, and the 42 px primary-display top reservation.
+alive across profile changes to avoid Zebar 3.3.1's orphaned-port bug. The
+helper verifies the visible managed bar, live listener ownership, and the 42 px
+primary-display top reservation. It never closes a stale widget unless the
+operator supplies `-AllowZebarWidgetRelaunch` after explicit user approval.
+Replacing a widget pack while Zebar is running likewise requires the explicit
+`-AllowRuntimeStop` installer switch.
 
 ## Application workspaces
 
-- Workspace 1: Zen Browser
+- Workspace 1 at login: Zen Browser
 - Workspace 2: Zotero, Raindrop.io, Todoist, and Notion Calendar
 - Workspace 3: Spotify and Discord
 - Workspace 4: Obsidian
@@ -95,7 +107,10 @@ managed windows. The guarded conversion is skipped when the target window set
 is incomplete, duplicated, unsafe, or already balanced.
 
 The startup helper launches only missing applications through their exact
-Start Apps entries. GlazeWM window rules perform the workspace routing.
+Start Apps entries. It places every Zen window on workspace 1 once during
+startup. Zen has no persistent window rule, so browser windows opened later
+stay on the currently active workspace. GlazeWM window rules continue to route
+the other listed applications.
 
 ## Key bindings
 
@@ -116,6 +131,9 @@ below. Native Win and Alt are not used as GlazeWM modifiers.
 | `F13/F15+Arrow` | Resize the focused tile |
 | `F13/F15+M` | Cycle audio outputs and show the selected device |
 | `F13/F15+,` / `/` / `.` | Focus left/primary/right monitor index |
+| `F13/F15+Shift+A` | Enable all three displays |
+| `F13/F15+Shift+C` | Enable the left and center displays |
+| `F13/F15+Shift+R` | Enable only the right display |
 
 GlazeWM can move a whole workspace between monitors but does not expose the
 same direct single-window monitor command as Komorebi. The shifted monitor

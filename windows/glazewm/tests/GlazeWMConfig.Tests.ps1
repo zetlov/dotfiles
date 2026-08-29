@@ -63,6 +63,25 @@ Describe "GlazeWM managed configuration" {
       Should -Match ([regex]::Escape("'shell-exec wezterm-gui start'"))
   }
 
+  It "switches monitor profiles through the active GlazeWM keybindings" {
+    $config = Get-Content -LiteralPath $configPath -Raw
+
+    foreach ($profile in @(
+      @{ Name = "all"; Binding = "shift+f16" },
+      @{ Name = "left-center"; Binding = "shift+f17" },
+      @{ Name = "right-only"; Binding = "shift+f18" }
+    )) {
+      $command = (
+        "shell-exec --hide-window powershell.exe -NoProfile " +
+        "-NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden " +
+        "-File `"%LOCALAPPDATA%\dotfiles\monitor-profiles\" +
+        "Switch-MonitorProfile.ps1`" -Name $($profile.Name)"
+      )
+      $config | Should -Match ([regex]::Escape("'$command'"))
+      $config | Should -Match ([regex]::Escape("'$($profile.Binding)'"))
+    }
+  }
+
   It "starts only the managed helper scripts" {
     $config = Get-Content -LiteralPath $configPath -Raw
 
@@ -87,6 +106,15 @@ Describe "GlazeWM managed configuration" {
     $script | Should -Match "GlazeWMMonitorSync\.psm1"
     $script | Should -Match 'sourceZebarInstaller'
     $script | Should -Not -Match "(?i)seelen"
+  }
+
+  It "can deploy GlazeWM while preserving the existing Zebar runtime" {
+    $script = Get-Content -LiteralPath $startPath -Raw
+
+    $script | Should -Match '\[switch\]\$PreserveZebarRuntime'
+    $script | Should -Match 'if \(\$PreserveZebarRuntime\)'
+    $script | Should -Match '(?s)\$PreserveZebarRuntime.+?\$sourceZebarInstaller'
+    $script | Should -Match '(?s)\$PreserveZebarRuntime.+?\$deployedMonitorSyncScript'
   }
 
   It "leaves audio lifecycle to the active audio component" {
@@ -114,11 +142,10 @@ Describe "GlazeWM managed configuration" {
     $config | Should -Match ([regex]::Escape('"%LOCALAPPDATA%\dotfiles\glazewm\Start-GlazeWorkspaceApps.ps1"'))
   }
 
-  It "routes the requested applications to workspaces one through four" {
+  It "routes non-browser startup applications with persistent window rules" {
     $config = Get-Content -LiteralPath $configPath -Raw
 
     foreach ($rule in @(
-      "zen:1",
       "zotero:2",
       "Raindrop:2",
       "Todoist:2",
@@ -131,6 +158,9 @@ Describe "GlazeWM managed configuration" {
       $pattern = "(?ms)commands: \['move --workspace $($parts[1])'\].{0,400}window_process: \{ equals: '$([regex]::Escape($parts[0]))' \}"
       $config | Should -Match $pattern
     }
+    $config | Should -Not -Match (
+      "(?m)^\s+- window_process: \{ equals: 'zen' \}\r?$"
+    )
   }
 
   It "routes every registered game to floating workspace eleven" {
