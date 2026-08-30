@@ -376,10 +376,179 @@ function Get-ZebarListener {
   return $null
 }
 
+function Initialize-ZebarAppBarInterop {
+  if ($null -eq ("ZebarAppBarInterop" -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+
+public static class ZebarAppBarInterop {
+  public const uint TopEdge = 1;
+  public const uint QueryPosition = 2;
+  public const uint SetPosition = 3;
+  public const uint GetWorkArea = 0x0030;
+
+  [StructLayout(LayoutKind.Sequential)]
+  public struct Rect {
+    public int Left;
+    public int Top;
+    public int Right;
+    public int Bottom;
+  }
+
+  [StructLayout(LayoutKind.Sequential)]
+  public struct AppBarData {
+    public uint Size;
+    public IntPtr Window;
+    public uint CallbackMessage;
+    public uint Edge;
+    public Rect Bounds;
+    public IntPtr Parameter;
+  }
+
+  [DllImport("shell32.dll", CallingConvention = CallingConvention.StdCall)]
+  public static extern UIntPtr SHAppBarMessage(
+    uint message,
+    ref AppBarData data
+  );
+
+  [DllImport("user32.dll", SetLastError = true)]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  public static extern bool GetWindowRect(IntPtr window, out Rect bounds);
+
+  [DllImport("user32.dll", SetLastError = true)]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  public static extern bool SystemParametersInfo(
+    uint action,
+    uint parameter,
+    out Rect data,
+    uint flags
+  );
+}
+'@
+  }
+}
+
+function Get-ZebarPrimaryWorkingArea {
+  Initialize-ZebarAppBarInterop
+  $workingArea = New-Object ZebarAppBarInterop+Rect
+  if (-not [ZebarAppBarInterop]::SystemParametersInfo(
+    [ZebarAppBarInterop]::GetWorkArea,
+    0,
+    [ref]$workingArea,
+    0
+  )) {
+    throw "Windows did not return the current primary work area."
+  }
+  return $workingArea
+}
+
 function Get-PrimaryReservedTop {
-  Add-Type -AssemblyName System.Windows.Forms
-  $screen = [System.Windows.Forms.Screen]::PrimaryScreen
-  return [int]($screen.WorkingArea.Y - $screen.Bounds.Y)
+  $workingArea = Get-ZebarPrimaryWorkingArea
+  $primary = Get-WindowsPrimaryBounds
+  return [int]($workingArea.Top - $primary.Y)
+}
+
+function Test-ZebarAppBarBoundsEqual {
+  param(
+    [Parameter(Mandatory = $true)][object]$First,
+    [Parameter(Mandatory = $true)][object]$Second
+  )
+
+  return (
+    [int]$First.Left -eq [int]$Second.Left -and
+    [int]$First.Top -eq [int]$Second.Top -and
+    [int]$First.Right -eq [int]$Second.Right -and
+    [int]$First.Bottom -eq [int]$Second.Bottom
+  )
+}
+
+function Get-ZebarWindowBounds {
+  param([Parameter(Mandatory = $true)][IntPtr]$WindowHandle)
+
+  Initialize-ZebarAppBarInterop
+  $bounds = New-Object ZebarAppBarInterop+Rect
+  if (-not [ZebarAppBarInterop]::GetWindowRect(
+    $WindowHandle,
+    [ref]$bounds
+  )) {
+    throw "Windows did not return the managed Zebar window bounds."
+  }
+  return $bounds
+}
+
+function Invoke-ZebarAppBarNativeMessage {
+  param(
+    [Parameter(Mandatory = $true)][uint32]$Message,
+    [Parameter(Mandatory = $true)][object]$Data
+  )
+
+  $mutableData = $Data
+  $null = [ZebarAppBarInterop]::SHAppBarMessage(
+    $Message,
+    [ref]$mutableData
+  )
+  return $mutableData
+}
+
+function Invoke-ZebarAppBarPositionRefresh {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true)][object]$Bar,
+    [ValidateRange(1, 200)][int]$ExpectedReservedTop
+  )
+
+  if (
+    $Bar.PSObject.Properties.Name -notcontains "MainWindowHandle" -or
+    $Bar.MainWindowHandle -eq [IntPtr]::Zero
+  ) {
+    throw "The managed Zebar bar does not expose a valid window handle."
+  }
+  Initialize-ZebarAppBarInterop
+
+  $primary = Get-WindowsPrimaryBounds
+  $expectedBounds = New-Object ZebarAppBarInterop+Rect
+  $expectedBounds.Left = $primary.X
+  $expectedBounds.Top = $primary.Y
+  $expectedBounds.Right = $primary.X + $primary.Width
+  $expectedBounds.Bottom = $primary.Y + $ExpectedReservedTop
+  $windowBounds = Get-ZebarWindowBounds `
+    -WindowHandle $Bar.MainWindowHandle
+  if (-not (Test-ZebarAppBarBoundsEqual `
+    -First $windowBounds `
+    -Second $expectedBounds
+  )) {
+    throw "The managed Zebar bar is not aligned with the primary monitor."
+  }
+
+  $data = New-Object ZebarAppBarInterop+AppBarData
+  $data.Size = [Runtime.InteropServices.Marshal]::SizeOf($data)
+  $data.Window = $Bar.MainWindowHandle
+  $data.Edge = [ZebarAppBarInterop]::TopEdge
+  $data.Bounds = $expectedBounds
+
+  $data = Invoke-ZebarAppBarNativeMessage `
+    -Message ([ZebarAppBarInterop]::QueryPosition) `
+    -Data $data
+  $approvedBounds = $data.Bounds
+  $approvedBounds.Bottom = $approvedBounds.Top + $ExpectedReservedTop
+  $data.Bounds = $approvedBounds
+  $data = Invoke-ZebarAppBarNativeMessage `
+    -Message ([ZebarAppBarInterop]::SetPosition) `
+    -Data $data
+  if (-not (Test-ZebarAppBarBoundsEqual `
+    -First $data.Bounds `
+    -Second $windowBounds
+  )) {
+    throw "The approved AppBar bounds do not match the Zebar window."
+  }
+
+  return [pscustomobject]@{
+    Left = $data.Bounds.Left
+    Top = $data.Bounds.Top
+    Right = $data.Bounds.Right
+    Bottom = $data.Bounds.Bottom
+  }
 }
 
 function Assert-ZebarAssetServerHealthy {
@@ -501,9 +670,8 @@ function Ensure-GlazeZebar {
   if (-not (Test-Path -LiteralPath $ZebarPath -PathType Leaf)) {
     throw "Zebar executable not found: $ZebarPath"
   }
-  # Zebar 3.3.1 can orphan port 6124 after process exit (upstream #285). Never
-  # terminate its runtime for a monitor change; relaunch only the widget inside
-  # the live process so the asset-server socket remains owned.
+  # Zebar 3.3.1 can orphan port 6124 after process exit (upstream #285). Keep
+  # the runtime alive and refresh the AppBar reservation on its existing HWND.
   $zebarProcesses = @(Get-Process `
     -Name "zebar" `
     -ErrorAction SilentlyContinue)
@@ -536,6 +704,21 @@ function Ensure-GlazeZebar {
       [int]$listener.OwningProcess -ne [int]$existingBar.Id
     ) {
       throw "The visible Zebar bar does not own port 6124."
+    }
+    Invoke-ZebarAppBarPositionRefresh `
+      -Bar $existingBar `
+      -ExpectedReservedTop $ExpectedReservedTop |
+      Out-Null
+    $reservedTop = Get-PrimaryReservedTop
+    if ($reservedTop -eq $ExpectedReservedTop) {
+      return [pscustomobject]@{
+        ProcessId = $existingBar.Id
+        ListenerOwningProcess = [int]$listener.OwningProcess
+        ListenerOwnerExists = $true
+        ListenerOwnedByBar = $true
+        ReservedTop = $reservedTop
+        ReservationRefreshed = $true
+      }
     }
     if (-not $AllowWidgetRelaunch) {
       throw (

@@ -92,8 +92,12 @@ rightmost display. With fewer displays, auxiliary workspaces collapse onto the
 available edge or the sole primary display. An existing Zebar process is kept
 alive across profile changes to avoid Zebar 3.3.1's orphaned-port bug. The
 helper verifies the visible managed bar, live listener ownership, and the 42 px
-primary-display top reservation. It never closes a stale widget unless the
-operator supplies `-AllowZebarWidgetRelaunch` after explicit user approval.
+primary-display top reservation. If a display-profile change clears the Windows
+work area while the bar remains healthy and correctly positioned, the helper
+reasserts `ABM_QUERYPOS` and `ABM_SETPOS` on the existing bar window. It verifies
+the live primary work area and requires the Shell-approved rectangle to match the
+actual widget rectangle. It never closes a stale widget unless the operator
+supplies `-AllowZebarWidgetRelaunch` after explicit user approval.
 Replacing a widget pack while Zebar is running likewise requires the explicit
 `-AllowRuntimeStop` installer switch.
 

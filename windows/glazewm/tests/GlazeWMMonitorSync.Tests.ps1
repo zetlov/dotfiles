@@ -226,6 +226,80 @@ if ($Arguments -join " " -eq "command wm-reload-config") {
     $module | Should -Match 'start-widget-preset'
     $module | Should -Match 'ReservedTop'
     $module | Should -Match 'ListenerOwningProcess'
+    $module | Should -Match 'SHAppBarMessage'
+    $module | Should -Match 'QueryPosition'
+    $module | Should -Match 'SetPosition'
+    $module | Should -Match 'SystemParametersInfo'
+    $module | Should -Match 'GetWindowRect'
+  }
+
+  It "calculates reserved top from the live primary work area" {
+    InModuleScope GlazeWMMonitorSync {
+      Mock Get-ZebarPrimaryWorkingArea {
+        [pscustomobject]@{ Top = 42 }
+      }
+      Mock Get-WindowsPrimaryBounds {
+        [pscustomobject]@{ X = 0; Y = 0; Width = 3840; Height = 2160 }
+      }
+
+      Get-PrimaryReservedTop | Should -Be 42
+    }
+  }
+
+  It "queries and sets the expected AppBar rectangle in order" {
+    InModuleScope GlazeWMMonitorSync {
+      $global:GlazeTestAppBarMessages = [Collections.Generic.List[string]]::new()
+      Mock Get-WindowsPrimaryBounds {
+        [pscustomobject]@{ X = 0; Y = 0; Width = 3840; Height = 2160 }
+      }
+      Mock Get-ZebarWindowBounds {
+        [pscustomobject]@{ Left = 0; Top = 0; Right = 3840; Bottom = 42 }
+      }
+      Mock Invoke-ZebarAppBarNativeMessage {
+        param($Message, $Data)
+        $global:GlazeTestAppBarMessages.Add(
+          "${Message}:$($Data.Bounds.Left),$($Data.Bounds.Top)," +
+          "$($Data.Bounds.Right),$($Data.Bounds.Bottom)"
+        )
+        return $Data
+      }
+
+      try {
+        $result = Invoke-ZebarAppBarPositionRefresh `
+          -Bar ([pscustomobject]@{ MainWindowHandle = [IntPtr]12345 }) `
+          -ExpectedReservedTop 42
+
+        $global:GlazeTestAppBarMessages | Should -Be @(
+          "2:0,0,3840,42"
+          "3:0,0,3840,42"
+        )
+        $result.Bottom | Should -Be 42
+      } finally {
+        Remove-Variable `
+          GlazeTestAppBarMessages `
+          -Scope Global `
+          -ErrorAction SilentlyContinue
+      }
+    }
+  }
+
+  It "rejects a bar outside the primary rectangle before AppBar messages" {
+    InModuleScope GlazeWMMonitorSync {
+      Mock Get-WindowsPrimaryBounds {
+        [pscustomobject]@{ X = 0; Y = 0; Width = 3840; Height = 2160 }
+      }
+      Mock Get-ZebarWindowBounds {
+        [pscustomobject]@{ Left = -1920; Top = 495; Right = 0; Bottom = 537 }
+      }
+      Mock Invoke-ZebarAppBarNativeMessage {}
+
+      {
+        Invoke-ZebarAppBarPositionRefresh `
+          -Bar ([pscustomobject]@{ MainWindowHandle = [IntPtr]12345 }) `
+          -ExpectedReservedTop 42
+      } | Should -Throw "*not aligned with the primary monitor*"
+      Should -Invoke Invoke-ZebarAppBarNativeMessage -Times 0
+    }
   }
 
   It "rejects a visible reserved bar when its listener is orphaned" {
@@ -254,6 +328,58 @@ if ($Arguments -join " " -eq "command wm-reload-config") {
         -TimeoutSeconds 1
     } | Should -Throw "*orphaned*sign out or reboot*"
     Should -Invoke Start-Process -ModuleName GlazeWMMonitorSync -Times 0
+  }
+
+  It "repairs a lost AppBar reservation without relaunching the widget" {
+    $global:GlazeTestAppBarRefreshed = $false
+    $barProcess = [pscustomobject]@{
+      Id = 123
+      Responding = $true
+      MainWindowTitle = "Zebar - zetshell / bar"
+      MainWindowHandle = [IntPtr]12345
+    }
+    Mock Test-Path { $true } -ModuleName GlazeWMMonitorSync
+    Mock Get-Process {
+      param($Name, $Id)
+      if ($null -ne $Name) {
+        return $barProcess
+      }
+      if ($Id -eq 123) {
+        return [pscustomobject]@{ Id = 123 }
+      }
+      return $null
+    } -ModuleName GlazeWMMonitorSync
+    Mock Get-ZebarListener {
+      [pscustomobject]@{ OwningProcess = 123 }
+    } -ModuleName GlazeWMMonitorSync
+    Mock Get-PrimaryReservedTop {
+      if ($global:GlazeTestAppBarRefreshed) { return 42 }
+      return 0
+    } -ModuleName GlazeWMMonitorSync
+    Mock Invoke-ZebarAppBarPositionRefresh {
+      $global:GlazeTestAppBarRefreshed = $true
+    } -ModuleName GlazeWMMonitorSync
+    Mock Start-Process {} -ModuleName GlazeWMMonitorSync
+
+    try {
+      $result = Ensure-GlazeZebar `
+        -ZebarPath "C:\Zebar\zebar.exe" `
+        -TimeoutSeconds 1
+
+      $result.ProcessId | Should -Be 123
+      $result.ReservedTop | Should -Be 42
+      $result.ReservationRefreshed | Should -BeTrue
+      Should -Invoke `
+        Invoke-ZebarAppBarPositionRefresh `
+        -ModuleName GlazeWMMonitorSync `
+        -Times 1
+      Should -Invoke Start-Process -ModuleName GlazeWMMonitorSync -Times 0
+    } finally {
+      Remove-Variable `
+        GlazeTestAppBarRefreshed `
+        -Scope Global `
+        -ErrorAction SilentlyContinue
+    }
   }
 
   It "requires authorization before relaunching only the Zebar widget" {
@@ -293,6 +419,8 @@ if ($Arguments -join " " -eq "command wm-reload-config") {
       if ($global:GlazeTestZebarStarted) { return 42 }
       return 0
     } -ModuleName GlazeWMMonitorSync
+    Mock Invoke-ZebarAppBarPositionRefresh {} `
+      -ModuleName GlazeWMMonitorSync
     Mock Start-Process {
       $global:GlazeTestZebarStarted = $true
     } -ModuleName GlazeWMMonitorSync

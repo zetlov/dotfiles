@@ -66,12 +66,13 @@ workspaces 1 through 12 return to the Windows primary display, `left` and
 is preserved when it still reserves the primary display. GlazeWM is reloaded
 once when its monitor topology is stale and can take up to 30 seconds to
 observe a display removal. A missing primary reservation triggers an orderly
-failure without closing the widget. A widget relaunch requires the explicit
-`-AllowZebarWidgetRelaunch` switch after user approval. The Zebar runtime is
-never force-stopped during a profile change because Zebar 3.3.1 can leave port
-6124 orphaned after process exit. If that desktop refresh fails, the already
-verified Windows display profile remains applied and the command reports the
-refresh error instead of silently hiding it.
+AppBar position refresh on the existing Zebar window, followed by verification
+that the primary work area again reserves 42 px. A widget relaunch is only a
+fallback and requires the explicit `-AllowZebarWidgetRelaunch` switch after user
+approval. The Zebar runtime is never force-stopped during a profile change
+because Zebar 3.3.1 can leave port 6124 orphaned after process exit. If that
+desktop refresh fails, the already verified Windows display profile remains
+applied and the command reports the refresh error instead of silently hiding it.
 
 Every switch validates the saved topology with Windows, captures the current
 configuration, applies without persistence, verifies active displays, primary,

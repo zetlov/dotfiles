@@ -49,4 +49,6 @@ utilization-only predecessor. Installation succeeds only after the responding
 responding bar because Zebar 3.3.1 can orphan its local asset-server socket
 during an otherwise normal restart. If port 6124 is already orphaned, monitor
 sync keeps an existing reserved bar running and refuses a new start with an
-explicit sign-out or reboot requirement.
+explicit sign-out or reboot requirement. If the bar remains healthy but Windows
+loses its work-area reservation, monitor sync refreshes `ABM_QUERYPOS` and
+`ABM_SETPOS` against the existing widget window instead of restarting Zebar.
