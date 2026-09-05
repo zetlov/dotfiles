@@ -68,6 +68,14 @@ while a detected game's window owns the foreground. The normal profile returns
 polls four times per second, runs without administrator privileges, and replaces
 the direct Kanata login entry.
 
+If PowerShell cannot read a process's main-module path, the watcher retries with
+the Windows `QueryFullProcessImageNameW` API using only
+`PROCESS_QUERY_LIMITED_INFORMATION`. This lets new Steam games use the existing
+library-path detection without a per-game name entry when that API can read the
+path. Foreground mode queries only the focused process; it does not inventory
+Steam executables or scan all running processes. If both path readers fail,
+only the explicit executable-name fallbacks apply.
+
 Long-running Steam utilities can be excluded with `steam_ignore_executables`.
 Wallpaper Engine's renderer, service, UI, web wallpaper, and application
 injection processes are excluded by default so they do not keep the game

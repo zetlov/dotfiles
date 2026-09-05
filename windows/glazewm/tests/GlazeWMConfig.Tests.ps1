@@ -3,7 +3,6 @@ Describe "GlazeWM managed configuration" {
     $configPath = Join-Path $PSScriptRoot "..\config.yaml"
     $startPath = Join-Path $PSScriptRoot "..\install.ps1"
     $kanataPath = Join-Path $PSScriptRoot "..\..\kanata\kanata.kbd"
-    $gameModePath = Join-Path $PSScriptRoot "..\..\kanata\game-mode.json"
   }
 
   It "defines profile-safe workspaces without fixed monitor indexes" {
@@ -180,16 +179,31 @@ Describe "GlazeWM managed configuration" {
     )
   }
 
-  It "routes every registered game to floating workspace eleven" {
+  It "routes the configured game processes to floating workspace eleven" {
     $config = Get-Content -LiteralPath $configPath -Raw
-    $settings = Get-Content -LiteralPath $gameModePath -Raw | ConvertFrom-Json
-
-    $config | Should -Match ([regex]::Escape(
-      "commands: ['move --workspace 11', 'set-floating --centered=false']"
-    ))
-    foreach ($executable in @($settings.hard_off_executables)) {
-      $processName = [IO.Path]::GetFileNameWithoutExtension($executable)
-      $config | Should -Match ([regex]::Escape(
+    # Input remapping exceptions do not define workspace placement.
+    $routedGames = @(
+      "StreetFighter6",
+      "FactoryGameSteam",
+      "FactoryGameSteam-Win64-Shipping",
+      "ShadowverseWB",
+      "AimLab_tb",
+      "VALORANT",
+      "VALORANT-Win64-Shipping",
+      "GenshinImpact",
+      "StarRail",
+      "EscapeFromTarkov",
+      "EscapeFromTarkov_BE"
+    )
+    $ruleHeader = [regex]::Escape(
+      "  - commands: ['move --workspace 11', 'set-floating --centered=false']"
+    )
+    $rule = [regex]::Match(
+      $config, "(?ms)^${ruleHeader}\r?\n.*?(?=^  - commands:|\z)"
+    ).Value
+    $rule | Should -Not -BeNullOrEmpty
+    foreach ($processName in $routedGames) {
+      $rule | Should -Match ([regex]::Escape(
         "window_process: { equals: '$processName' }"
       ))
     }

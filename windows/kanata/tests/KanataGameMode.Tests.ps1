@@ -80,6 +80,7 @@ Context "Get-KanataGameModeSettings" {
     $settings = Get-KanataGameModeSettings `
       -Path (Join-Path $PSScriptRoot "..\game-mode.json")
     $expected = @(
+      "Friends vs Friends.exe",
       "StreetFighter6.exe",
       "FactoryGameSteam.exe",
       "FactoryGameSteam-Win64-Shipping.exe",
@@ -689,4 +690,116 @@ Context "Watcher lifecycle implementation" {
     )) $true
   }
 }
+}
+Describe "Kanata process image path resolution" {
+  BeforeAll {
+    $modulePath = Join-Path $PSScriptRoot "..\KanataGameMode.psm1"
+    Import-Module $modulePath -Force -ErrorAction Stop
+  }
+
+  It "keeps an available managed process path" {
+    Mock Get-KanataNativeProcessPath { throw "Unexpected native query" } `
+      -ModuleName KanataGameMode
+    $process = [pscustomobject]@{ Id = 42; Path = "C:\Games\sample.exe" }
+
+    Get-KanataProcessPath -Process $process | Should -Be $process.Path
+    Should -Invoke Get-KanataNativeProcessPath -ModuleName KanataGameMode `
+      -Times 0
+  }
+
+  It "queries limited information when the managed path is empty" {
+    Mock Get-KanataNativeProcessPath { "D:\SteamLibrary\steamapps\common\New Game\game.exe" } `
+      -ModuleName KanataGameMode
+    $process = [pscustomobject]@{ Id = 42; Path = "" }
+
+    Get-KanataProcessPath -Process $process |
+      Should -Be "D:\SteamLibrary\steamapps\common\New Game\game.exe"
+    Should -Invoke Get-KanataNativeProcessPath -ModuleName KanataGameMode `
+      -Times 1 -ParameterFilter { $ProcessId -eq 42 }
+  }
+
+  It "queries limited information when the managed path getter throws" {
+    Mock Get-KanataNativeProcessPath { "C:\Games\sample.exe" } `
+      -ModuleName KanataGameMode
+    $process = [pscustomobject]@{ Id = 42 }
+    $process | Add-Member -MemberType ScriptProperty -Name Path -Value {
+      throw "Access denied"
+    }
+
+    Get-KanataProcessPath -Process $process | Should -Be "C:\Games\sample.exe"
+  }
+
+  It "returns an empty path when native access is unavailable" {
+    Mock Get-KanataNativeProcessPath { "" } -ModuleName KanataGameMode
+
+    Get-KanataProcessPath -Process ([pscustomobject]@{ Id = 42; Path = "" }) |
+      Should -BeNullOrEmpty
+  }
+
+  It "reads the current process path using the limited-information API" {
+    InModuleScope KanataGameMode {
+      Get-KanataNativeProcessPath -ProcessId $PID |
+        Should -Be (Get-Process -Id $PID).Path
+    }
+  }
+
+  It "returns an empty path for a process that no longer exists" {
+    InModuleScope KanataGameMode {
+      Get-KanataNativeProcessPath -ProcessId ([uint32]::MaxValue) |
+        Should -BeNullOrEmpty
+    }
+  }
+
+  Context "Automatic Steam classification" {
+    BeforeEach {
+      $settings = [pscustomobject]@{
+        DisableForSteamGames = $true
+        SteamIgnoreExecutables = @("wallpaper64.exe")
+        SteamIgnoreDirectories = @("wallpaper_engine")
+        HardOffExecutables = @()
+      }
+      $steamCommon = "D:\SteamLibrary\steamapps\common"
+      Mock Get-KanataForegroundProcess {
+        [pscustomobject]@{ Id = 42; ProcessName = "new-game"; Path = "" }
+      } -ModuleName KanataGameMode
+      Mock Get-Process {
+        [pscustomobject]@{ Id = 42; ProcessName = "new-game"; Path = "" }
+      } -ModuleName KanataGameMode
+      Mock Get-KanataNativeProcessPath {
+        "D:\SteamLibrary\steamapps\common\New Game\new-game.exe"
+      } -ModuleName KanataGameMode
+    }
+
+    It "recognizes an unlisted foreground Steam game without scanning processes" {
+      $games = @(Get-KanataForegroundGameProcesses -Settings $settings `
+        -SteamCommonPaths @($steamCommon))
+
+      $games.Count | Should -Be 1
+      $games[0].ProcessName | Should -Be "new-game"
+      Should -Invoke Get-Process -ModuleName KanataGameMode -Times 0
+    }
+
+    It "uses the same fallback in the optional running-game mode" {
+      $games = @(Get-KanataRunningGameProcesses -Settings $settings `
+        -SteamCommonPaths @($steamCommon))
+
+      $games.Count | Should -Be 1
+    }
+
+    It "preserves Steam utility directory exclusions with a recovered path" {
+      Mock Get-KanataNativeProcessPath {
+        "D:\SteamLibrary\steamapps\common\wallpaper_engine\bin\new-game.exe"
+      } -ModuleName KanataGameMode
+
+      @(Get-KanataForegroundGameProcesses -Settings $settings `
+        -SteamCommonPaths @($steamCommon)).Count | Should -Be 0
+    }
+
+    It "does not guess Steam membership when both path readers fail" {
+      Mock Get-KanataNativeProcessPath { "" } -ModuleName KanataGameMode
+
+      @(Get-KanataForegroundGameProcesses -Settings $settings `
+        -SteamCommonPaths @($steamCommon)).Count | Should -Be 0
+    }
+  }
 }

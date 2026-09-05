@@ -314,6 +314,28 @@ function Test-KanataGameProcess {
   return $false
 }
 
+function Get-KanataProcessPath {
+  param([Parameter(Mandatory = $true)][object]$Process)
+
+  $processPath = ""
+  try {
+    $processPath = [string]$Process.Path
+  } catch {
+    # Main-module access can fail even when limited process information is readable.
+  }
+  if (-not [string]::IsNullOrWhiteSpace($processPath)) {
+    return $processPath
+  }
+  return Get-KanataNativeProcessPath -ProcessId $Process.Id
+}
+
+function Get-KanataNativeProcessPath {
+  param([Parameter(Mandatory = $true)][uint32]$ProcessId)
+
+  Initialize-KanataForegroundWindowType
+  return [Dotfiles.Kanata.ForegroundWindow]::GetProcessImagePath($ProcessId)
+}
+
 function Get-KanataRunningGameProcesses {
   param(
     [Parameter(Mandatory = $true)]
@@ -324,12 +346,7 @@ function Get-KanataRunningGameProcesses {
 
   $matches = @()
   foreach ($process in Get-Process -ErrorAction SilentlyContinue) {
-    $processPath = ""
-    try {
-      $processPath = [string]$process.Path
-    } catch {
-      $processPath = ""
-    }
+    $processPath = Get-KanataProcessPath -Process $process
     if (Test-KanataGameProcess `
       -ProcessName $process.ProcessName `
       -ProcessPath $processPath `
@@ -351,9 +368,43 @@ function Initialize-KanataForegroundWindowType {
     Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace Dotfiles.Kanata {
   public static class ForegroundWindow {
+    private const uint ProcessQueryLimitedInformation = 0x1000;
+    private const int MaximumImagePathCharacters = 32768;
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr OpenProcess(
+      uint desiredAccess, bool inheritHandle, uint processId
+    );
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool QueryFullProcessImageNameW(
+      IntPtr process, uint flags, StringBuilder imagePath, ref uint size
+    );
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool CloseHandle(IntPtr handle);
+
+    public static string GetProcessImagePath(uint processId) {
+      IntPtr handle = OpenProcess(ProcessQueryLimitedInformation, false, processId);
+      if (handle == IntPtr.Zero) {
+        // An exited or access-restricted process has no readable image path.
+        return String.Empty;
+      }
+      try {
+        StringBuilder imagePath = new StringBuilder(MaximumImagePathCharacters);
+        uint size = (uint)imagePath.Capacity;
+        return QueryFullProcessImageNameW(handle, 0, imagePath, ref size)
+          ? imagePath.ToString()
+          : String.Empty;
+      } finally {
+        CloseHandle(handle);
+      }
+    }
+
     [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();
 
@@ -413,12 +464,7 @@ function Get-KanataForegroundGameProcesses {
   if (-not $process) {
     return @()
   }
-  $processPath = ""
-  try {
-    $processPath = [string]$process.Path
-  } catch {
-    $processPath = ""
-  }
+  $processPath = Get-KanataProcessPath -Process $process
   if (Test-KanataGameProcess `
     -ProcessName $process.ProcessName `
     -ProcessPath $processPath `
@@ -964,6 +1010,7 @@ Export-ModuleMember -Function `
   Get-KanataGameModeSettings, `
   Get-KanataSteamCommonPaths, `
   Test-KanataGameProcess, `
+  Get-KanataProcessPath, `
   Get-KanataRunningGameProcesses, `
   Get-KanataForegroundProcess, `
   Test-KanataAnyKeyboardKeyPressed, `
