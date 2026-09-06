@@ -62,8 +62,8 @@ fi
 if ! rg -q 'windows/tests/Invoke-PesterSuite\.ps1' "${MISE_CONFIG}"; then
     fail "Windows mise tasks should delegate to the shared Pester runner"
 fi
-tracked_pester_tests=$(git -C "${REPO_ROOT}" ls-files \
-    'windows/*/tests/*.Tests.ps1' | sort)
+tracked_pester_tests=$(git -C "${REPO_ROOT}" ls-files --cached --others --exclude-standard \
+    'windows/*/tests/*.Tests.ps1' | sort -u)
 manifest_pester_tests=$(
     if [ -f "${PESTER_MANIFEST}" ]; then
         sort "${PESTER_MANIFEST}"
@@ -71,7 +71,7 @@ manifest_pester_tests=$(
 )
 if [ -z "${tracked_pester_tests}" ] \
     || [ "${manifest_pester_tests}" != "${tracked_pester_tests}" ]; then
-    fail "the Pester suite manifest should list every tracked component test"
+    fail "the Pester suite manifest should list every non-ignored component test"
 fi
 if [ ! -f "${PESTER_RUNNER}" ] \
     || ! rg -q 'pester-suites\.txt' "${PESTER_RUNNER}"; then

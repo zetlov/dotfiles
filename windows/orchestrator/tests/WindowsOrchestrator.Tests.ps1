@@ -19,6 +19,7 @@ Describe "Windows component orchestrator" {
     $expected = @{
       "docker-desktop" = "active|optional"
       onepassword = "active|required"
+      'flow-launcher' = "active|optional"
       "monitor-profiles" = "active|optional"
       audio = "active|required"
       wezterm = "active|required"
@@ -613,6 +614,7 @@ Describe "Windows component orchestrator" {
     @($components.Name) | Should -Be @(
       "docker-desktop",
       "onepassword",
+      "flow-launcher",
       "wezterm",
       "audio",
       "kanata",
@@ -627,6 +629,7 @@ Describe "Windows component orchestrator" {
     }) | Should -Be @(
       "docker-desktop|active|optional",
       "onepassword|active|required",
+      "flow-launcher|active|optional",
       "wezterm|active|required",
       "audio|active|required",
       "kanata|active|required",

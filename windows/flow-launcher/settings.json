@@ -1,0 +1,8 @@
+{
+  "Hotkey": "Alt + Space",
+  "Language": "system",
+  "Theme": "Win11Light",
+  "StartFlowLauncherOnSystemStartup": true,
+  "UseLogonTaskForStartup": false,
+  "HideOnStartup": true
+}

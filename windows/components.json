@@ -2,6 +2,19 @@
   "schemaVersion": 1,
   "components": [
     {
+      "name": "flow-launcher",
+      "lifecycle": "active",
+      "selectionPolicy": "optional",
+      "order": 8,
+      "managedBy": [],
+      "conflictsWith": [],
+      "requiresSelection": [],
+      "entrypoints": {
+        "install": "flow-launcher/install.ps1",
+        "update": "flow-launcher/update-config.ps1"
+      }
+    },
+    {
       "name": "docker-desktop",
       "lifecycle": "active",
       "selectionPolicy": "optional",

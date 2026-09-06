@@ -203,6 +203,7 @@ rollback path.
 | Component | Status | Ownership and deployment |
 | --- | --- | --- |
 | onepassword | active | Required official WinGet application; account setup remains manual |
+| flow-launcher | active | Optional launcher with [managed shared preferences](windows/flow-launcher/README.md); select `-Component flow-launcher` |
 | audio | active | Audio output switcher on held `F13/F15+M` through `windows/audio/install.ps1` |
 | docker-desktop | active | Optional Windows container backend selected automatically by WSL `desktop` mode |
 | wezterm | active | WinGet application, terminal configuration, and user-scoped fonts through `windows/wezterm/install.ps1` |
