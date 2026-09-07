@@ -396,7 +396,7 @@ try {
   } else {
     $manager = Start-Process `
       -FilePath $ManagerPath `
-      -ArgumentList @("start", "--config=$liveConfig") `
+      -ArgumentList @("start", "--config=`"$liveConfig`"") `
       -PassThru
     $managerStartedByInstaller = $true
     $preserveStartedRuntime = $true
@@ -544,7 +544,7 @@ try {
       }
       $manager = Start-Process `
         -FilePath $ManagerPath `
-        -ArgumentList @("start", "--config=$liveConfig") `
+        -ArgumentList @("start", "--config=`"$liveConfig`"") `
         -PassThru
       if (-not (Wait-GlazeWMReady `
         -CliPath $GlazeWMPath `

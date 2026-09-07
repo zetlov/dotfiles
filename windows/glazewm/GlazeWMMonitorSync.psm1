@@ -286,7 +286,7 @@ function Invoke-GlazeCliCommand {
   return $response
 }
 
-function Ensure-GlazeAuxiliaryWorkspaces {
+function Ensure-GlazeManagedWorkspaces {
   [CmdletBinding()]
   param(
     [Parameter(Mandatory = $true)][string]$GlazeWMPath,
@@ -294,7 +294,10 @@ function Ensure-GlazeAuxiliaryWorkspaces {
   )
 
   $current = @($Monitors)
-  foreach ($name in @("left", "vert")) {
+  $managedNames = @(
+    (1..12 | ForEach-Object { [string]$_ }) + @("left", "vert")
+  )
+  foreach ($name in $managedNames) {
     $exists = @(
       foreach ($monitor in $current) {
         Get-GlazeWorkspacesInContainer -Container $monitor |
@@ -320,7 +323,7 @@ function Invoke-GlazeWorkspaceMonitorSync {
   $focusedWorkspaceName = Get-GlazeFocusedWorkspaceName -Monitors $monitors
   $plan = @()
   try {
-    $monitors = @(Ensure-GlazeAuxiliaryWorkspaces `
+    $monitors = @(Ensure-GlazeManagedWorkspaces `
       -GlazeWMPath $GlazeWMPath `
       -Monitors $monitors)
     $plan = @(Get-GlazeWorkspaceMonitorMovePlan `

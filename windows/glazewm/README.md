@@ -88,8 +88,12 @@ GlazeWM does not use static monitor indexes. At startup and after every managed
 display-profile change, the synchronization helper waits until GlazeWM sees the
 same display bounds as Windows, then routes workspaces 1 through 12 to the
 Windows primary display, `left` to the leftmost display, and `vert` to the
-rightmost display. With fewer displays, auxiliary workspaces collapse onto the
-available edge or the sole primary display. An existing Zebar process is kept
+rightmost display. All managed workspaces remain active when empty, so a
+numeric workspace cannot be destroyed and recreated on whichever monitor was
+focused later. The synchronization pass activates every managed workspace
+before routing it, including workspaces that were inactive before a config
+reload. With fewer displays, auxiliary workspaces collapse onto the available
+edge or the sole primary display. An existing Zebar process is kept
 alive across profile changes to avoid Zebar 3.3.1's orphaned-port bug. The
 helper verifies the visible managed bar, live listener ownership, and the 42 px
 primary-display top reservation. If a display-profile change clears the Windows

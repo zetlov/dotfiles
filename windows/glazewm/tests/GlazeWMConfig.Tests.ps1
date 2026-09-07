@@ -9,7 +9,9 @@ Describe "GlazeWM managed configuration" {
     $config = Get-Content -LiteralPath $configPath -Raw
 
     foreach ($workspace in 1..12) {
-      $config | Should -Match "(?m)^  - name: '$workspace'\r?$"
+      $config | Should -Match (
+        "(?ms)^  - name: '$workspace'\r?\n    keep_alive: true\r?$"
+      )
     }
     $config | Should -Match "(?m)^  - name: 'left'\r?$"
     $config | Should -Match "(?m)^  - name: 'vert'\r?$"
@@ -235,6 +237,33 @@ Describe "GlazeWM managed configuration" {
     $script | Should -Match 'function Wait-GlazeWMReady'
     $script | Should -Match '& \$CliPath query app-metadata'
     $script | Should -Match 'while \(\(Get-Date\) -lt \$deadline\)'
+  }
+
+  It "quotes configuration paths with spaces for startup and recovery" {
+    $tokens = $null
+    $parseErrors = $null
+    $ast = [Management.Automation.Language.Parser]::ParseFile(
+      $startPath, [ref]$tokens, [ref]$parseErrors
+    )
+    $parseErrors | Should -BeNullOrEmpty
+    $starts = @($ast.FindAll({
+      param($node)
+      $node -is [Management.Automation.Language.CommandAst] -and
+        $node.GetCommandName() -eq "Start-Process" -and
+        $node.Extent.Text.Contains('-FilePath $ManagerPath')
+    }, $true))
+    $starts.Count | Should -Be 2
+    $ManagerPath = "C:\Program Files\glzr.io\GlazeWM\glazewm.exe"
+    $liveConfig = "C:\Users\Example User\.glzr\glazewm\config.yaml"
+    Mock Start-Process {
+      [pscustomobject]@{ Arguments = $ArgumentList -join " " }
+    }
+
+    foreach ($start in $starts) {
+      $result = & ([scriptblock]::Create($start.Extent.Text))
+
+      $result.Arguments | Should -Be ('start --config="' + $liveConfig + '"')
+    }
   }
 
   It "reloads a running manager without replacing it" {

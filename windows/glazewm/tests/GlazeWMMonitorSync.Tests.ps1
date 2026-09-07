@@ -108,6 +108,61 @@ Describe "GlazeWM monitor profile synchronization" {
       -PrimaryBounds $primary).Count | Should -Be 0
   }
 
+  It "activates every managed workspace before monitor reconciliation" {
+    $initialMonitor = New-TestMonitor "primary" 0 0 3840 2160 @(
+      (New-TestWorkspace "1"), (New-TestWorkspace "left")
+    )
+
+    InModuleScope GlazeWMMonitorSync -Parameters @{
+      InitialMonitor = $initialMonitor
+    } {
+      $global:GlazeTestActivatedWorkspaces =
+        [Collections.Generic.List[string]]::new()
+      Mock Invoke-GlazeCliCommand {
+        param($GlazeWMPath, $Arguments)
+        $global:GlazeTestActivatedWorkspaces.Add($Arguments[-1])
+      }
+      Mock Get-GlazeMonitors {
+        $names = @("1", "left") + @($global:GlazeTestActivatedWorkspaces)
+        [pscustomobject]@{
+          type = "monitor"
+          id = "primary"
+          x = 0
+          y = 0
+          width = 3840
+          height = 2160
+          children = @(
+            $names | ForEach-Object {
+              [pscustomobject]@{
+                type = "workspace"
+                id = "workspace-$_"
+                name = $_
+                children = @()
+              }
+            }
+          )
+        }
+      }
+
+      try {
+        $result = @(Ensure-GlazeManagedWorkspaces `
+          -GlazeWMPath "C:\GlazeWM\glazewm.exe" `
+          -Monitors @($InitialMonitor))
+
+        @($global:GlazeTestActivatedWorkspaces) | Should -Be @(
+          "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "vert"
+        )
+        @(Get-GlazeWorkspacesInContainer -Container $result[0]).Count |
+          Should -Be 14
+      } finally {
+        Remove-Variable `
+          GlazeTestActivatedWorkspaces `
+          -Scope Global `
+          -ErrorAction SilentlyContinue
+      }
+    }
+  }
+
   It "normalizes a single monitor response into a collection" {
     $fakeCli = Join-Path $TestDrive "glazewm.ps1"
     @'
@@ -489,8 +544,8 @@ if ($Arguments -join " " -eq "command wm-reload-config") {
 
     $module | Should -Match 'focus.+--workspace'
     $module | Should -Match 'FocusedWorkspaceName'
-    $module | Should -Match 'Ensure-GlazeAuxiliaryWorkspaces'
-    $module | Should -Match 'left.+vert'
+    $module | Should -Match 'Ensure-GlazeManagedWorkspaces'
+    $module | Should -Match '1\.\.12.+left.+vert'
     $module | Should -Match 'AuxiliaryFirst'
     $module | Should -Match '\.success'
     $module | Should -Not -Match 'command `\s*\r?\n\s*--id \$move\.WorkspaceId'
