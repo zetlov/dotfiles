@@ -54,9 +54,16 @@ return {
     cond = function() return not vim.g.vscode end,
     lazy = false,
     priority = 1000,
-    opts = {},
-    config = function()
-      vim.cmd([[colorscheme tokyonight]])
+    opts = {
+      transparent = true,
+      styles = {
+        sidebars = "transparent",
+        floats = "transparent",
+      },
+    },
+    config = function(_, opts)
+      require("tokyonight").setup(opts)
+      vim.cmd.colorscheme("tokyonight")
     end,
   },
   {

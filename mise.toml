@@ -5,6 +5,7 @@ shellcheck = "0.10.0"
 
 [tasks.test]
 description = "Run repository shell tests"
+tools.lua = "5.4.8"
 run = '''
 for test_file in scripts/tests/*.test.sh; do
   "$test_file"
