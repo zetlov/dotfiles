@@ -18,8 +18,12 @@ registry update, and Kanata process run with normal user privileges.
 
 ## Key behavior
 
-- Configure the two physical keys beside Space in the keyboard firmware: the
-  left key must emit `F13`, and the right key must emit `F15`.
+- On the managed Microsoft Surface, the installer maps IME Off to `F13` with
+  PowerToys Keyboard Manager and IME On to `F15` with the system `Scancode
+  Map`. PowerToys must already be running. The system mapping requires one UAC
+  approval and a Windows restart when first installed.
+- The installer restarts PowerToys after Kanata so Keyboard Manager receives
+  the Surface IME Off event before Kanata's keyboard hook.
 - Tap `F13` for IME off or `F15` for IME on. Hold either key to activate the
   GlazeWM shortcut layer.
 - Left/Right Win and Left/Right Alt remain native Windows keys.
@@ -41,9 +45,11 @@ registry update, and Kanata process run with normal user privileges.
 | `F13/F15+Shift+C` | Enable the left and center displays |
 | `F13/F15+Shift+R` | Enable only the right display |
 
-The firmware mapping is outside this repository. Kanata can validate and use
-`F13`/`F15`, but it cannot make a different hardware scancode become those
-keys without adding that original key to `defsrc`.
+The Surface source codes were measured as `E0 F1` / virtual key `26` for IME
+Off and scan code `79` for IME On. The Windows `Scancode Map` does not transform
+the `E0 F1` event on this device, so only IME On uses that mechanism. Microsoft
+documents Scan 1 code `66` for `F15`; PowerToys maps virtual key `26` to virtual
+key `124` (`F13`). Non-Surface devices keep their existing keyboard mapping.
 
 ## Game mode
 
@@ -99,6 +105,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass \
   -AddDefenderExclusion
 ```
 
-`uninstall.ps1` removes the Defender exclusion only when the install metadata
-records that this installer created it. Use `-KeepDefenderExclusion` to preserve
-an installer-owned exclusion during uninstall.
+`uninstall.ps1` removes Defender and Surface IME changes only when the install
+metadata records that this installer created them. Use
+`-KeepDefenderExclusion`, `-KeepSurfaceImeScancodeMap`, or
+`-KeepImeOffPowerToysMapping` to preserve an owned setting during uninstall.

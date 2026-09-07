@@ -9,6 +9,7 @@
 
 (defvirtualkeys
   game-mode nop0
+  surface-imeoff (tap-hold-press 120 180 f13 (layer-while-held wm))
 )
 
 (defalias

@@ -22,6 +22,10 @@ $installerModule = Join-Path $PSScriptRoot "KanataInstaller.psm1"
 Import-Module $installerModule -Force -ErrorAction Stop
 $defenderModule = Join-Path $PSScriptRoot "KanataDefender.psm1"
 Import-Module $defenderModule -Force -ErrorAction Stop
+$surfaceImeModule = Join-Path $PSScriptRoot "KanataSurfaceIme.psm1"
+Import-Module $surfaceImeModule -Force -ErrorAction Stop
+$powerToysModule = Join-Path $PSScriptRoot "KanataPowerToys.psm1"
+Import-Module $powerToysModule -Force -ErrorAction Stop
 $gameModeModule = Join-Path $PSScriptRoot "KanataGameMode.psm1"
 Import-Module $gameModeModule -Force -ErrorAction Stop
 
@@ -34,9 +38,10 @@ function Detect-Cpu {
   param([string]$CpuParam)
   if ($CpuParam -ne "auto") { return $CpuParam }
 
-  # Windows ARM は ARM64 として出る想定
-  $arch = $env:PROCESSOR_ARCHITECTURE
-  if ($arch -match "ARM64") { return "arm64" }
+  $architecture = (
+    [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
+  ).ToString()
+  if ($architecture -eq "Arm64") { return "arm64" }
   return "x64"
 }
 
@@ -99,6 +104,11 @@ $tmp = Join-Path $env:TEMP ("kanata_dl_" + [guid]::NewGuid().ToString("N"))
 $zip = Join-Path $tmp "kanata.zip"
 $defenderExclusionAdded = $false
 $defenderExclusionOwned = $false
+$surfaceImeScancodeMapAdded = $false
+$surfaceImeScancodeMapOwned = $false
+$imeOffPowerToysMappingAdded = $false
+$imeOffPowerToysMappingOwned = $false
+$surfaceImeEnabled = $false
 $installCompleted = $false
 $installError = $null
 $rollbackPrepared = $false
@@ -124,6 +134,18 @@ if (Test-Path -LiteralPath $metaDst -PathType Leaf) {
   $ownershipProperty = $previousMeta.PSObject.Properties["defender_exclusion_added"]
   if ($ownershipProperty) {
     $defenderExclusionOwned = [bool]$ownershipProperty.Value
+  }
+  $surfaceImeProperty = $previousMeta.PSObject.Properties[
+    "surface_ime_scancode_map_added"
+  ]
+  if ($surfaceImeProperty) {
+    $surfaceImeScancodeMapOwned = [bool]$surfaceImeProperty.Value
+  }
+  $powerToysProperty = $previousMeta.PSObject.Properties[
+    "ime_off_powertoys_mapping_added"
+  ]
+  if ($powerToysProperty) {
+    $imeOffPowerToysMappingOwned = [bool]$powerToysProperty.Value
   }
 }
 
@@ -180,6 +202,19 @@ try {
     $defenderExclusionOwned = $defenderExclusionOwned -or $defenderExclusionAdded
     Write-Host "Defender allow : $exeDst"
   }
+  if ($Driver -eq "winio" -and (Test-KanataSurfaceDevice)) {
+    $surfaceImeEnabled = $true
+    $surfaceImeScancodeMapAdded = Add-KanataSurfaceImeScancodeMap
+    $surfaceImeScancodeMapOwned = (
+      $surfaceImeScancodeMapOwned -or $surfaceImeScancodeMapAdded
+    )
+    $imeOffPowerToysMappingAdded = Add-KanataImeOffPowerToysMapping
+    $imeOffPowerToysMappingOwned = (
+      $imeOffPowerToysMappingOwned -or $imeOffPowerToysMappingAdded
+    )
+    Write-Host "Surface IME    : IME Off -> F13 (PowerToys)"
+    Write-Host "Surface IME    : IME On -> F15 (Scancode Map)"
+  }
 
   Stop-KanataGameModeWatcher -InstallDir $InstallDir
   Stop-KanataIfRunning -ExePath $exeDst
@@ -209,6 +244,8 @@ try {
     cmd_allowed = [bool]$CmdAllowed
     defender_exclusion = [bool]$AddDefenderExclusion
     defender_exclusion_added = [bool]$defenderExclusionOwned
+    surface_ime_scancode_map_added = [bool]$surfaceImeScancodeMapOwned
+    ime_off_powertoys_mapping_added = [bool]$imeOffPowerToysMappingOwned
     game_mode = $true
     installed_at = (Get-Date).ToString("o")
   }
@@ -222,6 +259,10 @@ try {
 
   Start-KanataGameModeWatcher -InstallDir $InstallDir
   Write-Host "Started Kanata game mode watcher."
+  if ($surfaceImeEnabled) {
+    Restart-KanataPowerToys
+    Write-Host "Prioritized the PowerToys Surface IME hook."
+  }
   $installCompleted = $true
 } catch {
   $installError = $_
@@ -280,6 +321,26 @@ try {
       Remove-KanataDefenderExclusion -ExePath $exeDst | Out-Null
     } catch {
       Write-Warning "Failed to roll back the Kanata Defender exclusion: $($_.Exception.Message)"
+    }
+  }
+  if (-not $installCompleted -and $surfaceImeScancodeMapAdded) {
+    try {
+      Remove-KanataSurfaceImeScancodeMap | Out-Null
+    } catch {
+      Write-Warning (
+        "Failed to roll back the Surface IME Scancode Map: " +
+        $_.Exception.Message
+      )
+    }
+  }
+  if (-not $installCompleted -and $imeOffPowerToysMappingAdded) {
+    try {
+      Remove-KanataImeOffPowerToysMapping | Out-Null
+    } catch {
+      Write-Warning (
+        "Failed to roll back the Surface IME PowerToys mapping: " +
+        $_.Exception.Message
+      )
     }
   }
   if (

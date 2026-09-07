@@ -4,6 +4,10 @@ BeforeAll {
   Import-Module $modulePath -Force
   $defenderModulePath = Join-Path $PSScriptRoot "..\KanataDefender.psm1"
   Import-Module $defenderModulePath -Force
+  $surfaceImeModulePath = Join-Path $PSScriptRoot "..\KanataSurfaceIme.psm1"
+  Import-Module $surfaceImeModulePath -Force
+  $powerToysModulePath = Join-Path $PSScriptRoot "..\KanataPowerToys.psm1"
+  Import-Module $powerToysModulePath -Force
 
   function Assert-Equal {
     param($Actual, $Expected)
@@ -76,7 +80,139 @@ Context "Resolve-KanataDefenderExclusionPath" {
   }
 }
 
+Context "Surface IME Scancode Map" {
+  BeforeAll {
+    $capsToControl = [byte[]]@(
+      0, 0, 0, 0, 0, 0, 0, 0,
+      2, 0, 0, 0,
+      0x1D, 0, 0x3A, 0,
+      0, 0, 0, 0
+    )
+  }
+
+  It "preserves existing mappings while adding the supported Surface key" {
+    $update = Get-KanataSurfaceImeScancodeMapUpdate `
+      -Action Add `
+      -CurrentData $capsToControl
+    $mappings = @(ConvertFrom-KanataScancodeMap -Data $update.DesiredData)
+
+    Assert-Equal $update.Changed $true
+    Assert-Equal $mappings.Count 2
+    Assert-Equal $mappings[0].Source 0x003A
+    Assert-Equal $mappings[0].Target 0x001D
+    Assert-Equal $mappings[1].Source 0x0079
+    Assert-Equal $mappings[1].Target 0x0066
+  }
+
+  It "removes only the managed Surface mappings" {
+    $added = Get-KanataSurfaceImeScancodeMapUpdate `
+      -Action Add `
+      -CurrentData $capsToControl
+    $removed = Get-KanataSurfaceImeScancodeMapUpdate `
+      -Action Remove `
+      -CurrentData $added.DesiredData
+
+    Assert-Equal (
+      [Convert]::ToBase64String($removed.DesiredData)
+    ) ([Convert]::ToBase64String($capsToControl))
+  }
+
+  It "removes the ineffective legacy IME Off mapping during migration" {
+    $legacy = ConvertTo-KanataScancodeMap -Mappings @(
+      [pscustomobject]@{ Source = 0xE0F1; Target = 0x0064 }
+    )
+    $update = Get-KanataSurfaceImeScancodeMapUpdate `
+      -Action Add `
+      -CurrentData $legacy
+    $mappings = @(ConvertFrom-KanataScancodeMap -Data $update.DesiredData)
+
+    Assert-Equal $mappings.Count 1
+    Assert-Equal $mappings[0].Source 0x0079
+    Assert-Equal $mappings[0].Target 0x0066
+  }
+
+  It "rejects an existing mapping for a managed source" {
+    $conflict = ConvertTo-KanataScancodeMap -Mappings @(
+      [pscustomobject]@{ Source = 0x0079; Target = 0x0042 }
+    )
+
+    Assert-Throws {
+      Get-KanataSurfaceImeScancodeMapUpdate `
+        -Action Add `
+        -CurrentData $conflict
+    }
+  }
+}
+
+Context "Surface IME PowerToys mapping" {
+  BeforeAll {
+    $emptyProfile = @{
+      remapKeys = @{ inProcess = @() }
+      remapKeysToText = @{ inProcess = @() }
+      remapShortcuts = @{ global = @(); appSpecific = @() }
+      remapShortcutsToText = @{ global = @(); appSpecific = @() }
+    } | ConvertTo-Json -Depth 10 -Compress
+  }
+
+  It "adds VK_IME_OFF to F13 while preserving the profile" {
+    $update = Get-KanataImeOffPowerToysProfileUpdate `
+      -Action Add `
+      -ProfileJson $emptyProfile
+    $profile = $update.DesiredJson | ConvertFrom-Json
+
+    Assert-Equal $update.Changed $true
+    Assert-Equal @($profile.remapKeys.inProcess).Count 1
+    Assert-Equal $profile.remapKeys.inProcess[0].originalKeys "26"
+    Assert-Equal $profile.remapKeys.inProcess[0].newRemapKeys "124"
+  }
+
+  It "is idempotent and removes only its exact mapping" {
+    $added = Get-KanataImeOffPowerToysProfileUpdate `
+      -Action Add `
+      -ProfileJson $emptyProfile
+    $same = Get-KanataImeOffPowerToysProfileUpdate `
+      -Action Add `
+      -ProfileJson $added.DesiredJson
+    $removed = Get-KanataImeOffPowerToysProfileUpdate `
+      -Action Remove `
+      -ProfileJson $added.DesiredJson
+
+    Assert-Equal $same.Changed $false
+    Assert-Equal $removed.Changed $true
+    Assert-Equal @(
+      ($removed.DesiredJson | ConvertFrom-Json).remapKeys.inProcess
+    ).Count 0
+  }
+
+  It "rejects a conflicting IME Off remap" {
+    $profile = $emptyProfile | ConvertFrom-Json
+    $profile.remapKeys.inProcess = @(
+      [pscustomobject]@{ originalKeys = "26"; newRemapKeys = "65" }
+    )
+
+    Assert-Throws {
+      Get-KanataImeOffPowerToysProfileUpdate `
+        -Action Add `
+        -ProfileJson ($profile | ConvertTo-Json -Depth 10 -Compress)
+    }
+  }
+}
+
 Context "Keyboard modifier configuration" {
+  It "exposes the Surface IME Off action through a TCP virtual key" {
+    $configPath = Join-Path $PSScriptRoot "..\kanata.kbd"
+    $config = Get-Content -LiteralPath $configPath -Raw
+
+    Assert-Equal ($config -match (
+      "(?ms)^\(defvirtualkeys\s+" +
+      ".*surface-imeoff\s+" +
+      [regex]::Escape(
+        "(tap-hold-press 120 180 f13 (layer-while-held wm))"
+      ) +
+      ".*^\)\s*$"
+    )) $true
+  }
+
   It "disables only the Space layer while game mode is active" {
     $configPath = Join-Path $PSScriptRoot "..\kanata.kbd"
     $config = Get-Content -LiteralPath $configPath -Raw
@@ -299,6 +435,22 @@ Context "Game mode installer integration" {
       Assert-Equal $installScript.Contains($name) $true
     }
     Assert-Equal $installScript.Contains("Start-KanataGameModeWatcher") $true
+    Assert-Equal $installScript.Contains("Add-KanataSurfaceImeScancodeMap") $true
+    Assert-Equal $installScript.Contains("Add-KanataImeOffPowerToysMapping") $true
+    Assert-Equal $installScript.Contains(
+      "surface_ime_scancode_map_added"
+    ) $true
+    Assert-Equal $installScript.Contains(
+      "ime_off_powertoys_mapping_added"
+    ) $true
+    $watcherStart = $installScript.IndexOf(
+      "Start-KanataGameModeWatcher -InstallDir `$InstallDir"
+    )
+    $powerToysRestart = $installScript.IndexOf(
+      "Restart-KanataPowerToys"
+    )
+    Assert-Equal ($watcherStart -ge 0) $true
+    Assert-Equal ($powerToysRestart -gt $watcherStart) $true
   }
 
   It "lets the watcher restart Kanata after config updates" {
@@ -323,6 +475,12 @@ Context "Game mode installer integration" {
   It "stops and unregisters the watcher during uninstall" {
     Assert-Equal $uninstallScript.Contains("Stop-KanataGameModeWatcher") $true
     Assert-Equal $uninstallScript.Contains("Test-KanataOwnedRunValue") $true
+    Assert-Equal $uninstallScript.Contains(
+      "Remove-KanataSurfaceImeScancodeMap"
+    ) $true
+    Assert-Equal $uninstallScript.Contains(
+      "Remove-KanataImeOffPowerToysMapping"
+    ) $true
   }
 
   It "restores managed files when installation fails" {
