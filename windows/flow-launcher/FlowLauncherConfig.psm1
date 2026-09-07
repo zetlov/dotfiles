@@ -37,7 +37,7 @@ function Merge-FlowLauncherSettings {
     } else {
       throw "Unsupported managed Flow Launcher setting: $name"
     }
-    if (-not $result.Contains($name) -or $result[$name] -cne $value) {
+    if (-not $result.Contains($name) -or -not [object]::Equals($result[$name], $value)) {
       $changed = $true
     }
     $result[$name] = $value

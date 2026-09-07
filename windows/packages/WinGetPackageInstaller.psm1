@@ -189,7 +189,7 @@ function Install-WinGetPackage {
     -InstallerOverride $InstallerOverride)
   Write-Host "Installing $PackageId with WinGet..."
   if ($null -eq $CommandRunner) {
-    & $WingetPath @arguments
+    & $WingetPath @arguments | Out-Host
     $exitCode = $LASTEXITCODE
   } else {
     $exitCode = & $CommandRunner $WingetPath ([string[]]$arguments)

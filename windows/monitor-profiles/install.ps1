@@ -142,7 +142,7 @@ try {
     Test-Path -LiteralPath $backupRoot -PathType Container
   )) {
     Move-Item -LiteralPath $backupRoot -Destination $dependencyRoot
-  } elseif (-not $dependencyReady -and (
+  } elseif (-not $hadDependency -and -not $dependencyReady -and (
     Test-Path -LiteralPath $dependencyRoot -PathType Container
   )) {
     Remove-Item -LiteralPath $dependencyRoot -Recurse -Force

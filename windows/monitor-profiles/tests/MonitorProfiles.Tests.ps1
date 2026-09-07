@@ -174,6 +174,37 @@ Context "Post-apply verification" {
 }
 
 Context "Managed scripts" {
+  It "preserves an existing dependency when validation fails before replacement" {
+    $tokens = $null
+    $parseErrors = $null
+    $ast = [Management.Automation.Language.Parser]::ParseFile(
+      $installScriptPath, [ref]$tokens, [ref]$parseErrors
+    )
+    $parseErrors | Should -BeNullOrEmpty
+    $transaction = $ast.Find({
+      param($node)
+      $node -is [Management.Automation.Language.TryStatementAst] -and
+        $null -ne $node.Finally
+    }, $false)
+    $cleanup = [scriptblock]::Create($transaction.Finally.Extent.Text)
+    $temporaryRoot = Join-Path $TestDrive "failed-download"
+    $dependencyRoot = Join-Path $TestDrive "installed-dependency"
+    $backupRoot = Join-Path $temporaryRoot "dependency.old"
+    New-Item -ItemType Directory -Path $temporaryRoot, $dependencyRoot |
+      Out-Null
+    $installedFile = Join-Path $dependencyRoot "DisplayConfig.dll"
+    Set-Content -LiteralPath $installedFile -Value "previous verified payload"
+    $hadDependency = $true
+    $dependencyReady = $false
+
+    & (& $cleanup)
+
+    Test-Path -LiteralPath $installedFile -PathType Leaf | Should -BeTrue
+    Get-Content -LiteralPath $installedFile |
+      Should -Be "previous verified payload"
+    Test-Path -LiteralPath $temporaryRoot | Should -BeFalse
+  }
+
   It "installs only the pinned DisplayConfig package" {
     $source = Get-Content -LiteralPath $installScriptPath -Raw
 

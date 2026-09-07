@@ -150,6 +150,31 @@ Describe "WinGet package installer" {
     Assert-Equal $result.Path ([IO.Path]::GetFullPath($applicationPath))
   }
 
+  It "returns only the application result when WinGet writes progress output" {
+    $applicationPath = Join-Path $TestDrive "native-installed.exe"
+    $wingetPath = Join-Path $TestDrive "winget.cmd"
+    [IO.File]::WriteAllLines($wingetPath, @(
+      "@echo off",
+      "echo Installing the test application",
+      "type nul > `"$applicationPath`"",
+      "exit /b 0"
+    ))
+
+    Push-Location $TestDrive
+    try {
+      $results = @(Install-WinGetPackage `
+        -PackageId "Docker.DockerDesktop" `
+        -ExpectedPath $applicationPath `
+        -WingetPath $wingetPath)
+    } finally {
+      Pop-Location
+    }
+
+    $results.Count | Should -Be 1
+    $results[0].Changed | Should -BeTrue
+    $results[0].Path | Should -Be ([IO.Path]::GetFullPath($applicationPath))
+  }
+
   It "does not invoke WinGet for an existing Appx package" {
     $installLocation = Join-Path $TestDrive "existing-appx"
     $wingetPath = Join-Path $TestDrive "winget.exe"

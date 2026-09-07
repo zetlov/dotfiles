@@ -73,6 +73,29 @@ Describe 'Flow Launcher managed settings' {
     $result.Changed | Should -BeFalse
   }
 
+  It 'repairs existing preference types even when PowerShell considers values equal' {
+    foreach ($existingJson in @(
+      '{"HideOnStartup":"False"}',
+      '{"HideOnStartup":0}'
+    )) {
+      $result = Merge-FlowLauncherSettings -ExistingJson $existingJson `
+        -ManagedJson '{"HideOnStartup":false}'
+
+      $result.Changed | Should -BeTrue
+      $settings = $result.Json | ConvertFrom-Json
+      $settings.HideOnStartup | Should -BeOfType ([bool])
+      $settings.HideOnStartup | Should -BeFalse
+    }
+  }
+
+  It 'does not rewrite boolean settings that already match' {
+    $result = Merge-FlowLauncherSettings `
+      -ExistingJson '{"HideOnStartup":false}' `
+      -ManagedJson '{"HideOnStartup":false}'
+
+    $result.Changed | Should -BeFalse
+  }
+
   It 'can initialize a new settings file' {
     $result = Merge-FlowLauncherSettings -ExistingJson '{}' -ManagedJson '{"HideOnStartup":true}'
     ($result.Json | ConvertFrom-Json).HideOnStartup | Should -BeTrue
