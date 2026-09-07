@@ -10,7 +10,7 @@ JetBrainsMono Nerd Font at 13 pt, Catppuccin Mocha, 70% background opacity,
 zero padding, a steady bar cursor, a bottom tab bar, and no title bar. Windows
 Acrylic blur is intentionally disabled so unfocused windows retain the same
 background opacity. Zsh switches the cursor to a steady block in vi command
-mode and back to a bar in insert mode. New windows open in the `archlinux` WSL
+mode and back to a bar in insert mode. New windows open in the `alarm` WSL
 domain by default. On Arch,
 Zetshell can override Kitty colors with a generated host-local theme. That file
 is not currently present and is not loaded by the Windows WezTerm config;

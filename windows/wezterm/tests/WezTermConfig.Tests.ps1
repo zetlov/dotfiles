@@ -66,11 +66,11 @@ Context "Version-controlled Kitty baseline appearance" {
     }
   }
 
-  It "hides the title bar and opens the Arch WSL domain by default" {
+  It "hides the title bar and opens the alarm WSL domain by default" {
     $config = Get-Content -LiteralPath $configPath -Raw
 
     Assert-Matches $config "window_decorations\s*=\s*'RESIZE'"
-    Assert-Matches $config "default_domain\s*=\s*'WSL:archlinux'"
+    Assert-Matches $config "default_domain\s*=\s*'WSL:alarm'"
   }
 
   It "contains the Catppuccin Mocha colors used by Kitty" {

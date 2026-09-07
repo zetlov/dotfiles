@@ -2,7 +2,7 @@ local wezterm = require 'wezterm'
 
 local config = wezterm.config_builder()
 
-config.default_domain = 'WSL:archlinux'
+config.default_domain = 'WSL:alarm'
 
 config.font = wezterm.font_with_fallback {
   'JetBrainsMono Nerd Font',
