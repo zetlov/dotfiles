@@ -81,7 +81,8 @@ foreach ($app in $applications) {
     }
   }
 
-  $normalized = $processName.ToLowerInvariant()
+  $matchKey = $processName.ToLowerInvariant() + "|" + [string]$app.processCommandLinePattern
+  $normalized = $matchKey
   if ($seenProcesses.ContainsKey($normalized)) {
     throw "Duplicate startup process name: $processName"
   }
@@ -100,32 +101,53 @@ if (-not (Get-Process -Name "glazewm" -ErrorAction SilentlyContinue)) {
 }
 
 $startApps = @(Get-StartApps)
+$launchedApplications = @()
 $failures = @()
 foreach ($app in $applications) {
   $processName = [string]$app.processName
-  if (Get-Process -Name $processName -ErrorAction SilentlyContinue) {
-    continue
-  }
-
-  $matches = @(
-    $startApps | Where-Object { $_.Name -eq [string]$app.startAppName }
-  )
-  if ($matches.Count -ne 1) {
-    $failures += [string]$app.name
-    continue
-  }
-
   try {
-    Start-Process `
-      -FilePath "explorer.exe" `
-      -ArgumentList "shell:AppsFolder\$($matches[0].AppID)" |
-      Out-Null
+    $existing = @(Get-CimInstance Win32_Process -Filter "Name = '$processName.exe'" |
+      Where-Object {
+        $pattern = [string]$app.processCommandLinePattern
+        [string]::IsNullOrWhiteSpace($pattern) -or
+          ([string]$_.CommandLine -match $pattern)
+      })
+    if ($existing.Count -eq 0) {
+      $launchType = [string]$app.launchType
+      if ([string]::IsNullOrWhiteSpace($launchType)) {
+        $launchType = "start-app"
+      }
+      if ($launchType -eq "executable") {
+        $path = @($app.pathCandidates | ForEach-Object {
+          [Environment]::ExpandEnvironmentVariables([string]$_)
+        } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1)
+        if ($path.Count -ne 1) {
+          throw "No executable candidate is installed."
+        }
+        Start-Process -FilePath $path[0] -ArgumentList ([string]$app.arguments) | Out-Null
+      } else {
+        $matches = @(
+          $startApps | Where-Object { $_.Name -eq [string]$app.startAppName }
+        )
+        if ($matches.Count -ne 1) {
+          throw "Start Apps entry is missing or ambiguous."
+        }
+        Start-Process `
+          -FilePath "explorer.exe" `
+          -ArgumentList "shell:AppsFolder\$($matches[0].AppID)" |
+          Out-Null
+      }
+    }
   } catch {
     $failures += [string]$app.name
   }
 
   if ($intervalMilliseconds -gt 0) {
     Start-Sleep -Milliseconds $intervalMilliseconds
+  }
+  $launchedApplications += [pscustomobject]@{
+    Config = $app
+    ProcessId = 0
   }
 }
 
@@ -134,13 +156,30 @@ if ($failures.Count -gt 0) {
   throw "Could not start: $($failedNames -join ', ')"
 }
 
-foreach ($app in $applications) {
+foreach ($entry in $launchedApplications) {
+  $app = $entry.Config
   if (-not ($app.PSObject.Properties.Name -contains "startupWorkspace")) {
     continue
   }
+  $processName = [string]$app.processName
+  $deadline = (Get-Date).AddSeconds($workspacePlacementWaitSeconds)
+  do {
+    $process = @(Get-CimInstance Win32_Process -Filter "Name = '$processName.exe'" |
+      Where-Object {
+        $pattern = [string]$app.processCommandLinePattern
+        [string]::IsNullOrWhiteSpace($pattern) -or
+          ([string]$_.CommandLine -match $pattern)
+      } | Select-Object -First 1)
+    if ($process.Count -eq 1) {
+      $entry.ProcessId = [int]$process[0].ProcessId
+      break
+    }
+    Start-Sleep -Milliseconds 500
+  } while ((Get-Date) -lt $deadline)
   Invoke-GlazeStartupWorkspacePlacement `
     -GlazeWMPath $GlazeWMPath `
     -ProcessName ([string]$app.processName) `
+    -ProcessId ([int]$entry.ProcessId) `
     -WorkspaceName ([string]$app.startupWorkspace) `
     -WaitSeconds $workspacePlacementWaitSeconds
 }

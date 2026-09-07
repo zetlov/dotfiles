@@ -9,11 +9,12 @@ Describe "GlazeWM startup applications" {
     $names = @($config.applications | ForEach-Object { $_.name })
 
     ($names -join "|") | Should -Be (
-      "Zen Browser|Zotero|Raindrop.io|Todoist|Notion Calendar|" +
-      "Spotify|Discord|Obsidian"
+      "Zen Browser (Personal)|Discord|Spotify|Todoist|Notion Calendar|" +
+      "Obsidian|Notion|Zen Browser (MadoriLABO)|Slack|" +
+      "Zen Browser (University)|Zotero"
     )
     @($config.applications.processName | Sort-Object -Unique).Count |
-      Should -Be 8
+      Should -Be 9
   }
 
   It "validates config and skips applications that are already running" {
@@ -32,23 +33,26 @@ Describe "GlazeWM startup applications" {
     $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
     $script = Get-Content -LiteralPath $scriptPath -Raw
     $zen = @($config.applications | Where-Object {
-      $_.processName -eq "zen"
+      $_.name -eq "Zen Browser (Personal)"
     })[0]
 
     $zen.startupWorkspace | Should -Be "1"
+    $zen.arguments | Should -Be '-P "Personal"'
+    @($config.applications | Where-Object {
+      $_.name -eq "Zen Browser (MadoriLABO)"
+    })[0].startupWorkspace | Should -Be "7"
+    @($config.applications | Where-Object {
+      $_.name -eq "Zen Browser (University)"
+    })[0].startupWorkspace | Should -Be "9"
     [int]$config.workspacePlacementWaitSeconds | Should -BeGreaterThan 0
     $script | Should -Match "Invoke-GlazeStartupWorkspacePlacement"
   }
 
-  It "arranges the four workspace 2 applications as a guarded grid" {
+  It "does not apply the obsolete workspace grid" {
     $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
     $script = Get-Content -LiteralPath $scriptPath -Raw
-    $grid = @($config.workspaceGrids)[0]
 
-    $grid.workspaceName | Should -Be "2"
-    (@($grid.processNames) -join "|") | Should -Be (
-      "Zotero|Raindrop|Todoist|Notion Calendar"
-    )
+    @($config.workspaceGrids).Count | Should -Be 0
     $script | Should -Match "Invoke-GlazeWorkspaceGrid"
   }
 

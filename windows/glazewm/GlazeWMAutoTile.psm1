@@ -530,6 +530,8 @@ function Invoke-GlazeStartupWorkspacePlacement {
     [Parameter(Mandatory = $true)]
     [string]$ProcessName,
 
+    [int]$ProcessId,
+
     [Parameter(Mandatory = $true)]
     [string]$WorkspaceName,
 
@@ -567,7 +569,14 @@ function Invoke-GlazeStartupWorkspacePlacement {
         foreach ($window in @(Get-GlazeWindowsInContainer -Container $workspace)) {
           if (
             $window.PSObject.Properties.Name -contains "processName" -and
-            [string]$window.processName -eq $ProcessName
+            [string]$window.processName -eq $ProcessName -and
+            (
+              $ProcessId -le 0 -or
+              (
+                $window.PSObject.Properties.Name -contains "processId" -and
+                [int]$window.processId -eq $ProcessId
+              )
+            )
           ) {
             [pscustomobject]@{
               Window = $window

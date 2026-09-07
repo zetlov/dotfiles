@@ -107,23 +107,19 @@ Replacing a widget pack while Zebar is running likewise requires the explicit
 
 ## Application workspaces
 
-- Workspace 1 at login: Zen Browser
-- Workspace 2: Zotero, Raindrop.io, Todoist, and Notion Calendar
-- Workspace 3: Spotify and Discord
-- Workspace 4: Obsidian
+- Workspace 1 at login: Zen Browser (Personal profile)
+- Workspace 2: Discord and Spotify
+- Workspace 3: Todoist and Notion Calendar
+- Workspace 4: Obsidian and Notion
+- Workspace 7: Zen Browser (MadoriLABO profile) and Slack
+- Workspace 9: Zen Browser (University profile) and Zotero
 - Workspace 11: registered games, floating and not centered
 
-At startup, the four managed workspace 2 windows are converted from a single
-horizontal row into two equal vertical pairs that fill the workspace. A hidden
-workspace with a stale or unbalanced 2x2 tree is rebuilt from only those four
-managed windows. The guarded conversion is skipped when the target window set
-is incomplete, duplicated, unsafe, or already balanced.
-
-The startup helper launches only missing applications through their exact
-Start Apps entries. It places every Zen window on workspace 1 once during
-startup. Zen has no persistent window rule, so browser windows opened later
-stay on the currently active workspace. GlazeWM window rules continue to route
-the other listed applications.
+The startup helper launches only missing applications. Zen is launched three
+times with the named Firefox-compatible profiles and each profile is placed on
+its corresponding workspace. Zen has no persistent window rule, so browser
+windows opened later stay on the currently active workspace. GlazeWM window
+rules continue to route the other listed applications.
 
 After startup placement and workspace-grid reconciliation finish, the same
 helper reruns workspace-to-monitor synchronization without invoking Zebar.

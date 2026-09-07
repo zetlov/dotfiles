@@ -3,58 +3,88 @@
   "launchIntervalMilliseconds": 1500,
   "workspacePlacementWaitSeconds": 60,
   "workspaceGridWaitSeconds": 60,
-  "workspaceGrids": [
-    {
-      "workspaceName": "2",
-      "processNames": [
-        "Zotero",
-        "Raindrop",
-        "Todoist",
-        "Notion Calendar"
-      ]
-    }
-  ],
+  "workspaceGrids": [],
   "applications": [
     {
-      "name": "Zen Browser",
+      "name": "Zen Browser (Personal)",
       "processName": "zen",
-      "startAppName": "Zen",
+      "launchType": "executable",
+      "pathCandidates": [
+        "%ProgramFiles%\\Zen Browser\\zen.exe"
+      ],
+      "arguments": "-P \"Personal\"",
+      "processCommandLinePattern": "(?:^|\\s)-P\\s+\\\"?Personal\\\"?(?:\\s|$)",
       "startupWorkspace": "1"
-    },
-    {
-      "name": "Zotero",
-      "processName": "zotero",
-      "startAppName": "Zotero"
-    },
-    {
-      "name": "Raindrop.io",
-      "processName": "Raindrop.io",
-      "startAppName": "Raindrop.io"
-    },
-    {
-      "name": "Todoist",
-      "processName": "Todoist",
-      "startAppName": "Todoist"
-    },
-    {
-      "name": "Notion Calendar",
-      "processName": "Notion Calendar",
-      "startAppName": "Notion Calendar"
-    },
-    {
-      "name": "Spotify",
-      "processName": "Spotify",
-      "startAppName": "Spotify"
     },
     {
       "name": "Discord",
       "processName": "Discord",
-      "startAppName": "Discord"
+      "startAppName": "Discord",
+      "startupWorkspace": "2"
+    },
+    {
+      "name": "Spotify",
+      "processName": "Spotify",
+      "startAppName": "Spotify",
+      "startupWorkspace": "2"
+    },
+    {
+      "name": "Todoist",
+      "processName": "Todoist",
+      "startAppName": "Todoist",
+      "startupWorkspace": "3"
+    },
+    {
+      "name": "Notion Calendar",
+      "processName": "Notion Calendar",
+      "startAppName": "Notion Calendar",
+      "startupWorkspace": "3"
     },
     {
       "name": "Obsidian",
       "processName": "Obsidian",
-      "startAppName": "Obsidian"
+      "startAppName": "Obsidian",
+      "startupWorkspace": "4"
+    },
+    {
+      "name": "Notion",
+      "processName": "Notion",
+      "startAppName": "Notion",
+      "startupWorkspace": "4"
+    },
+    {
+      "name": "Zen Browser (MadoriLABO)",
+      "processName": "zen",
+      "launchType": "executable",
+      "pathCandidates": [
+        "%ProgramFiles%\\Zen Browser\\zen.exe"
+      ],
+      "arguments": "-P \"MadoriLABO\"",
+      "processCommandLinePattern": "(?:^|\\s)-P\\s+\\\"?MadoriLABO\\\"?(?:\\s|$)",
+      "startupWorkspace": "7"
+    },
+    {
+      "name": "Slack",
+      "processName": "slack",
+      "startAppName": "Slack",
+      "startupWorkspace": "7"
+    },
+    {
+      "name": "Zen Browser (University)",
+      "processName": "zen",
+      "launchType": "executable",
+      "pathCandidates": [
+        "%ProgramFiles%\\Zen Browser\\zen.exe"
+      ],
+      "arguments": "-P \"University\"",
+      "processCommandLinePattern": "(?:^|\\s)-P\\s+\\\"?University\\\"?(?:\\s|$)",
+      "startupWorkspace": "9"
+    },
+    {
+      "name": "Zotero",
+      "processName": "zotero",
+      "startAppName": "Zotero",
+      "startupWorkspace": "9"
     }
   ]
 }

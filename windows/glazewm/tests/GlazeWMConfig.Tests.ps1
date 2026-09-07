@@ -164,13 +164,14 @@ Describe "GlazeWM managed configuration" {
     $config = Get-Content -LiteralPath $configPath -Raw
 
     foreach ($rule in @(
-      "zotero:2",
-      "Raindrop:2",
-      "Todoist:2",
-      "Notion Calendar:2",
-      "Spotify:3",
-      "Discord:3",
-      "Obsidian:4"
+      "Todoist:3",
+      "Notion Calendar:3",
+      "Spotify:2",
+      "Discord:2",
+      "Obsidian:4",
+      "Notion:4",
+      "slack:7",
+      "zotero:9"
     )) {
       $parts = $rule.Split(":")
       $pattern = "(?ms)commands: \['move --workspace $($parts[1])'\].{0,400}window_process: \{ equals: '$([regex]::Escape($parts[0]))' \}"
