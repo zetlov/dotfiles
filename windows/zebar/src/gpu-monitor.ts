@@ -32,7 +32,7 @@ export function parseGpuMetrics(line: string): GpuMetrics | null {
   if (!normalized) return null;
 
   const fields = normalized.split(',').map(field => field.trim());
-  if (fields.length !== 2) return null;
+  if (fields.length !== 2 || fields.some(field => field.length === 0)) return null;
 
   const usage = Number(fields[0]);
   const temperature = Number(fields[1]);

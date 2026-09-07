@@ -27,7 +27,7 @@ import {
 } from './view-model';
 import { startGpuMonitor } from './gpu-monitor';
 import {
-  createMonitorProfileCommand,
+  applyMonitorProfile,
   getMonitorProfileForCount,
   monitorProfiles,
   probeMonitorProfiles,
@@ -88,24 +88,18 @@ function App() {
   );
 
   const switchMonitorProfile = async (name: string) => {
-    if (pendingMonitorProfile() || name === currentMonitorProfile()) return;
-    const command = createMonitorProfileCommand(name);
+    if (pendingMonitorProfile()) return;
     setPendingMonitorProfile(name as MonitorProfileName);
     setMonitorProfileError(null);
     try {
-      const process = await zebar.shellSpawn(
-        command.program,
-        [...command.args],
+      await applyMonitorProfile(
+        name,
+        (program, args) => zebar.shellExec(program, [...args]),
       );
-      process.onExit(({ exitCode }) => {
-        setPendingMonitorProfile(null);
-        if (exitCode !== 0) {
-          setMonitorProfileError('Monitor profile switch failed');
-        }
-      });
     } catch {
-      setPendingMonitorProfile(null);
       setMonitorProfileError('Monitor profile switch failed');
+    } finally {
+      setPendingMonitorProfile(null);
     }
   };
 
@@ -150,11 +144,14 @@ function App() {
             <select
               class="monitor-profile-select"
               aria-label="Monitor profile"
-              value={pendingMonitorProfile() ?? currentMonitorProfile() ?? ''}
+              value={pendingMonitorProfile() ?? ''}
               disabled={pendingMonitorProfile() !== null}
               onChange={event => void switchMonitorProfile(event.currentTarget.value)}
             >
-              <option value="" disabled>Unknown layout</option>
+              <option value="" disabled>
+                {monitorProfiles.find(profile => profile.name === currentMonitorProfile())?.label
+                  ?? 'Unknown layout'}
+              </option>
               <For each={monitorProfiles}>
                 {profile => <option value={profile.name}>{profile.label}</option>}
               </For>

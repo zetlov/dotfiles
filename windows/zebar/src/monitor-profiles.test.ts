@@ -7,7 +7,49 @@ import {
   getMonitorProfileForCount,
   monitorProfiles,
   probeMonitorProfiles,
+  applyMonitorProfile,
 } from './monitor-profiles';
+
+test('applyMonitorProfile waits for command completion and allows reapplying', async () => {
+  const calls: Array<{ program: string; args: readonly string[] }> = [];
+  let complete: ((result: { code: number }) => void) | undefined;
+  const pending = new Promise<{ code: number }>(resolve => { complete = resolve; });
+  let settled = false;
+  const execute = async (program: string, args: readonly string[]) => {
+    calls.push({ program, args });
+    return pending;
+  };
+
+  const applied = applyMonitorProfile('right-only', execute).then(() => {
+    settled = true;
+  });
+  await Promise.resolve();
+  assert.equal(settled, false);
+  complete?.({ code: 0 });
+  await applied;
+  await applyMonitorProfile('right-only', execute);
+  assert.deepEqual(calls, [
+    createMonitorProfileCommand('right-only'),
+    createMonitorProfileCommand('right-only'),
+  ]);
+});
+
+test('applyMonitorProfile rejects command failures and invalid profiles', async () => {
+  for (const code of [1, null]) {
+    await assert.rejects(
+      applyMonitorProfile('all', async () => ({ code })),
+      /Monitor profile switch failed/,
+    );
+  }
+  await assert.rejects(
+    applyMonitorProfile('all', async () => { throw new Error('unavailable'); }),
+    /unavailable/,
+  );
+  await assert.rejects(
+    applyMonitorProfile('unexpected', async () => { assert.fail('must not execute'); }),
+    /Unknown monitor profile/,
+  );
+});
 
 test('getMonitorProfileForCount recognizes only managed topologies', () => {
   assert.equal(getMonitorProfileForCount(3), 'all');

@@ -17,6 +17,12 @@ test('parseGpuMetrics accepts safe NVIDIA usage and temperature output', () => {
   assert.equal(parseGpuMetrics('not supported'), null);
 });
 
+test('parseGpuMetrics rejects missing CSV values instead of reporting zero', () => {
+  for (const line of [', 60', '40, ', ',', ' , ']) {
+    assert.equal(parseGpuMetrics(line), null, line);
+  }
+});
+
 test('startGpuMonitor uses the pinned command and stops its process', async () => {
   let stdout: ((line: string) => void) | undefined;
   let killed = false;

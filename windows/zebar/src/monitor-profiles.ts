@@ -6,6 +6,11 @@ export const monitorProfiles = [
 
 export type MonitorProfileName = (typeof monitorProfiles)[number]['name'];
 
+type ExecuteMonitorProfileCommand = (
+  program: string,
+  args: readonly string[],
+) => Promise<{ readonly code: number | null }>;
+
 const powershellPath =
   'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
 const switchScriptPath =
@@ -62,11 +67,19 @@ export function createMonitorProfileProbeCommand(): {
   );
 }
 
+export async function applyMonitorProfile(
+  name: string,
+  execute: ExecuteMonitorProfileCommand,
+): Promise<void> {
+  const command = createMonitorProfileCommand(name);
+  const result = await execute(command.program, command.args);
+  if (result.code !== 0) {
+    throw new Error('Monitor profile switch failed');
+  }
+}
+
 export async function probeMonitorProfiles(
-  execute: (
-    program: string,
-    args: readonly string[],
-  ) => Promise<{ readonly code: number | null }>,
+  execute: ExecuteMonitorProfileCommand,
 ): Promise<boolean> {
   const command = createMonitorProfileProbeCommand();
   try {

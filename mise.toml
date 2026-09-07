@@ -31,9 +31,12 @@ git ls-files -z -- '*.json' | xargs -0 -r -n1 jq empty
 description = "Run Zebar tests, type checks, and build"
 dir = "windows/zebar"
 run = '''
-npm ci
-mise run check
-git diff --exit-code -- dist
+mise exec -- npm ci
+mise run test ::: typecheck
+build_dir=$(mktemp -d)
+trap 'rm -rf -- "${build_dir}"' EXIT
+mise exec -- npm run build -- --outDir "${build_dir}" --emptyOutDir
+diff -r dist "${build_dir}"
 '''
 
 [tasks."check:windows"]

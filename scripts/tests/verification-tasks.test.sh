@@ -61,8 +61,12 @@ if "zebar" not in zebar_definition.lower():
     fail("check:zebar should delegate to the Zebar verification workflow")
 if "npm ci" not in zebar_definition:
     fail("check:zebar should install its lockfile-pinned dependencies")
-if "git diff --exit-code -- dist" not in zebar_definition:
-    fail("check:zebar should reject drift in the tracked production bundle")
+if "mise run test ::: typecheck" not in zebar_definition:
+    fail("check:zebar should run typecheck as a separate task, not a test argument")
+if 'diff -r dist "${build_dir}"' not in zebar_definition:
+    fail("check:zebar should compare the production bundle with an isolated build")
+if '--outDir "${build_dir}"' not in zebar_definition:
+    fail("check:zebar should preserve the working-tree production bundle")
 
 windows_definition = str(tasks["check:windows"].get("run", ""))
 if "Pester" not in windows_definition and "powershell" not in windows_definition.lower():

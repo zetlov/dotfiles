@@ -121,7 +121,7 @@ Describe "Zetshell Zebar configuration" {
 
     $source | Assert-Match 'class="[^"]*\bmonitor-profile-card\b[^"]*"'
     $source | Assert-Match 'aria-label="Monitor profile"'
-    $source | Assert-Match 'createMonitorProfileCommand'
+    $source | Assert-Match 'applyMonitorProfile'
     $source | Assert-Match 'probeMonitorProfiles'
     $source | Assert-Match 'when=\{monitorProfilesAvailable\(\)\}'
     $source | Assert-Match 'allMonitors\.length'

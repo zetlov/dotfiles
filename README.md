@@ -331,8 +331,8 @@ scripts/security/check-public-tree.sh
 
 | Task | Boundary | Requirements |
 | --- | --- | --- |
-| `mise run check` | Portable repository tests, lint, config syntax, and security | Bootstrapped Linux/WSL checkout with `bash`, Git, jq, ripgrep, Stow, Zsh, and mise |
-| `mise run check:zebar` | Lockfile install, Zebar tests, type checking, production build, and tracked `dist/` drift check | mise-managed Node toolchain and npm registry access |
+| `mise run check` | Portable repository tests, lint, config syntax, and security | Bootstrapped Linux/WSL checkout with `bash`, Git, jq, ripgrep, Stow, Zsh, util-linux, and mise |
+| `mise run check:zebar` | Lockfile install, Zebar tests, type checking, and an isolated build compared with working-tree `dist/` | mise-managed Node toolchain and npm registry access |
 | `mise run check:windows` | All Windows Pester suites under PowerShell 7 | Windows bridge and Pester 5.7.1 |
 | `mise run check:windows-compat` | The same suites under Windows PowerShell 5.1 | Windows bridge and Pester 5.7.1 |
 | `mise run check:all-local` | All four source-verification boundaries above | Every prerequisite in the rows above |
@@ -344,7 +344,13 @@ as process lifecycle, window preservation, scheduled tasks, font resolution,
 and actual configuration loading remain explicit post-deployment checks and
 are not implied by any source-verification task.
 
+The Zebar check leaves `dist/` unchanged and accepts intentional, uncommitted
+bundle updates when they match the current source. Rebuild with
+`mise -C windows/zebar run build` after editing Zebar source.
+
 The public boundary check rejects credential filenames, private assistant
 state, personal home paths, common personal email addresses, and symlinks that
 escape the repository. An optional private denylist can be supplied through
-`DOTFILES_DENYLIST` for host-specific names and identifiers.
+`DOTFILES_DENYLIST` for host-specific names and identifiers. Content checks
+include hidden dotfiles and reject search errors instead of treating them as
+an absence of matches.
