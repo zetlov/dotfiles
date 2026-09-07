@@ -227,6 +227,16 @@ Describe "GlazeWM managed configuration" {
 
     $script | Should -Match '\$RequiredVersion = "3\.10\.1"'
     $script | Should -Match '--version \$RequiredVersion'
+    $script | Should -Match 'winget\.exe upgrade'
+    $script | Should -Match 'winget\.exe uninstall'
+    $script | Should -Match '--version \$installedVersion'
+    $script | Should -Match '-1978335189'
+    $script | Should -Match '-1978335090'
+    $script | Should -Match '\$upgradeExitCode -in \$reinstallRequiredExitCodes'
+    $script | Should -Match '\$uninstallExitCode -eq 1603'
+    $script | Should -Match 'requires.+?administrator approval'
+    $script | Should -Match '\$installedVersion -lt \$requiredSemanticVersion'
+    $script | Should -Match '\$installedVersion -gt \$requiredSemanticVersion'
     $script | Should -Match '& \$GlazeWMPath --version'
     $script | Should -Match 'Unexpected GlazeWM version'
   }

@@ -76,10 +76,32 @@ function Get-GlazeWorkspaceMonitorMovePlan {
   $ordered = @($Monitors | Sort-Object `
     @{ Expression = { (Get-GlazeContainerBounds $_).X } }, `
     @{ Expression = { (Get-GlazeContainerBounds $_).Y } })
+  $primaryDeviceName = if (
+    $PrimaryBounds.PSObject.Properties.Name -contains "DeviceName"
+  ) {
+    [string]$PrimaryBounds.DeviceName
+  } else {
+    ""
+  }
+  $matchByDeviceName = (
+    -not [string]::IsNullOrWhiteSpace($primaryDeviceName) -and
+    @($ordered | Where-Object {
+      $_.PSObject.Properties.Name -notcontains "deviceName" -or
+      [string]::IsNullOrWhiteSpace([string]$_.deviceName)
+    }).Count -eq 0
+  )
   $primaryIndexes = @(
     for ($index = 0; $index -lt $ordered.Count; $index++) {
       $bounds = Get-GlazeContainerBounds -Container $ordered[$index]
-      if (Test-GlazeBoundsEqual -First $bounds -Second $PrimaryBounds) {
+      $isPrimary = if ($matchByDeviceName) {
+        ([string]$ordered[$index].deviceName).Equals(
+          $primaryDeviceName,
+          [StringComparison]::OrdinalIgnoreCase
+        )
+      } else {
+        Test-GlazeBoundsEqual -First $bounds -Second $PrimaryBounds
+      }
+      if ($isPrimary) {
         $index
       }
     }
@@ -157,8 +179,10 @@ function Get-GlazeMonitors {
 
 function Get-WindowsPrimaryBounds {
   Add-Type -AssemblyName System.Windows.Forms
-  $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+  $screen = [System.Windows.Forms.Screen]::PrimaryScreen
+  $bounds = $screen.Bounds
   return [pscustomobject]@{
+    DeviceName = $screen.DeviceName
     X = $bounds.X
     Y = $bounds.Y
     Width = $bounds.Width
@@ -171,6 +195,7 @@ function Get-WindowsScreenBounds {
   return @(
     [System.Windows.Forms.Screen]::AllScreens | ForEach-Object {
       [pscustomobject]@{
+        DeviceName = $_.DeviceName
         X = $_.Bounds.X
         Y = $_.Bounds.Y
         Width = $_.Bounds.Width
@@ -190,15 +215,34 @@ function Test-GlazeMonitorTopologyMatchesWindows {
   if ($Monitors.Count -ne $WindowsBounds.Count) {
     return $false
   }
+  $matchByDeviceName = (
+    @($WindowsBounds | Where-Object {
+      $_.PSObject.Properties.Name -notcontains "DeviceName" -or
+      [string]::IsNullOrWhiteSpace([string]$_.DeviceName)
+    }).Count -eq 0 -and
+    @($Monitors | Where-Object {
+      $_.PSObject.Properties.Name -notcontains "deviceName" -or
+      [string]::IsNullOrWhiteSpace([string]$_.deviceName)
+    }).Count -eq 0
+  )
   $unmatched = [Collections.Generic.List[object]]::new()
   foreach ($bounds in $WindowsBounds) {
     $unmatched.Add($bounds)
   }
   foreach ($monitor in $Monitors) {
-    $glazeBounds = Get-GlazeContainerBounds -Container $monitor
-    $match = $unmatched | Where-Object {
-      Test-GlazeBoundsEqual -First $glazeBounds -Second $_
-    } | Select-Object -First 1
+    $match = if ($matchByDeviceName) {
+      $unmatched | Where-Object {
+        ([string]$_.DeviceName).Equals(
+          [string]$monitor.deviceName,
+          [StringComparison]::OrdinalIgnoreCase
+        )
+      } | Select-Object -First 1
+    } else {
+      $glazeBounds = Get-GlazeContainerBounds -Container $monitor
+      $unmatched | Where-Object {
+        Test-GlazeBoundsEqual -First $glazeBounds -Second $_
+      } | Select-Object -First 1
+    }
     if ($null -eq $match) {
       return $false
     }

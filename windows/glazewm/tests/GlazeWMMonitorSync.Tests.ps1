@@ -163,6 +163,57 @@ Describe "GlazeWM monitor profile synchronization" {
     }
   }
 
+  It "matches the primary by device name across DPI-scaled coordinates" {
+    $monitors = @(
+      [pscustomobject]@{
+        type = "monitor"
+        id = "primary"
+        deviceName = "\\.\DISPLAY1"
+        x = 0
+        y = 0
+        width = 2196
+        height = 1464
+        children = @((New-TestWorkspace "1"))
+      }
+    )
+    $primary = [pscustomobject]@{
+      DeviceName = "\\.\display1"
+      X = 0
+      Y = 0
+      Width = 1757
+      Height = 1171
+    }
+
+    @(Get-GlazeWorkspaceMonitorMovePlan `
+      -Monitors $monitors `
+      -PrimaryBounds $primary).Count | Should -Be 0
+  }
+
+  It "matches monitor topology by device name across DPI scaling" {
+    $monitors = @(
+      [pscustomobject]@{
+        deviceName = "\\.\DISPLAY1"
+        x = 0
+        y = 0
+        width = 2196
+        height = 1464
+      }
+    )
+    $windows = @(
+      [pscustomobject]@{
+        DeviceName = "\\.\display1"
+        X = 0
+        Y = 0
+        Width = 1757
+        Height = 1171
+      }
+    )
+
+    Test-GlazeMonitorTopologyMatchesWindows `
+      -Monitors $monitors `
+      -WindowsBounds $windows | Should -BeTrue
+  }
+
   It "normalizes a single monitor response into a collection" {
     $fakeCli = Join-Path $TestDrive "glazewm.ps1"
     @'

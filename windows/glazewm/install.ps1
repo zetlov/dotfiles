@@ -47,15 +47,18 @@ if ($env:OS -ne "Windows_NT") {
   throw "This script must run on Windows."
 }
 
-if (
-  -not (Test-Path -LiteralPath $ManagerPath -PathType Leaf) -or
-  -not (Test-Path -LiteralPath $GlazeWMPath -PathType Leaf)
-) {
+$executablesPresent = (
+  (Test-Path -LiteralPath $ManagerPath -PathType Leaf) -and
+  (Test-Path -LiteralPath $GlazeWMPath -PathType Leaf)
+)
+if (-not $executablesPresent) {
   & winget.exe install `
     --id "glzr-io.glazewm" `
     --exact `
+    --source winget `
     --version $RequiredVersion `
     --silent `
+    --disable-interactivity `
     --accept-source-agreements `
     --accept-package-agreements
   if ($LASTEXITCODE -ne 0) {
@@ -63,11 +66,82 @@ if (
   }
 }
 
-foreach ($executable in @($ManagerPath, $GlazeWMPath)) {
-  if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
-    throw "GlazeWM executable not found: $executable"
-  }
+if (
+  -not (Test-Path -LiteralPath $ManagerPath -PathType Leaf) -or
+  -not (Test-Path -LiteralPath $GlazeWMPath -PathType Leaf)
+) {
+  throw "GlazeWM executables were not found after WinGet installation."
 }
+
+$versionOutput = (& $GlazeWMPath --version 2>&1 | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or $versionOutput -notmatch '^glazewm (\d+\.\d+\.\d+)$') {
+  throw "Unable to determine the installed GlazeWM version: $versionOutput"
+}
+$installedVersion = [version]$Matches[1]
+$requiredSemanticVersion = [version]$RequiredVersion
+if ($installedVersion -lt $requiredSemanticVersion) {
+  & winget.exe upgrade `
+    --id "glzr-io.glazewm" `
+    --exact `
+    --source winget `
+    --version $RequiredVersion `
+    --silent `
+    --disable-interactivity `
+    --accept-source-agreements `
+    --accept-package-agreements
+  $upgradeExitCode = $LASTEXITCODE
+  $reinstallRequiredExitCodes = @(
+    -1978335189, # 0x8A15002B: no applicable update
+    -1978335090  # 0x8A15008E: install technology mismatch
+  )
+  if ($upgradeExitCode -in $reinstallRequiredExitCodes) {
+    & winget.exe uninstall `
+      --id "glzr-io.glazewm" `
+      --exact `
+      --source winget `
+      --version $installedVersion `
+      --silent `
+      --disable-interactivity
+    $uninstallExitCode = $LASTEXITCODE
+    if ($uninstallExitCode -eq 1603) {
+      throw (
+        "GlazeWM $installedVersion uses a machine-wide MSI that requires " +
+        "administrator approval to remove. Open an elevated PowerShell, " +
+        "run 'winget uninstall --id glzr-io.glazewm --exact --version " +
+        "$installedVersion', then rerun this installer."
+      )
+    }
+    if ($uninstallExitCode -ne 0) {
+      throw (
+        "WinGet could not remove the incompatible GlazeWM package " +
+        "(exit code $uninstallExitCode)."
+      )
+    }
+    & winget.exe install `
+      --id "glzr-io.glazewm" `
+      --exact `
+      --source winget `
+      --version $RequiredVersion `
+      --silent `
+      --disable-interactivity `
+      --accept-source-agreements `
+      --accept-package-agreements
+    if ($LASTEXITCODE -ne 0) {
+      throw "WinGet could not reinstall glzr-io.glazewm $RequiredVersion."
+    }
+  } elseif ($upgradeExitCode -ne 0) {
+    throw (
+      "WinGet could not upgrade glzr-io.glazewm from " +
+      "$installedVersion to $RequiredVersion."
+    )
+  }
+} elseif ($installedVersion -gt $requiredSemanticVersion) {
+  throw (
+    "Installed GlazeWM $installedVersion is newer than the supported " +
+    "$RequiredVersion."
+  )
+}
+
 $versionOutput = (& $GlazeWMPath --version 2>&1 | Out-String).Trim()
 if (
   $LASTEXITCODE -ne 0 -or
