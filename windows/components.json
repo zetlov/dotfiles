@@ -15,6 +15,32 @@
       }
     },
     {
+      "name": "spicetify",
+      "lifecycle": "active",
+      "selectionPolicy": "optional",
+      "order": 9,
+      "managedBy": [],
+      "conflictsWith": [],
+      "requiresSelection": [],
+      "entrypoints": {
+        "install": "spicetify/install.ps1",
+        "update": "spicetify/install.ps1"
+      }
+    },
+    {
+      "name": "jpegview",
+      "lifecycle": "active",
+      "selectionPolicy": "optional",
+      "order": 6,
+      "managedBy": [],
+      "conflictsWith": [],
+      "requiresSelection": [],
+      "entrypoints": {
+        "install": "jpegview/install.ps1",
+        "update": "jpegview/install.ps1"
+      }
+    },
+    {
       "name": "docker-desktop",
       "lifecycle": "active",
       "selectionPolicy": "optional",

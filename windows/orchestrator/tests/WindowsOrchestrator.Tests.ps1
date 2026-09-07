@@ -20,6 +20,8 @@ Describe "Windows component orchestrator" {
       "docker-desktop" = "active|optional"
       onepassword = "active|required"
       'flow-launcher' = "active|optional"
+      spicetify = "active|optional"
+      jpegview = "active|optional"
       "monitor-profiles" = "active|optional"
       audio = "active|required"
       wezterm = "active|required"
@@ -613,8 +615,10 @@ Describe "Windows component orchestrator" {
 
     @($components.Name) | Should -Be @(
       "docker-desktop",
+      "jpegview",
       "onepassword",
       "flow-launcher",
+      "spicetify",
       "wezterm",
       "audio",
       "kanata",
@@ -628,8 +632,10 @@ Describe "Windows component orchestrator" {
       "$($_.Name)|$($_.Lifecycle)|$($_.SelectionPolicy)"
     }) | Should -Be @(
       "docker-desktop|active|optional",
+      "jpegview|active|optional",
       "onepassword|active|required",
       "flow-launcher|active|optional",
+      "spicetify|active|optional",
       "wezterm|active|required",
       "audio|active|required",
       "kanata|active|required",

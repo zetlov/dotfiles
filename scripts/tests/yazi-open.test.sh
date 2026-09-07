@@ -4,7 +4,10 @@ set -eu
 
 ROOT_DIR=$(CDPATH= cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 OPEN_SCRIPT="${ROOT_DIR}/stow/base/.local/bin/yazi-open"
+IMAGE_OPEN_SCRIPT="${ROOT_DIR}/stow/base/.local/bin/yazi-open-image"
 YAZI_CONFIG="${ROOT_DIR}/stow/base/.config/yazi/yazi.toml"
+YAZI_KEYMAP="${ROOT_DIR}/stow/base/.config/yazi/keymap.toml"
+YAZI_PACKAGES="${ROOT_DIR}/stow/base/.config/yazi/package.toml"
 TEST_ROOT=$(mktemp -d)
 trap 'rm -rf "${TEST_ROOT}"' EXIT
 
@@ -22,7 +25,10 @@ assert_file_equals() {
 }
 
 [ -x "${OPEN_SCRIPT}" ] || fail "Yazi opener must be executable"
+[ -x "${IMAGE_OPEN_SCRIPT}" ] || fail "Yazi image opener must be executable"
 [ -f "${YAZI_CONFIG}" ] || fail "Yazi config is missing"
+[ -f "${YAZI_KEYMAP}" ] || fail "Yazi keymap is missing"
+[ -f "${YAZI_PACKAGES}" ] || fail "Yazi package lock is missing"
 
 mise exec -- python - "${YAZI_CONFIG}" <<'PY'
 import sys
@@ -41,6 +47,52 @@ for name in ("open", "play"):
         }
     ]:
         raise SystemExit(f"unexpected {name} opener: {rules!r}")
+
+if config.get("opener", {}).get("jpegview") != [
+    {
+        "run": "yazi-open-image %s1",
+        "desc": "Open image with JPEGView on WSL",
+        "orphan": True,
+        "for": "linux",
+    }
+]:
+    raise SystemExit("unexpected JPEGView opener")
+
+if config.get("open", {}).get("prepend_rules") != [
+    {"mime": "image/*", "use": "jpegview"}
+]:
+    raise SystemExit("images must use JPEGView on WSL")
+
+if config.get("mgr", {}).get("show_hidden") is not True:
+    raise SystemExit("hidden files must be visible")
+PY
+
+mise exec -- python - "${YAZI_KEYMAP}" <<'PY'
+import sys
+import tomllib
+from pathlib import Path
+
+config = tomllib.loads(Path(sys.argv[1]).read_text())
+bindings = config.get("mgr", {}).get("prepend_keymap")
+if bindings != [
+    {"on": "l", "run": "plugin smart-enter", "desc": "Enter the directory or open the file"}
+]:
+    raise SystemExit("l must enter directories and open files")
+PY
+
+mise exec -- python - "${YAZI_PACKAGES}" <<'PY'
+import sys
+import tomllib
+from pathlib import Path
+
+config = tomllib.loads(Path(sys.argv[1]).read_text())
+dependencies = config.get("plugin", {}).get("deps")
+if dependencies != [{
+    "use": "yazi-rs/plugins:smart-enter",
+    "rev": "4dc7f1b",
+    "hash": "187cc58ba7ac3befd49c342129e6f1b6",
+}]:
+    raise SystemExit("smart-enter must be installed from the locked official source")
 PY
 
 mkdir -p "${TEST_ROOT}/bin"
@@ -95,6 +147,18 @@ CALL_LOG="${windows_log}" \
 printf '<%s>\n' "${expected_command}" \
     >"${TEST_ROOT}/expected-windows.log"
 assert_file_equals "${TEST_ROOT}/expected-windows.log" "${windows_log}"
+
+image_log="${TEST_ROOT}/image.log"
+expected_image_command="Start-Process -FilePath 'C:\\Program Files\\JPEGView\\JPEGView.exe' -ArgumentList 'C:\\WSL/data/Alice''s Picture.png'"
+CALL_LOG="${image_log}" \
+    EXPECTED_COMMAND="${expected_image_command}" \
+    WSL_DISTRO_NAME=Arch \
+    YAZI_OPEN_WSL_INIT="${TEST_ROOT}/bin/init" \
+    PATH="${TEST_ROOT}/bin:/usr/bin" \
+    "${IMAGE_OPEN_SCRIPT}" "/data/Alice's Picture.png"
+printf '<%s>\n' "${expected_image_command}" \
+    >"${TEST_ROOT}/expected-image.log"
+assert_file_equals "${TEST_ROOT}/expected-image.log" "${image_log}"
 
 linux_log="${TEST_ROOT}/linux.log"
 CALL_LOG="${linux_log}" \
