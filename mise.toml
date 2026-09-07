@@ -14,7 +14,8 @@ done
 [tasks.lint]
 description = "Lint shell scripts"
 run = '''
-git ls-files -z -- '*.sh' | xargs -0 -r shellcheck --severity=error
+git ls-files -z -- '*.sh' 'stow/base/.local/bin/hwork' \
+  | xargs -0 -r shellcheck --severity=error
 '''
 
 [tasks."check:configs"]

@@ -37,6 +37,8 @@ if missing_tasks:
 lint_command = str(tasks.get("lint", {}).get("run", ""))
 if "git ls-files" not in lint_command:
     fail("shell lint should select tracked files with git ls-files")
+if "stow/base/.local/bin/hwork" not in lint_command:
+    fail("shell lint should include the extensionless hwork script")
 if "find ." in lint_command:
     fail("shell lint should not scan untracked working-tree files with find")
 

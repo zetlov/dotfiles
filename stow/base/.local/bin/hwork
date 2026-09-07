@@ -1,0 +1,868 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly PROGRAM_NAME="${0##*/}"
+DATA_ROOT="${HWORK_DATA_HOME:-${XDG_DATA_HOME:-${HOME}/.local/share}/hwork}"
+STATE_ROOT="${HWORK_STATE_HOME:-${XDG_STATE_HOME:-${HOME}/.local/state}/hwork}"
+readonly -a DEFAULT_SHARED_FILES=(
+    ".env"
+    ".env.local"
+    "mise.local.toml"
+    "CLAUDE.local.md"
+    "AGENTS.override.md"
+)
+
+CURRENT_ROOT=""
+PRIMARY_ROOT=""
+REPO_KEY=""
+REPO_DATA_DIR=""
+REPO_STATE_DIR=""
+FILES_ROOT=""
+FILES_LIST=""
+TASK=""
+BRANCH=""
+AGENT_KIND=""
+AGENT_NAME=""
+WORKSPACE_ID=""
+PANE_ID=""
+WORKTREE_PATH=""
+STATE_FILE=""
+CREATED_AT=""
+declare -a SHARED_FILES=()
+declare -a LINKED_FILES=()
+declare -a INIT_CREATED_LINKS=()
+declare -a INIT_MIGRATED_FILES=()
+declare -A LINKED_HASHES=()
+declare -A LINKED_MODES=()
+
+usage() {
+    cat <<EOF
+Usage:
+  ${PROGRAM_NAME} init
+  ${PROGRAM_NAME} start <task> --agent <codex|claude> [--branch <name>] [--base <ref>] [--no-focus] [-- <agent args...>]
+  ${PROGRAM_NAME} finish <task> [--accept-shared-changes]  # Run from a different Herdr workspace.
+
+Commands:
+  init     Move local project files to the shared store and replace them with symlinks.
+  start    Create a Herdr worktree, link shared files, and start an agent.
+  finish   Remove a clean worktree from another workspace. The branch is preserved.
+EOF
+}
+
+die() {
+    printf '%s: %s\n' "${PROGRAM_NAME}" "$1" >&2
+    exit 1
+}
+
+require_command() {
+    command -v "$1" >/dev/null 2>&1 \
+        || die "Required command not found: $1"
+}
+
+require_herdr_environment() {
+    [ "${HERDR_ENV:-}" = "1" ] \
+        || die "start and finish must run inside a Herdr-managed pane"
+}
+
+validate_storage_roots() {
+    [[ "${DATA_ROOT}" = /* ]] \
+        || die "Storage roots must be absolute paths: ${DATA_ROOT}"
+    [[ "${STATE_ROOT}" = /* ]] \
+        || die "Storage roots must be absolute paths: ${STATE_ROOT}"
+    DATA_ROOT=$(realpath -m -- "${DATA_ROOT}")
+    STATE_ROOT=$(realpath -m -- "${STATE_ROOT}")
+    if [ "${DATA_ROOT}" = "/" ] || [ "${STATE_ROOT}" = "/" ]; then
+        die "Storage roots must not be the filesystem root"
+    fi
+    [ "${DATA_ROOT}" != "${STATE_ROOT}" ] \
+        || die "Data and state roots must be different directories"
+}
+
+resolve_repository() {
+    local identity
+    local primary_line
+    local repo_hash
+    local repo_name
+    local repo_slug
+
+    CURRENT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) \
+        || die "Run this command inside a Git worktree"
+    CURRENT_ROOT=$(realpath -e -- "${CURRENT_ROOT}")
+
+    primary_line=$(git -C "${CURRENT_ROOT}" worktree list --porcelain \
+        | sed -n '1s/^worktree //p')
+    [ -n "${primary_line}" ] || die "Could not resolve the primary Git worktree"
+    PRIMARY_ROOT=$(realpath -e -- "${primary_line}")
+
+    identity=$(git -C "${CURRENT_ROOT}" remote get-url origin 2>/dev/null || true)
+    if [ -z "${identity}" ]; then
+        identity="${PRIMARY_ROOT}"
+    fi
+
+    repo_name="${PRIMARY_ROOT##*/}"
+    repo_slug=$(printf '%s' "${repo_name}" | tr -cs 'A-Za-z0-9._-' '-')
+    repo_slug="${repo_slug#-}"
+    repo_slug="${repo_slug%-}"
+    [ -n "${repo_slug}" ] || repo_slug="repository"
+    repo_hash=$(printf '%s' "${identity}" | git hash-object --stdin)
+
+    REPO_KEY="${repo_slug}-${repo_hash:0:12}"
+    REPO_DATA_DIR="${DATA_ROOT}/repos/${REPO_KEY}"
+    REPO_STATE_DIR="${STATE_ROOT}/repos/${REPO_KEY}"
+    FILES_ROOT="${REPO_DATA_DIR}/files"
+    FILES_LIST="${REPO_DATA_DIR}/files.list"
+}
+
+validate_task() {
+    [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] \
+        || die "Task must match [A-Za-z0-9][A-Za-z0-9._-]{0,63}"
+}
+
+validate_shared_file() {
+    local file="$1"
+
+    [ -n "${file}" ] || die "Shared file names must not be empty"
+    [[ "${file}" != *[[:cntrl:]]* ]] \
+        || die "Shared file names must not contain control characters"
+    [[ "${file}" =~ ^[A-Za-z0-9._-]+$ ]] \
+        || die "Shared file names may contain only letters, numbers, dot, underscore, and hyphen"
+    case "${file}" in
+        .|..|*/*) die "Only repository-root files can be shared: ${file}" ;;
+    esac
+}
+
+write_default_file_list() {
+    local file
+    local temporary
+
+    mkdir -p -- "${REPO_DATA_DIR}"
+    chmod 700 -- "${REPO_DATA_DIR}"
+    temporary=$(mktemp "${FILES_LIST}.tmp.XXXXXX")
+    for file in "${DEFAULT_SHARED_FILES[@]}"; do
+        printf '%s\n' "${file}" >>"${temporary}"
+    done
+    chmod 600 -- "${temporary}"
+    mv -- "${temporary}" "${FILES_LIST}"
+}
+
+load_shared_files() {
+    local file
+    declare -A seen=()
+
+    if [ ! -f "${FILES_LIST}" ] || [ -L "${FILES_LIST}" ]; then
+        die "Shared file list is missing. Run '${PROGRAM_NAME} init' first"
+    fi
+
+    SHARED_FILES=()
+    while IFS= read -r file || [ -n "${file}" ]; do
+        case "${file}" in
+            ""|\#*) continue ;;
+        esac
+        validate_shared_file "${file}"
+        [[ -v "seen[${file}]" ]] \
+            && die "Duplicate shared file in ${FILES_LIST}: ${file}"
+        seen["${file}"]=1
+        SHARED_FILES+=("${file}")
+    done <"${FILES_LIST}"
+
+    [ "${#SHARED_FILES[@]}" -gt 0 ] \
+        || die "Shared file list must contain at least one file"
+}
+
+link_points_to() {
+    local link_path="$1"
+    local target_path="$2"
+
+    [ -L "${link_path}" ] \
+        && [ "$(realpath -m -- "${link_path}")" = "$(realpath -m -- "${target_path}")" ]
+}
+
+rollback_init() {
+    local index
+    local original
+    local shared
+
+    for ((index = ${#INIT_CREATED_LINKS[@]} - 1; index >= 0; index--)); do
+        original="${PRIMARY_ROOT}/${INIT_CREATED_LINKS[index]}"
+        shared="${FILES_ROOT}/${INIT_CREATED_LINKS[index]}"
+        if link_points_to "${original}" "${shared}"; then
+            unlink -- "${original}" || true
+        fi
+    done
+    for ((index = ${#INIT_MIGRATED_FILES[@]} - 1; index >= 0; index--)); do
+        original="${PRIMARY_ROOT}/${INIT_MIGRATED_FILES[index]}"
+        shared="${FILES_ROOT}/${INIT_MIGRATED_FILES[index]}"
+        if [ -f "${shared}" ] && [ ! -L "${shared}" ] \
+            && [ ! -e "${original}" ] && [ ! -L "${original}" ]; then
+            mv -- "${shared}" "${original}" || true
+        fi
+    done
+}
+
+init_shared_files() {
+    local file
+    local original
+    local shared
+
+    [ "${CURRENT_ROOT}" = "${PRIMARY_ROOT}" ] \
+        || die "Run '${PROGRAM_NAME} init' from the primary Git worktree: ${PRIMARY_ROOT}"
+
+    umask 077
+    mkdir -p -- "${FILES_ROOT}"
+    chmod 700 -- "${REPO_DATA_DIR}" "${FILES_ROOT}"
+    if [ ! -e "${FILES_LIST}" ] && [ ! -L "${FILES_LIST}" ]; then
+        write_default_file_list
+    fi
+    load_shared_files
+
+    for file in "${SHARED_FILES[@]}"; do
+        original="${PRIMARY_ROOT}/${file}"
+        shared="${FILES_ROOT}/${file}"
+
+        if git -C "${PRIMARY_ROOT}" ls-files --error-unmatch -- "${file}" \
+            >/dev/null 2>&1; then
+            die "Tracked files cannot be moved into the shared store: ${file}"
+        fi
+        if [ -L "${shared}" ] || { [ -e "${shared}" ] && [ ! -f "${shared}" ]; }; then
+            die "Shared target must be a regular file: ${shared}"
+        fi
+        if [ -L "${original}" ]; then
+            if [ ! -f "${shared}" ] || ! link_points_to "${original}" "${shared}"; then
+                die "Existing symlink has an unexpected target: ${original}"
+            fi
+        elif [ -e "${original}" ]; then
+            [ -f "${original}" ] \
+                || die "Only regular files can be shared: ${original}"
+            if [ -e "${shared}" ] || [ -L "${shared}" ]; then
+                die "Both the checkout and shared store contain ${file}"
+            fi
+        fi
+    done
+
+    INIT_CREATED_LINKS=()
+    INIT_MIGRATED_FILES=()
+    trap 'rollback_init; exit 130' INT TERM
+    for file in "${SHARED_FILES[@]}"; do
+        original="${PRIMARY_ROOT}/${file}"
+        shared="${FILES_ROOT}/${file}"
+
+        if [ -L "${original}" ]; then
+            continue
+        fi
+        if [ -f "${original}" ]; then
+            if ! mv -- "${original}" "${shared}"; then
+                rollback_init
+                die "Could not move ${file} into the shared store"
+            fi
+            INIT_MIGRATED_FILES+=("${file}")
+        elif [ ! -f "${shared}" ]; then
+            continue
+        fi
+        if ! ln -s -- "${shared}" "${original}"; then
+            rollback_init
+            die "Could not link ${original}"
+        fi
+        INIT_CREATED_LINKS+=("${file}")
+    done
+    for file in "${SHARED_FILES[@]}"; do
+        shared="${FILES_ROOT}/${file}"
+        if [ -f "${shared}" ] && [ ! -L "${shared}" ]; then
+            if ! chmod 600 -- "${shared}"; then
+                rollback_init
+                die "Could not protect shared file permissions: ${shared}"
+            fi
+        fi
+    done
+    trap - INT TERM
+
+    printf 'Initialized shared files for %s\n' "${REPO_KEY}"
+    printf 'Shared store: %s\n' "${REPO_DATA_DIR}"
+}
+
+validate_shared_setup() {
+    local file
+    local original
+    local shared
+
+    load_shared_files
+    for file in "${SHARED_FILES[@]}"; do
+        original="${PRIMARY_ROOT}/${file}"
+        shared="${FILES_ROOT}/${file}"
+        if [ -L "${shared}" ] || { [ -e "${shared}" ] && [ ! -f "${shared}" ]; }; then
+            die "Shared target must be a regular file: ${shared}"
+        fi
+        if [ -f "${shared}" ] && [ ! -L "${shared}" ]; then
+            link_points_to "${original}" "${shared}" \
+                || die "Primary worktree is not linked to the shared file: ${original}"
+        elif [ -e "${original}" ] || [ -L "${original}" ]; then
+            die "Shared file is missing for existing checkout path: ${original}"
+        fi
+    done
+}
+
+acquire_task_lock() {
+    local lock_file="$1"
+
+    mkdir -p -- "${REPO_STATE_DIR}/locks"
+    chmod 700 -- "${REPO_STATE_DIR}" "${REPO_STATE_DIR}/locks"
+    exec {TASK_LOCK_FD}>"${lock_file}"
+    flock -n "${TASK_LOCK_FD}" \
+        || die "Task is already being changed: ${TASK}"
+}
+
+branch_exists() {
+    local candidate="$1"
+    local refs
+
+    refs=$(git -C "${CURRENT_ROOT}" for-each-ref --format='%(refname)' \
+        "refs/heads/${candidate}" "refs/remotes/*/${candidate}")
+    [ -n "${refs}" ]
+}
+
+choose_branch() {
+    local candidate="work/${TASK}"
+    local suffix=2
+
+    while branch_exists "${candidate}"; do
+        candidate="work/${TASK}-${suffix}"
+        suffix=$((suffix + 1))
+    done
+    printf '%s\n' "${candidate}"
+}
+
+find_branch_worktree() {
+    local branch_ref="refs/heads/$1"
+    local line
+    local listing
+    local path=""
+
+    listing=$(git -C "${CURRENT_ROOT}" worktree list --porcelain) || return 1
+    while IFS= read -r line || [ -n "${line}" ]; do
+        case "${line}" in
+            "worktree "*) path="${line#worktree }" ;;
+            "branch ${branch_ref}") printf '%s\n' "${path}"; return 0 ;;
+            "") path="" ;;
+        esac
+    done <<<"${listing}"
+}
+
+make_agent_name() {
+    local agent_base
+    local agent_hash
+    local task_slug
+
+    task_slug=$(printf '%s' "${TASK}" | tr '[:upper:]' '[:lower:]' \
+        | tr -cs 'a-z0-9_-' '-')
+    task_slug="${task_slug#-}"
+    task_slug="${task_slug%-}"
+    [ -n "${task_slug}" ] || task_slug="task"
+    agent_hash=$(printf '%s' "${REPO_KEY}:${TASK}" | git hash-object --stdin)
+    agent_base="${AGENT_KIND}-${task_slug}"
+    printf '%s-%s\n' "${agent_base:0:25}" "${agent_hash:0:6}"
+}
+
+write_state() {
+    local file
+    local linked_json
+    local status="$1"
+    local temporary
+    local -a metadata_args=()
+
+    for file in "${LINKED_FILES[@]}"; do
+        metadata_args+=(
+            "${file}"
+            "${LINKED_HASHES[${file}]}"
+            "${LINKED_MODES[${file}]}"
+        )
+    done
+    linked_json=$(jq -cn --args '
+        $ARGS.positional as $values
+        | [range(0; ($values | length); 3) as $index
+           | {path:$values[$index], sha256:$values[$index + 1], mode:$values[$index + 2]}]
+    ' "${metadata_args[@]}")
+    temporary=$(mktemp "${STATE_FILE}.tmp.XXXXXX")
+    jq -n \
+        --arg repo_key "${REPO_KEY}" \
+        --arg task "${TASK}" \
+        --arg branch "${BRANCH}" \
+        --arg agent_kind "${AGENT_KIND}" \
+        --arg agent_name "${AGENT_NAME}" \
+        --arg workspace_id "${WORKSPACE_ID}" \
+        --arg pane_id "${PANE_ID}" \
+        --arg worktree_path "${WORKTREE_PATH}" \
+        --arg status "${status}" \
+        --arg created_at "${CREATED_AT}" \
+        --argjson shared_files "${linked_json}" \
+        '{version:1, repo_key:$repo_key, task:$task, branch:$branch,
+          agent_kind:$agent_kind, agent_name:$agent_name,
+          workspace_id:$workspace_id, pane_id:$pane_id,
+          worktree_path:$worktree_path, status:$status,
+          created_at:$created_at, shared_files:$shared_files}' \
+        >"${temporary}"
+    chmod 600 -- "${temporary}"
+    mv -- "${temporary}" "${STATE_FILE}"
+}
+
+capture_shared_metadata() {
+    local digest
+    local file
+    local shared
+
+    LINKED_HASHES=()
+    LINKED_MODES=()
+    for file in "${LINKED_FILES[@]}"; do
+        shared="${FILES_ROOT}/${file}"
+        digest=$(sha256sum -- "${shared}")
+        LINKED_HASHES["${file}"]="${digest%% *}"
+        LINKED_MODES["${file}"]=$(stat -c '%a' -- "${shared}")
+    done
+}
+
+validate_created_worktree() {
+    local source_common
+    local target_common
+    local target_root
+
+    [ -d "${WORKTREE_PATH}" ] \
+        || die "Herdr returned a missing worktree path: ${WORKTREE_PATH}"
+    WORKTREE_PATH=$(realpath -e -- "${WORKTREE_PATH}")
+    target_root=$(git -C "${WORKTREE_PATH}" rev-parse --show-toplevel 2>/dev/null) \
+        || die "Herdr returned a non-Git worktree path: ${WORKTREE_PATH}"
+    [ "$(realpath -e -- "${target_root}")" = "${WORKTREE_PATH}" ] \
+        || die "Herdr worktree path is not the checkout root: ${WORKTREE_PATH}"
+
+    source_common=$(git -C "${CURRENT_ROOT}" rev-parse --path-format=absolute --git-common-dir)
+    target_common=$(git -C "${WORKTREE_PATH}" rev-parse --path-format=absolute --git-common-dir)
+    [ "$(realpath -e -- "${source_common}")" = "$(realpath -e -- "${target_common}")" ] \
+        || die "Herdr worktree belongs to a different repository"
+}
+
+link_worktree_files() {
+    local destination
+    local file
+    local shared
+
+    for file in "${SHARED_FILES[@]}"; do
+        shared="${FILES_ROOT}/${file}"
+        destination="${WORKTREE_PATH}/${file}"
+        if [ ! -f "${shared}" ] || [ -L "${shared}" ]; then
+            continue
+        fi
+        if [ -e "${destination}" ] || [ -L "${destination}" ]; then
+            printf '%s: Shared-file destination already exists: %s\n' \
+                "${PROGRAM_NAME}" "${destination}" >&2
+            return 1
+        fi
+    done
+
+    LINKED_FILES=()
+    for file in "${SHARED_FILES[@]}"; do
+        shared="${FILES_ROOT}/${file}"
+        destination="${WORKTREE_PATH}/${file}"
+        if [ ! -f "${shared}" ] || [ -L "${shared}" ]; then
+            continue
+        fi
+        if ! ln -s -- "${shared}" "${destination}"; then
+            printf '%s: Could not link shared file: %s\n' \
+                "${PROGRAM_NAME}" "${destination}" >&2
+            return 1
+        fi
+        LINKED_FILES+=("${file}")
+    done
+}
+
+start_task() {
+    local base=""
+    local branch=""
+    local focus=1
+    local failed_branch_worktree
+    local previous_branch_worktree
+    local task="$1"
+    local created
+    local -a agent_args=()
+    local agent_result
+    local -a agent_command
+    local -a create_command
+    shift
+
+    validate_task "${task}"
+    TASK="${task}"
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --agent)
+                [ "$#" -ge 2 ] || die "--agent requires codex or claude"
+                AGENT_KIND="$2"
+                shift 2
+                ;;
+            --branch)
+                [ "$#" -ge 2 ] || die "--branch requires a branch name"
+                branch="$2"
+                shift 2
+                ;;
+            --base)
+                [ "$#" -ge 2 ] || die "--base requires a Git ref"
+                base="$2"
+                shift 2
+                ;;
+            --no-focus)
+                focus=0
+                shift
+                ;;
+            --)
+                shift
+                agent_args=("$@")
+                break
+                ;;
+            *) die "Unknown start option: $1" ;;
+        esac
+    done
+
+    case "${AGENT_KIND}" in
+        codex|claude) ;;
+        "") die "--agent codex or --agent claude is required" ;;
+        *) die "Unsupported agent: ${AGENT_KIND}" ;;
+    esac
+
+    resolve_repository
+    validate_shared_setup
+    umask 077
+    mkdir -p -- "${REPO_STATE_DIR}"
+    chmod 700 -- "${STATE_ROOT}" "${STATE_ROOT}/repos" "${REPO_STATE_DIR}"
+    STATE_FILE="${REPO_STATE_DIR}/${TASK}.json"
+    acquire_task_lock "${REPO_STATE_DIR}/locks/${TASK}.lock"
+    if [ -e "${STATE_FILE}" ] || [ -L "${STATE_FILE}" ]; then
+        die "Task already has saved state: ${TASK}"
+    fi
+
+    if [ -n "${branch}" ]; then
+        git -C "${CURRENT_ROOT}" check-ref-format --branch "${branch}" >/dev/null \
+            || die "Invalid branch name: ${branch}"
+        BRANCH="${branch}"
+    else
+        BRANCH=$(choose_branch)
+    fi
+    if [ -n "${base}" ]; then
+        git -C "${CURRENT_ROOT}" rev-parse --verify "${base}^{commit}" >/dev/null 2>&1 \
+            || die "Base ref does not resolve to a commit: ${base}"
+    fi
+    if ! previous_branch_worktree=$(find_branch_worktree "${BRANCH}"); then
+        die "Could not inspect existing Git worktrees"
+    fi
+
+    AGENT_NAME=$(make_agent_name)
+    CREATED_AT=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+    WORKSPACE_ID=""
+    PANE_ID=""
+    WORKTREE_PATH=""
+    LINKED_FILES=()
+    LINKED_HASHES=()
+    LINKED_MODES=()
+    write_state "creating"
+
+    create_command=(herdr worktree create --cwd "${CURRENT_ROOT}" \
+        --branch "${BRANCH}" --label "${TASK}" --no-focus)
+    if [ -n "${base}" ]; then
+        create_command+=(--base "${base}")
+    fi
+    if ! created=$("${create_command[@]}"); then
+        if ! failed_branch_worktree=$(find_branch_worktree "${BRANCH}"); then
+            write_state "create_failed"
+            die "Herdr failed and Git worktree state could not be verified; inspect ${STATE_FILE}"
+        fi
+        if [ -z "${previous_branch_worktree}" ] && [ -n "${failed_branch_worktree}" ]; then
+            WORKTREE_PATH=$(realpath -m -- "${failed_branch_worktree}")
+            write_state "create_failed"
+            die "Herdr failed after creating a checkout; inspect ${STATE_FILE} and 'herdr worktree list'"
+        fi
+        unlink -- "${STATE_FILE}"
+        die "Herdr could not create the worktree"
+    fi
+
+    jq -e '
+        .result.type == "worktree_created"
+        and (.result.workspace.workspace_id | type == "string" and length > 0)
+        and (.result.root_pane.pane_id | type == "string" and length > 0)
+        and (.result.worktree.path | type == "string" and length > 0)
+    ' <<<"${created}" >/dev/null \
+        || die "Herdr returned an invalid worktree response; inspect '${STATE_FILE}' and 'herdr worktree list'"
+    WORKSPACE_ID=$(jq -r '.result.workspace.workspace_id' <<<"${created}")
+    PANE_ID=$(jq -r '.result.root_pane.pane_id' <<<"${created}")
+    WORKTREE_PATH=$(jq -r '.result.worktree.path' <<<"${created}")
+    write_state "validating"
+    validate_created_worktree
+
+    write_state "preparing"
+    if ! link_worktree_files; then
+        capture_shared_metadata
+        write_state "setup_failed"
+        die "Worktree was kept after shared-file setup failed: ${WORKTREE_PATH}"
+    fi
+    capture_shared_metadata
+    write_state "starting_agent"
+
+    agent_command=(herdr agent start "${AGENT_NAME}" \
+        --kind "${AGENT_KIND}" --pane "${PANE_ID}")
+    if [ "${#agent_args[@]}" -gt 0 ]; then
+        agent_command+=(-- "${agent_args[@]}")
+    fi
+    if ! agent_result=$("${agent_command[@]}"); then
+        write_state "agent_failed"
+        die "Agent failed to start; worktree kept at ${WORKTREE_PATH}"
+    fi
+    jq -e --arg name "${AGENT_NAME}" --arg pane "${PANE_ID}" '
+        .result.type == "agent_started"
+        and .result.agent.name == $name
+        and .result.agent.pane_id == $pane
+    ' <<<"${agent_result}" >/dev/null \
+        || { write_state "agent_failed"; die "Herdr returned an invalid agent response"; }
+    write_state "running"
+
+    if [ "${focus}" -eq 1 ] && ! herdr workspace focus "${WORKSPACE_ID}" >/dev/null; then
+        printf '%s: Agent started, but the workspace could not be focused\n' \
+            "${PROGRAM_NAME}" >&2
+    fi
+    printf 'Started task %s\n' "${TASK}"
+    printf 'Branch: %s\n' "${BRANCH}"
+    printf 'Worktree: %s\n' "${WORKTREE_PATH}"
+    printf 'Agent: %s (%s)\n' "${AGENT_NAME}" "${AGENT_KIND}"
+}
+
+load_task_state() {
+    jq -e \
+        --arg repo_key "${REPO_KEY}" \
+        --arg task "${TASK}" \
+        '.version == 1 and .repo_key == $repo_key and .task == $task
+         and (.workspace_id | type == "string" and length > 0)
+         and (.pane_id | type == "string" and length > 0)
+         and (.worktree_path | type == "string" and length > 0)
+         and (.shared_files | type == "array")
+         and all(.shared_files[];
+             (.path | type == "string" and length > 0)
+             and (.sha256 | type == "string" and test("^[0-9a-f]{64}$"))
+             and (.mode | type == "string" and test("^[0-7]{3,4}$")))' \
+        "${STATE_FILE}" >/dev/null \
+        || die "Task state is invalid: ${STATE_FILE}"
+
+    BRANCH=$(jq -r '.branch' "${STATE_FILE}")
+    AGENT_KIND=$(jq -r '.agent_kind' "${STATE_FILE}")
+    AGENT_NAME=$(jq -r '.agent_name' "${STATE_FILE}")
+    WORKSPACE_ID=$(jq -r '.workspace_id' "${STATE_FILE}")
+    PANE_ID=$(jq -r '.pane_id' "${STATE_FILE}")
+    WORKTREE_PATH=$(jq -r '.worktree_path' "${STATE_FILE}")
+    CREATED_AT=$(jq -r '.created_at' "${STATE_FILE}")
+    LINKED_FILES=()
+    LINKED_HASHES=()
+    LINKED_MODES=()
+    while IFS=$'\t' read -r file digest mode; do
+        validate_shared_file "${file}"
+        LINKED_FILES+=("${file}")
+        LINKED_HASHES["${file}"]="${digest}"
+        LINKED_MODES["${file}"]="${mode}"
+    done < <(jq -r '.shared_files[] | [.path, .sha256, .mode] | @tsv' "${STATE_FILE}")
+}
+
+validate_workspace_identity() {
+    local checkout_path
+    local workspace
+
+    if ! workspace=$(herdr workspace get "${WORKSPACE_ID}"); then
+        die "Could not inspect saved Herdr workspace: ${WORKSPACE_ID}"
+    fi
+    checkout_path=$(jq -er --arg workspace_id "${WORKSPACE_ID}" '
+        .result
+        | select(.type == "workspace_info")
+        | .workspace
+        | select(.workspace_id == $workspace_id)
+        | .worktree.checkout_path
+    ' <<<"${workspace}") || die "Herdr workspace is not the saved worktree"
+    [ "$(realpath -e -- "${checkout_path}")" = "${WORKTREE_PATH}" ] \
+        || die "Herdr workspace points to a different worktree: ${WORKSPACE_ID}"
+}
+
+ensure_agent_stopped() {
+    local agents
+
+    if ! agents=$(herdr agent list); then
+        die "Could not inspect live Herdr agents"
+    fi
+    jq -e '.result.type == "agent_list" and (.result.agents | type == "array")' \
+        <<<"${agents}" >/dev/null \
+        || die "Herdr returned an invalid agent list"
+    if jq -e --arg name "${AGENT_NAME}" --arg pane "${PANE_ID}" '
+        .result.agents[]? | select(.name == $name or .pane_id == $pane)
+    ' <<<"${agents}" >/dev/null; then
+        die "Agent is still running: ${AGENT_NAME}"
+    fi
+}
+
+validate_clean_worktree() {
+    local accept_shared_changes="$1"
+    local current_digest
+    local current_mode
+    local file
+    local path
+    local shared
+    local untracked
+    declare -A allowed_untracked=()
+
+    validate_created_worktree
+    for file in "${LINKED_FILES[@]}"; do
+        validate_shared_file "${file}"
+        path="${WORKTREE_PATH}/${file}"
+        shared="${FILES_ROOT}/${file}"
+        if git -C "${WORKTREE_PATH}" ls-files --error-unmatch -- "${file}" \
+            >/dev/null 2>&1; then
+            die "Shared-file link became tracked and must be reviewed: ${file}"
+        fi
+        if [ ! -f "${shared}" ] || [ -L "${shared}" ] \
+            || ! link_points_to "${path}" "${shared}"; then
+            die "Managed shared-file link was changed: ${path}"
+        fi
+        current_digest=$(sha256sum -- "${shared}")
+        current_digest="${current_digest%% *}"
+        current_mode=$(stat -c '%a' -- "${shared}")
+        if [ "${current_digest}" != "${LINKED_HASHES[${file}]}" ] \
+            || [ "${current_mode}" != "${LINKED_MODES[${file}]}" ]; then
+            if [ "${accept_shared_changes}" -ne 1 ]; then
+                die "Shared file changed during the task: ${file}; review it and rerun with --accept-shared-changes"
+            fi
+            printf '%s: Accepting reviewed shared-file changes: %s\n' \
+                "${PROGRAM_NAME}" "${file}" >&2
+        fi
+        allowed_untracked["${file}"]=1
+    done
+
+    git -C "${WORKTREE_PATH}" diff --quiet --ignore-submodules=none \
+        || die "Worktree has unstaged changes: ${WORKTREE_PATH}"
+    git -C "${WORKTREE_PATH}" diff --cached --quiet --ignore-submodules=none \
+        || die "Worktree has staged changes: ${WORKTREE_PATH}"
+    [ -z "$(git -C "${WORKTREE_PATH}" ls-files -u)" ] \
+        || die "Worktree has unresolved conflicts: ${WORKTREE_PATH}"
+
+    while IFS= read -r -d '' untracked; do
+        [[ -v "allowed_untracked[${untracked}]" ]] \
+            || die "Worktree has an untracked file: ${untracked}"
+    done < <(git -C "${WORKTREE_PATH}" ls-files --others --exclude-standard -z)
+}
+
+restore_worktree_links() {
+    local failed=0
+    local file
+    local path
+    local shared
+
+    [ -d "${WORKTREE_PATH}" ] || return
+    for file in "${LINKED_FILES[@]}"; do
+        path="${WORKTREE_PATH}/${file}"
+        shared="${FILES_ROOT}/${file}"
+        if [ ! -e "${path}" ] && [ ! -L "${path}" ] && [ -f "${shared}" ]; then
+            if ! ln -s -- "${shared}" "${path}"; then
+                failed=1
+            fi
+        fi
+    done
+    return "${failed}"
+}
+
+finish_task() {
+    local accept_shared_changes=0
+    local file
+    local path
+    local shared
+    local task="$1"
+    shift
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --accept-shared-changes) accept_shared_changes=1 ;;
+            *) die "Unknown finish option: $1" ;;
+        esac
+        shift
+    done
+
+    validate_task "${task}"
+    TASK="${task}"
+    resolve_repository
+    REPO_STATE_DIR="${STATE_ROOT}/repos/${REPO_KEY}"
+    STATE_FILE="${REPO_STATE_DIR}/${TASK}.json"
+    if [ ! -f "${STATE_FILE}" ] || [ -L "${STATE_FILE}" ]; then
+        die "No saved task state found: ${TASK}"
+    fi
+    acquire_task_lock "${REPO_STATE_DIR}/locks/${TASK}.lock"
+    load_task_state
+    [ "${HERDR_WORKSPACE_ID:-}" != "${WORKSPACE_ID}" ] \
+        || die "Run finish from a different Herdr workspace; the target is ${WORKSPACE_ID}"
+    validate_workspace_identity
+    ensure_agent_stopped
+    validate_clean_worktree "${accept_shared_changes}"
+
+    for file in "${LINKED_FILES[@]}"; do
+        path="${WORKTREE_PATH}/${file}"
+        shared="${FILES_ROOT}/${file}"
+        link_points_to "${path}" "${shared}" \
+            || die "Refusing to unlink an unexpected path: ${path}"
+        if ! unlink -- "${path}"; then
+            if ! restore_worktree_links; then
+                die "Could not unlink shared files, and link restoration was incomplete"
+            fi
+            die "Could not unlink shared files; removed links were restored"
+        fi
+    done
+
+    if ! herdr worktree remove --workspace "${WORKSPACE_ID}" >/dev/null; then
+        if ! restore_worktree_links; then
+            die "Herdr could not remove the worktree, and link restoration was incomplete"
+        fi
+        die "Herdr could not remove the worktree; shared links were restored"
+    fi
+    unlink -- "${STATE_FILE}"
+    printf 'Finished task %s\n' "${TASK}"
+    printf 'Preserved branch: %s\n' "${BRANCH}"
+}
+
+main() {
+    local command="${1:-}"
+    shift || true
+
+    require_command git
+    require_command realpath
+    validate_storage_roots
+    case "${command}" in
+        init)
+            [ "$#" -eq 0 ] || die "init does not accept arguments"
+            resolve_repository
+            init_shared_files
+            ;;
+        start)
+            [ "$#" -ge 1 ] || die "start requires a task name"
+            require_herdr_environment
+            require_command herdr
+            require_command jq
+            require_command flock
+            require_command sha256sum
+            require_command stat
+            start_task "$@"
+            ;;
+        finish)
+            [ "$#" -ge 1 ] || die "finish requires a task name"
+            require_herdr_environment
+            require_command herdr
+            require_command jq
+            require_command flock
+            require_command sha256sum
+            require_command stat
+            finish_task "$@"
+            ;;
+        help|-h|--help)
+            usage
+            ;;
+        "")
+            usage >&2
+            exit 2
+            ;;
+        *) die "Unknown command: ${command}" ;;
+    esac
+}
+
+main "$@"

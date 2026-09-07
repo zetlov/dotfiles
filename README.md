@@ -177,6 +177,36 @@ them to the shared global file. The unmanaged global file has higher priority
 than `conf.d`, so avoid redefining shared tools there unless an override is
 intentional.
 
+### Herdr task worktrees
+
+`hwork` creates a Herdr-managed Git worktree, links local project files into
+it, and starts either Codex or Claude in the new workspace. Initialize each
+repository once from its primary worktree, then start and finish tasks from a
+Herdr-managed pane:
+
+```bash
+hwork init
+hwork start auth-fix --agent codex --branch fix/authentication
+hwork start api-review --agent claude -- --model opus
+hwork finish auth-fix
+```
+
+Run `finish` from the primary repository workspace or another workspace after
+the task agent has exited. It refuses to remove its own workspace, an active
+agent, changed tracked files, conflicts, unexpected untracked files, changed
+shared-file links, or shared-file content changed since `start`. After reviewing
+an intentional shared-file change, acknowledge it explicitly with
+`hwork finish <task> --accept-shared-changes`. Successful removal preserves the
+Git branch.
+
+Shared files live outside all worktrees under
+`${XDG_DATA_HOME:-$HOME/.local/share}/hwork/repos/<repository-id>`. The default
+file list is `.env`, `.env.local`, `mise.local.toml`, `CLAUDE.local.md`, and
+`AGENTS.override.md`. Edit that repository's `files.list` to change the
+root-level file allowlist. `hwork init` moves existing files into the shared
+store and replaces them in the primary worktree with absolute symlinks; it
+never overwrites a conflicting path.
+
 ## Key entrypoints
 
 - Neovim: `stow/base/.config/nvim/init.lua`
