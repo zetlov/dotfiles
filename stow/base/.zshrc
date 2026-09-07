@@ -217,10 +217,16 @@ if (( $+commands[starship] )); then
 fi
 
 codex() {
+    local _codex_path="$PATH"
+    # WSL may need /init to execute Windows PowerShell for image clipboard fallback.
+    if [[ -n "${WSL_INTEROP:-}" ]]; then
+        _codex_path="$HOME/.local/libexec/codex-wsl:$_codex_path"
+    fi
+
     if (( $+commands[mise] )); then
-        mise x npm:@openai/codex -- codex "$@"
+        PATH="$_codex_path" mise x npm:@openai/codex -- codex "$@"
         return
     fi
 
-    command codex "$@"
+    PATH="$_codex_path" command codex "$@"
 }

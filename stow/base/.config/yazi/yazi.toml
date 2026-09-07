@@ -1,0 +1,9 @@
+#:schema https://yazi-rs.github.io/schemas/yazi.json
+
+[opener]
+open = [
+	{ run = "yazi-open %s1", desc = "Open with the system default", orphan = true, for = "linux" },
+]
+play = [
+	{ run = "yazi-open %s1", desc = "Open with the system default", orphan = true, for = "linux" },
+]

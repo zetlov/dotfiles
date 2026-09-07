@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+
+set -u
+
+usage() {
+    echo "Usage: yazi-open PATH..." >&2
+}
+
+is_wsl() {
+    [ -n "${WSL_DISTRO_NAME:-}" ] \
+        || [ -n "${WSL_INTEROP:-}" ] \
+        || uname -r | grep -qi microsoft
+}
+
+require_command() {
+    local command_name="$1"
+
+    if ! command -v "${command_name}" >/dev/null 2>&1; then
+        echo "yazi-open: required command not found: ${command_name}" >&2
+        return 1
+    fi
+}
+
+open_in_windows() {
+    local escaped_path
+    local path
+    local powershell_path
+    local powershell_command
+    local wsl_init="${YAZI_OPEN_WSL_INIT:-/init}"
+    local windows_path
+    local status=0
+
+    require_command wslpath || return 1
+    require_command powershell.exe || return 1
+    if [[ "${wsl_init}" != /* ]] || [ ! -x "${wsl_init}" ]; then
+        echo "yazi-open: WSL init launcher is not executable: ${wsl_init}" >&2
+        return 1
+    fi
+    powershell_path=$(command -v powershell.exe)
+
+    for path in "$@"; do
+        if ! windows_path=$(wslpath -w -- "${path}"); then
+            echo "yazi-open: could not convert path for Windows: ${path}" >&2
+            status=1
+            continue
+        fi
+        escaped_path=${windows_path//\'/\'\'}
+        powershell_command="Start-Process -FilePath '${escaped_path}'"
+        if ! "${wsl_init}" "${powershell_path}" \
+            -NoProfile \
+            -NonInteractive \
+            -Command "${powershell_command}"; then
+            echo "yazi-open: Windows failed to open path: ${path}" >&2
+            status=1
+        fi
+    done
+
+    return "${status}"
+}
+
+open_on_linux() {
+    local path
+    local status=0
+
+    require_command xdg-open || return 1
+
+    for path in "$@"; do
+        if ! xdg-open "${path}"; then
+            echo "yazi-open: system default failed to open path: ${path}" >&2
+            status=1
+        fi
+    done
+
+    return "${status}"
+}
+
+main() {
+    if [ "$#" -eq 0 ]; then
+        usage
+        return 2
+    fi
+
+    if is_wsl; then
+        open_in_windows "$@"
+    else
+        open_on_linux "$@"
+    fi
+}
+
+main "$@"

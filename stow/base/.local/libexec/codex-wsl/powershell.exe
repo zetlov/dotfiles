@@ -1,0 +1,8 @@
+#!/bin/sh
+
+set -eu
+
+wsl_init=${CODEX_WSL_INIT:-/init}
+powershell_path=${CODEX_WSL_POWERSHELL:-/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe}
+
+exec "${wsl_init}" "${powershell_path}" "$@"
