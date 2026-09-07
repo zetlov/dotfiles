@@ -106,7 +106,7 @@ handle_saved_notification() {
 normalize_region_geometry() {
     local geometry="$1"
 
-    if [[ "$geometry" =~ ^([0-9]+),([0-9]+)\ ([0-9]+)x([0-9]+)$ ]]; then
+    if [[ "$geometry" =~ ^(-?[0-9]+),(-?[0-9]+)\ ([0-9]+)x([0-9]+)$ ]]; then
         local x="${BASH_REMATCH[1]}"
         local y="${BASH_REMATCH[2]}"
         local width="${BASH_REMATCH[3]}"
@@ -115,7 +115,7 @@ normalize_region_geometry() {
         return 0
     fi
 
-    if [[ "$geometry" =~ ^([0-9]+)x([0-9]+)\+([0-9]+)\+([0-9]+)$ ]]; then
+    if [[ "$geometry" =~ ^([0-9]+)x([0-9]+)\+(-?[0-9]+)\+(-?[0-9]+)$ ]]; then
         printf '%s\n' "$geometry"
         return 0
     fi

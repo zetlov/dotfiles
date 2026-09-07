@@ -37,6 +37,19 @@ cat > "${fixture_bin}/nmcli" <<'EOF'
 if [ -n "${NMCLI_LOG:-}" ]; then
     printf '%s\n' "$*" >> "${NMCLI_LOG}"
 fi
+if [ "${NMCLI_FIXTURE:-wifi}" = localized ]; then
+    case "$*" in
+        "radio wifi") printf 'enabled\n' ;;
+        "-t -e yes -f DEVICE,TYPE,STATE,CONNECTION dev status")
+            if [ "${LC_ALL:-}" = C ]; then
+                printf 'wlan0:wifi:connected:Fixture Wi-Fi\n'
+            else
+                printf 'wlan0:wifi:verbunden:Fixture Wi-Fi\n'
+            fi
+            ;;
+    esac
+    exit 0
+fi
 if [ "${NMCLI_FIXTURE:-wifi}" = "ethernet" ]; then
     case "$*" in
         "radio wifi") printf 'disabled\n' ;;
@@ -122,6 +135,13 @@ if ! jq -e '
     and .networks == []
 ' <<< "${ethernet_json}" >/dev/null; then
     echo "FAIL: network status should survive an unavailable Wi-Fi scan" >&2
+    exit 1
+fi
+
+localized_json=$(HOME="${fixture_root}/home" XDG_CACHE_HOME="${fixture_root}/localized-cache" \
+    LC_ALL=C.UTF-8 NMCLI_FIXTURE=localized PATH="${fixture_bin}:/usr/bin:/bin" "${NETWORK_STATUS}")
+if ! jq -e '.state == "wifi" and .deviceName == "wlan0"' <<< "${localized_json}" >/dev/null; then
+    echo "FAIL: localized nmcli output must not hide an active connection" >&2
     exit 1
 fi
 

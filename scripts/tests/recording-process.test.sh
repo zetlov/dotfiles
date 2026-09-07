@@ -36,4 +36,60 @@ if ! jq -e '.recording == false' <<<"${status}" >/dev/null; then
     exit 1
 fi
 
+mkdir -p "${TEST_ROOT}/bin"
+cat > "${TEST_ROOT}/bin/gpu-screen-recorder" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "${RECORDER_ARGS_FILE}"
+echo "Mock recorder intentionally stopped before capture" >&2
+exit 17
+EOF
+chmod +x "${TEST_ROOT}/bin/gpu-screen-recorder"
+
+assert_region_arguments() {
+    local geometry="$1"
+    local expected="$2"
+    local args_file="${TEST_ROOT}/recorder.args"
+    local -a arguments=()
+
+    rm -f "${args_file}"
+    if HOME="${TEST_ROOT}/user-home" XDG_STATE_HOME="${TEST_ROOT}/state" \
+        PATH="${TEST_ROOT}/bin:${PATH}" RECORDER_ARGS_FILE="${args_file}" \
+        "${RECORD_SCRIPT}" start region false "${geometry}" \
+        >"${TEST_ROOT}/start.stdout" 2>"${TEST_ROOT}/start.stderr"; then
+        echo "FAIL: mock recorder must fail before starting capture" >&2
+        exit 1
+    fi
+    if [ ! -f "${args_file}" ]; then
+        echo "FAIL: valid region was rejected: ${geometry}" >&2
+        exit 1
+    fi
+    mapfile -t arguments < "${args_file}"
+    if [ "${arguments[2]}" != "-region" ] || [ "${arguments[3]}" != "${expected}" ]; then
+        echo "FAIL: incorrect recorder region for ${geometry}" >&2
+        exit 1
+    fi
+}
+
+# The recorder parses WxH+X+Y with signed offsets after literal plus separators.
+assert_region_arguments "10,20 800x600" "800x600+10+20"
+assert_region_arguments "-1900,20 800x600" "800x600+-1900+20"
+assert_region_arguments "10,-1000 800x600" "800x600+10+-1000"
+assert_region_arguments "-1900,-1000 800x600" "800x600+-1900+-1000"
+assert_region_arguments "800x600+-1900+-1000" "800x600+-1900+-1000"
+
+for geometry in "10,20 -800x600" "10,20 800x-600" "800x600-1900+20" "invalid"; do
+    rm -f "${TEST_ROOT}/recorder.args"
+    if HOME="${TEST_ROOT}/user-home" XDG_STATE_HOME="${TEST_ROOT}/state" \
+        PATH="${TEST_ROOT}/bin:${PATH}" RECORDER_ARGS_FILE="${TEST_ROOT}/recorder.args" \
+        "${RECORD_SCRIPT}" start region false "${geometry}" \
+        >"${TEST_ROOT}/start.stdout" 2>"${TEST_ROOT}/start.stderr"; then
+        echo "FAIL: malformed region was accepted: ${geometry}" >&2
+        exit 1
+    fi
+    if [ -f "${TEST_ROOT}/recorder.args" ]; then
+        echo "FAIL: malformed region reached the recorder: ${geometry}" >&2
+        exit 1
+    fi
+done
+
 echo "recording process tests passed"

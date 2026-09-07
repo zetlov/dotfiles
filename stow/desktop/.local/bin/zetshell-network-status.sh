@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+# Keep nmcli status values stable for the JSON parser.
+export LC_ALL=C
+
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/zetshell"
 PROFILE_CACHE="${CACHE_DIR}/network-profiles.json"
 PROFILE_CACHE_TTL=300

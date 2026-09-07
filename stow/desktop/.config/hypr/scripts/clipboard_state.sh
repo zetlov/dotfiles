@@ -31,25 +31,26 @@ list_entries() {
     '
 }
 
-copy_entry() {
+# A subshell keeps local paths available to EXIT cleanup after command failures.
+copy_entry() (
     local entry
-    local entry_file
-    local tmp
+    local entry_file=""
+    local tmp=""
     entry="$(find_entry "$1")"
     [[ -n "$entry" ]] || {
         echo "Clipboard entry not found: $1" >&2
         exit 1
     }
 
+    trap 'rm -f -- "$entry_file" "$tmp"' EXIT
     entry_file="$(mktemp)"
     tmp="$(mktemp)"
-    trap 'rm -f "$entry_file" "$tmp"' RETURN
 
     printf '%s\n' "$entry" >"$entry_file"
     cliphist decode <"$entry_file" >"$tmp"
     wl-copy <"$tmp"
     echo "Copied clipboard entry $1"
-}
+)
 
 delete_entry() {
     local entry
