@@ -45,4 +45,40 @@ if ! rg -q 'Denied sensitive path' "${output_file}"; then
     exit 1
 fi
 
+content_fixture_root="${fixture_root}/content"
+mkdir -p "${content_fixture_root}/scripts/security" \
+    "${content_fixture_root}/stow/base/.config/example"
+cp -- "${CHECK_SCRIPT}" "${content_fixture_root}/scripts/security/check-public-tree.sh"
+hidden_config="${content_fixture_root}/stow/base/.config/example/settings"
+
+assert_content_rejected() {
+    local label="$1"
+    shift
+    if "$@" >"${output_file}" 2>&1; then
+        echo "FAIL: ${label} should fail the public boundary check" >&2
+        exit 1
+    fi
+    if ! rg -q "${label}" "${output_file}"; then
+        echo "FAIL: content failure should explain ${label}" >&2
+        exit 1
+    fi
+}
+
+printf '/%s/%s/config\n' home fixture-user >"${hidden_config}"
+assert_content_rejected 'Absolute home path' \
+    "${content_fixture_root}/scripts/security/check-public-tree.sh"
+printf '%s@%s.com\n' fixture-user gmail >"${hidden_config}"
+assert_content_rejected 'Personal email address' \
+    "${content_fixture_root}/scripts/security/check-public-tree.sh"
+printf 'fixture-private-identifier\n' >"${hidden_config}"
+printf 'fixture-private-identifier\n' >"${fixture_root}/denylist"
+assert_content_rejected 'Private local identifier' env \
+    DOTFILES_DENYLIST="${fixture_root}/denylist" \
+    "${content_fixture_root}/scripts/security/check-public-tree.sh"
+
+printf 'public fixture\n' >"${hidden_config}"
+assert_content_rejected 'Unable to scan' env \
+    DOTFILES_DENYLIST="${content_fixture_root}" \
+    "${content_fixture_root}/scripts/security/check-public-tree.sh"
+
 echo "public boundary tests passed"

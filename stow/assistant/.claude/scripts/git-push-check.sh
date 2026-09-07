@@ -28,17 +28,100 @@ repo_dir=${repo_dir/#\~/$HOME}
 
 origin=$(git -C "$repo_dir" remote get-url origin 2>/dev/null)
 
+refspec_targets_main() {
+  local destination="${1#+}"
+  destination="${destination##*:}"
+  case "$destination" in
+    main|refs/heads/main|""|*\**) return 0 ;;
+    HEAD) [ "$current_branch" = main ]; return ;;
+    *) return 1 ;;
+  esac
+}
+
+implicit_push_targets_main() {
+  local remote="$1" configured_refs refspec push_default
+  if [ -z "$remote" ]; then
+    remote=$(git -C "$repo_dir" config --get "branch.${current_branch}.pushRemote" 2>/dev/null \
+      || git -C "$repo_dir" config --get remote.pushDefault 2>/dev/null \
+      || git -C "$repo_dir" config --get "branch.${current_branch}.remote" 2>/dev/null \
+      || printf origin)
+  fi
+  [ "$(git -C "$repo_dir" config --bool --get "remote.${remote}.mirror" 2>/dev/null)" = true ] && return 0
+  configured_refs=$(git -C "$repo_dir" config --get-all "remote.${remote}.push" 2>/dev/null)
+  if [ -n "$configured_refs" ]; then
+    while IFS= read -r refspec; do
+      refspec_targets_main "$refspec" && return 0
+    done <<< "$configured_refs"
+    return 1
+  fi
+  push_default=$(git -C "$repo_dir" config --get push.default 2>/dev/null || printf simple)
+  case "$push_default" in
+    nothing) return 1 ;;
+    matching) return 0 ;;
+    upstream|tracking)
+      refspec=$(git -C "$repo_dir" config --get "branch.${current_branch}.merge" 2>/dev/null)
+      refspec_targets_main "$refspec" && return 0
+      ;;
+  esac
+  [ "$current_branch" = main ]
+}
+
+push_targets_main() {
+  local push_arguments remote="" argument expect_value="" explicit_refs=0 tags_only=0
+  local configured_refs refspec
+  local -a arguments=()
+  [[ "$cmd" == *$'\n'* || "$cmd" =~ [\;\&\|] ]] && return 0
+  push_arguments=$(printf '%s\n' "$cmd" | grep -oP 'git\s+(?:-C\s+\S+\s+)?push\K(?:\s.*)?$')
+  # Inspect simple literal arguments only; never evaluate shell syntax from a hook.
+  [[ "$push_arguments" =~ ^[[:alnum:][:space:]_./:@=,+%*-]*$ ]] || return 0
+  read -r -a arguments <<< "$push_arguments"
+  for argument in "${arguments[@]}"; do
+    if [ -n "$expect_value" ]; then
+      [ "$expect_value" = remote ] && remote="$argument"
+      expect_value=""
+      continue
+    fi
+    case "$argument" in
+      --all|--branches|--mirror) return 0 ;;
+      --tags) tags_only=1 ;;
+      --repo) expect_value=remote ;;
+      --repo=*) remote="${argument#--repo=}" ;;
+      -o|--push-option|--receive-pack|--exec) expect_value=ignored ;;
+      --push-option=*|--receive-pack=*|--exec=*) ;;
+      -f|-u|-n|-q|-v|-d|--force|--set-upstream|--dry-run|--quiet|--verbose|--delete|--porcelain|--atomic|--no-verify|--follow-tags|--prune|--force-with-lease|--force-with-lease=*|--force-if-includes) ;;
+      -*) return 0 ;;
+      *)
+        if [ -z "$remote" ]; then
+          remote="$argument"
+        else
+          explicit_refs=1
+          refspec_targets_main "$argument" && return 0
+          if [[ "$argument" != *:* ]]; then
+            configured_refs=$(git -C "$repo_dir" config --get-all "remote.${remote}.push" 2>/dev/null)
+            while IFS= read -r refspec; do
+              [ -n "$refspec" ] && refspec_targets_main "$refspec" && return 0
+            done <<< "$configured_refs"
+          fi
+        fi
+        ;;
+    esac
+  done
+  if [ "$explicit_refs" -eq 1 ] || [ "$tags_only" -eq 1 ]; then
+    return 1
+  fi
+  implicit_push_targets_main "$remote"
+}
+
 # Owner-gated repos: main branch is owner-only when a local pattern is set.
 owner_gated_pattern="${OWNER_GATED_REPO_PATTERN:-}"
 if [ -n "$owner_gated_pattern" ] \
   && echo "$origin" | grep -qiE -- "$owner_gated_pattern"; then
-  # git push touching main (push origin main / HEAD:main / --delete main ...)
-  if echo "$cmd" | grep -qE 'git\s+(-C\s+\S+\s+)?push' && echo "$cmd" | grep -qE '(^|[[:space:]:/])main([[:space:];&|"'"'"']|$)'; then
+  current_branch=$(git -C "$repo_dir" branch --show-current 2>/dev/null)
+  if echo "$cmd" | grep -qE 'git\s+(-C\s+\S+\s+)?push([[:space:]]|$)' && push_targets_main; then
       echo "[Hook] BLOCKED: pushing to 'main' in this owner-gated repository is disabled. Create a promotion PR instead." >&2
     exit 2
   fi
   # writing to local main
-  current_branch=$(git -C "$repo_dir" branch --show-current 2>/dev/null)
   if [ "$current_branch" = "main" ] && echo "$cmd" | grep -qE 'git\s+(-C\s+\S+\s+)?(merge|rebase|commit|cherry-pick|reset)'; then
       echo "[Hook] BLOCKED: writing to local 'main' in this owner-gated repository is disabled. Switch to a feature branch." >&2
     exit 2

@@ -18,28 +18,36 @@ if denied_paths=$(list_public_files | LC_ALL=C sort | rg -i "${deny_path_pattern
     exit 1
 fi
 
-if absolute_home_paths=$(rg -I -l '/home/[A-Za-z0-9._-]+/' "${REPO_ROOT}" \
-    --glob '!.git/**' \
-    --glob '!scripts/security/check-public-tree.sh'); then
-    printf 'Absolute home path in public tree:\n%s\n' "${absolute_home_paths}" >&2
-    exit 1
-fi
+check_content() {
+    local label="$1"
+    shift
+    local matches
+    local status
 
-if personal_emails=$(rg -I -l '[A-Za-z0-9._%+-]+@(gmail|outlook|hotmail|icloud)\.com' "${REPO_ROOT}" \
-    --glob '!.git/**'); then
-    printf 'Personal email address in public tree:\n%s\n' "${personal_emails}" >&2
-    exit 1
-fi
+    if matches=$(rg --no-config --hidden -I -l "$@" "${REPO_ROOT}" \
+        --glob '!.git/**'); then
+        printf '%s in public tree:\n%s\n' "${label}" "${matches}" >&2
+        return 1
+    else
+        status=$?
+    fi
+    if [ "${status}" -ne 1 ]; then
+        printf 'Unable to scan public tree for %s.\n' "${label}" >&2
+        return 1
+    fi
+}
+
+check_content 'Absolute home path' '/home/[A-Za-z0-9._-]+/' \
+    --glob '!scripts/security/check-public-tree.sh'
+check_content 'Personal email address' \
+    '[A-Za-z0-9._%+-]+@(gmail|outlook|hotmail|icloud)\.com'
 
 if [ -n "${DOTFILES_DENYLIST:-}" ]; then
     if [ ! -r "${DOTFILES_DENYLIST}" ]; then
         echo "DOTFILES_DENYLIST must point to a readable file." >&2
         exit 1
     fi
-    if private_matches=$(rg -I -l -F -f "${DOTFILES_DENYLIST}" "${REPO_ROOT}" --glob '!.git/**'); then
-        printf 'Private local identifier in public tree:\n%s\n' "${private_matches}" >&2
-        exit 1
-    fi
+    check_content 'Private local identifier' -F -f "${DOTFILES_DENYLIST}"
 fi
 
 while IFS= read -r -d '' link; do
