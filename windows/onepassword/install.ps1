@@ -16,9 +16,13 @@ Import-Module $packageModule -Force -ErrorAction Stop
 $wingetPath = Join-Path `
   $env:LOCALAPPDATA `
   "Microsoft\WindowsApps\winget.exe"
+$applicationPaths = @(
+  "$env:LOCALAPPDATA\1Password\app\8\1Password.exe",
+  "$env:ProgramFiles\1Password\app\8\1Password.exe"
+)
 $application = Install-WinGetPackage `
   -PackageId "AgileBits.1Password" `
-  -ExpectedAppxPackageName "Agilebits.1Password" `
+  -ExpectedPath $applicationPaths `
   -WingetPath $wingetPath
 
 [PSCustomObject]@{

@@ -175,6 +175,28 @@ Describe "WinGet package installer" {
     $results[0].Path | Should -Be ([IO.Path]::GetFullPath($applicationPath))
   }
 
+  It "does not mix WinGet progress output into the application result" {
+    $applicationPath = Join-Path $TestDrive "installed-with-progress.exe"
+    $wingetPath = Join-Path $TestDrive "winget.exe"
+    [IO.File]::WriteAllText($wingetPath, "test")
+    $runner = {
+      param($Executable, $Arguments)
+      [IO.File]::WriteAllText($applicationPath, "installed")
+      Write-Output "Installer progress"
+      return 0
+    }.GetNewClosure()
+
+    $result = @(Install-WinGetPackage `
+      -PackageId "Docker.DockerDesktop" `
+      -ExpectedPath $applicationPath `
+      -WingetPath $wingetPath `
+      -CommandRunner $runner)
+
+    Assert-Equal $result.Count 1
+    Assert-Equal $result[0].Changed $true
+    Assert-Equal $result[0].Path ([IO.Path]::GetFullPath($applicationPath))
+  }
+
   It "does not invoke WinGet for an existing Appx package" {
     $installLocation = Join-Path $TestDrive "existing-appx"
     $wingetPath = Join-Path $TestDrive "winget.exe"

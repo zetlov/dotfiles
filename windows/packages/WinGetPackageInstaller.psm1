@@ -125,6 +125,33 @@ function Resolve-InstalledAppxPackagePath {
   return $null
 }
 
+function Invoke-WinGetInstallCommand {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$WingetPath,
+
+    [Parameter(Mandatory = $true)]
+    [string[]]$ArgumentList,
+
+    [scriptblock]$CommandRunner
+  )
+
+  if ($null -eq $CommandRunner) {
+    & $WingetPath @ArgumentList | Out-Host
+    return [int]$LASTEXITCODE
+  }
+
+  $runnerOutput = @(& $CommandRunner $WingetPath $ArgumentList)
+  if ($runnerOutput.Count -eq 0) {
+    throw "The WinGet command runner did not return an exit code."
+  }
+  if ($runnerOutput.Count -gt 1) {
+    $runnerOutput[0..($runnerOutput.Count - 2)] | Out-Host
+  }
+
+  return [int]$runnerOutput[-1]
+}
+
 function Install-WinGetPackage {
   [CmdletBinding()]
   param(
@@ -188,12 +215,10 @@ function Install-WinGetPackage {
     -Architecture $Architecture `
     -InstallerOverride $InstallerOverride)
   Write-Host "Installing $PackageId with WinGet..."
-  if ($null -eq $CommandRunner) {
-    & $WingetPath @arguments | Out-Host
-    $exitCode = $LASTEXITCODE
-  } else {
-    $exitCode = & $CommandRunner $WingetPath ([string[]]$arguments)
-  }
+  $exitCode = Invoke-WinGetInstallCommand `
+    -WingetPath $WingetPath `
+    -ArgumentList ([string[]]$arguments) `
+    -CommandRunner $CommandRunner
   if ([int]$exitCode -ne 0) {
     throw "WinGet failed to install $PackageId (exit code $exitCode)."
   }

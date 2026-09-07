@@ -1,13 +1,15 @@
 # 1Password for Windows
 
 The WSL bootstrap installs the official `AgileBits.1Password` WinGet package
-as a required Windows component. WinGet selects the native architecture from
-the MSIX bundle, including ARM64 on supported Windows systems.
+as a required Windows component. WinGet selects the applicable installer for
+the Windows host architecture.
 
-The installer verifies the registered `Agilebits.1Password` Appx package and
-its install location before and after installation. Re-running the installer
-does not start the application, modify vaults, or change account settings.
-1Password manages application updates after installation.
+The installer verifies the 1Password executable in its supported per-user or
+system install location before and after installation. Re-running the installer
+does not start the application, modify vaults, or change account settings. An
+existing Win32 installation is accepted even when a newer WinGet manifest uses
+a different installer technology. 1Password manages application updates after
+installation.
 
 Install or verify the application from WSL:
 

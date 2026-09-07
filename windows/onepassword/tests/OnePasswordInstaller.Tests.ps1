@@ -6,11 +6,12 @@ Describe "1Password installer" {
     $manifestPath = Join-Path $windowsRoot "components.json"
   }
 
-  It "uses the official WinGet package and Appx identity" {
+  It "uses the official WinGet package and verifies the Win32 executable" {
     $source = Get-Content -LiteralPath $installPath -Raw
 
     $source | Should -Match ([regex]::Escape("AgileBits.1Password"))
-    $source | Should -Match ([regex]::Escape("Agilebits.1Password"))
+    $source | Should -Match ([regex]::Escape("1Password\app\8\1Password.exe"))
+    $source | Should -Match "ExpectedPath"
     $source | Should -Match "Install-WinGetPackage"
   }
 
