@@ -29,20 +29,29 @@ UPDATE_LIST=0
 AUTO_YES=0
 FROM_LOG=""
 TEX_FILE=""
-FALLBACK_LOG=""
+BUILD_LOG=""
 
-cleanup_fallback_log() {
-    if [ -n "$FALLBACK_LOG" ]; then
-        rm -f -- "$FALLBACK_LOG"
+cleanup_build_log() {
+    if [ -n "$BUILD_LOG" ]; then
+        rm -f -- "$BUILD_LOG"
     fi
 }
-trap cleanup_fallback_log EXIT
+trap cleanup_build_log EXIT
 
 # --- arg parse ---
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --from-log)    FROM_LOG="$2"; shift 2 ;;
+        --from-log)
+            if [ $# -lt 2 ] || [ -z "$2" ] || [[ "$2" == -* ]]; then
+                echo "error: --from-log requires a log file path" >&2
+                exit 1
+            fi
+            if [ -n "$FROM_LOG" ] || [ -n "$TEX_FILE" ]; then
+                echo "error: specify only one input (.tex file or --from-log)" >&2
+                exit 1
+            fi
+            FROM_LOG="$2"; shift 2 ;;
         --update-list) UPDATE_LIST=1; shift ;;
         --dry-run)     DRY_RUN=1; shift ;;
         --yes)         AUTO_YES=1; shift ;;
@@ -51,12 +60,22 @@ while [ $# -gt 0 ]; do
         -*)
             echo "unknown option: $1" >&2; exit 1 ;;
         *)
+            if [ -n "$TEX_FILE" ] || [ -n "$FROM_LOG" ]; then
+                echo "error: specify only one input (.tex file or --from-log)" >&2
+                exit 1
+            fi
             TEX_FILE="$1"; shift ;;
     esac
 done
 
 if [ -z "$TEX_FILE" ] && [ -z "$FROM_LOG" ]; then
     echo "error: specify a .tex file or --from-log <file.log>" >&2
+    exit 1
+fi
+
+INPUT_FILE="${FROM_LOG:-$TEX_FILE}"
+if [ ! -f "$INPUT_FILE" ] || [ ! -r "$INPUT_FILE" ]; then
+    echo "error: not a readable regular file: $INPUT_FILE" >&2
     exit 1
 fi
 
@@ -83,7 +102,8 @@ sync_files_db() {
 
 run_latexmk() {
     local tex="$1"
-    latexmk -interaction=nonstopmode -file-line-error "$tex" 2>&1 || true
+    # Rebuild so cached failures also emit fresh missing-package diagnostics.
+    latexmk -g -interaction=nonstopmode -file-line-error "$tex" 2>&1
 }
 
 # Extract missing file names from a latexmk/latex log.
@@ -102,7 +122,8 @@ extract_missing() {
 lookup_package() {
     local fname="$1"
     local matches
-    matches=$(pacman -Fq "$fname" 2>/dev/null | grep '^texlive-' | sort -u || true)
+    matches=$(pacman -Fq "$fname" 2>/dev/null \
+        | sed 's|^[^/]*/||' | grep '^texlive-' | sort -u || true)
     if [ -z "$matches" ]; then
         return 0
     fi
@@ -128,6 +149,12 @@ lookup_package() {
     printf 'pick [1-%d] (empty=skip): ' "${#opts[@]}" >&2
     read -r choice </dev/tty || choice=""
     if [ -z "$choice" ]; then
+        return 0
+    fi
+    # Bound decimal input before arithmetic to prevent evaluation and overflow.
+    if ! [[ "$choice" =~ ^[1-9][0-9]*$ ]] \
+        || [ "${#choice}" -gt "${#count}" ] || [ "$choice" -gt "$count" ]; then
+        warn "invalid choice; enter a number from 1 to $count (skipping)"
         return 0
     fi
     printf '%s\n' "${opts[$((choice-1))]}"
@@ -202,24 +229,24 @@ if [ -n "$FROM_LOG" ]; then
 fi
 
 # build-retry loop
+build_status=0
 while [ "$retry" -lt "$MAX_RETRIES" ]; do
     log "latexmk attempt $((retry+1))/${MAX_RETRIES}: $TEX_FILE"
-    output=$(run_latexmk "$TEX_FILE")
-    log_file="${TEX_FILE%.tex}.log"
-    if [ ! -f "$log_file" ]; then
-        if [ -z "$FALLBACK_LOG" ]; then
-            FALLBACK_LOG=$(mktemp)
-        fi
-        printf '%s\n' "$output" > "$FALLBACK_LOG"
-        log_file="$FALLBACK_LOG"
+    build_status=0
+    output=$(run_latexmk "$TEX_FILE") || build_status=$?
+    # Existing .log files can be stale or live in a configured output directory.
+    if [ -z "$BUILD_LOG" ]; then
+        BUILD_LOG=$(mktemp)
     fi
+    printf '%s\n' "$output" > "$BUILD_LOG"
 
-    missing=$(extract_missing "$log_file")
+    missing=$(extract_missing "$BUILD_LOG")
     if [ -z "$missing" ]; then
-        if echo "$output" | grep -q '^Latexmk: All targets .* up-to-date\|^Latexmk: Getting log file'; then
+        if [ "$build_status" -eq 0 ]; then
             log "build finished with no missing files."
         else
-            log "no missing files detected; build may still have other errors."
+            printf '%s\n' "$output" >&2
+            warn "latexmk failed (exit $build_status); no missing files detected."
         fi
         break
     fi
@@ -256,9 +283,12 @@ done
 
 if [ "$retry" -ge "$MAX_RETRIES" ]; then
     warn "hit retry cap ($MAX_RETRIES); giving up."
+    build_status=4
 fi
 
 if [ "${#all_installed[@]}" -gt 0 ]; then
     mapfile -t all_installed < <(printf '%s\n' "${all_installed[@]}" | sort -u)
     append_to_tex_list "${all_installed[@]}"
 fi
+
+exit "$build_status"

@@ -143,6 +143,17 @@ fi
 
 fixture_repo="${test_root}/fixture-repo"
 mkdir -p "${fixture_repo}/packages"
+printf '%s\n' '# Generated TeX packages' '' \
+    '  texlive-example    # 2026-09-05' 'texlive-other' '   # Comment' \
+    >"${fixture_repo}/packages/tex.txt"
+: >"${yay_log}"
+apply_package_profiles \
+    "${fixture_repo}" 0 "${fake_yay}" "${fake_pacman}" tex.txt
+installed_packages=$(sed -n '/^STDIN$/,/^END$/{ /^STDIN$/d; /^END$/d; p; }' "${yay_log}")
+if [ "${installed_packages}" != $'texlive-example\ntexlive-other' ]; then
+    fail "package profiles must remove inline comments and surrounding whitespace"
+fi
+
 printf '%s\n' readable-package >"${fixture_repo}/packages/readable.txt"
 printf '%s\n' unreadable-package >"${fixture_repo}/packages/unreadable.txt"
 chmod 000 "${fixture_repo}/packages/unreadable.txt"

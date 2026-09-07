@@ -42,7 +42,9 @@ validate_package_profiles() {
 read_package_profile() {
     local profile_path="$1"
     sed \
-        -e '/^[[:space:]]*#/d' \
+        -e 's/#.*//' \
+        -e 's/^[[:space:]]*//' \
+        -e 's/[[:space:]]*$//' \
         -e '/^[[:space:]]*$/d' \
         "${profile_path}"
 }
