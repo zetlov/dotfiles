@@ -50,12 +50,20 @@ if ! rg -q '^"npm:difit" = "latest"$' "${GLOBAL_MISE_CONFIG}"; then
     exit 1
 fi
 
-for tool in herdr aws hunk; do
-    if ! rg -q "^${tool} = \"latest\"$" "${GLOBAL_MISE_CONFIG}"; then
-        echo "FAIL: ${tool} should be installed through the shared mise configuration" >&2
-        exit 1
-    fi
-done
+if ! rg -q '^"aqua:modem-dev/hunk" = "latest"$' "${GLOBAL_MISE_CONFIG}"; then
+    echo "FAIL: Hunk should use its Aqua registry package" >&2
+    exit 1
+fi
+
+if ! rg -q '^"github:herdrdev/herdr" = "latest"$' "${GLOBAL_MISE_CONFIG}"; then
+    echo "FAIL: Herdr should use its official GitHub release fallback" >&2
+    exit 1
+fi
+
+if ! rg -q '^aws = "latest"$' "${GLOBAL_MISE_CONFIG}"; then
+    echo "FAIL: AWS CLI should be installed through the shared mise configuration" >&2
+    exit 1
+fi
 
 for package in mise python github-cli jq neovim ripgrep fd fzf lazygit; do
     assert_package_present "${package}"
@@ -65,12 +73,12 @@ for package in nodejs npm shellcheck gitleaks herdr aws-cli difit hunk hunkdiff;
     assert_package_absent "${package}"
 done
 
-if ! rg -q '^[[:space:]]*mise install$' "${DOTFILES_HELPER}"; then
-    echo "FAIL: the mise installation helper should install configured tools" >&2
+if ! rg -q '"\$\{mise_bin\}" install' "${DOTFILES_HELPER}"; then
+    echo "FAIL: the mise installation helper should use the OS-managed executable" >&2
     exit 1
 fi
 
-if ! rg -q 'mise exec -- herdr integration install codex' \
+if ! rg -q '"\$\{mise_bin\}" exec -- herdr integration install codex' \
     "${DOTFILES_HELPER}"; then
     echo "FAIL: full bootstrap should install the managed Herdr Codex integration" >&2
     exit 1

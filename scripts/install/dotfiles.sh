@@ -10,7 +10,7 @@ preflight_dotfiles() {
         echo "Local configuration validation failed." >&2
         return 1
     fi
-    if ! DOTFILES_DIR="${dotfiles_dir}" \
+    if ! LC_ALL=C DOTFILES_DIR="${dotfiles_dir}" \
         "${dotfiles_dir}/scripts/stow-dotfiles.sh" \
         "--profile=${profile}" --preflight >/dev/null; then
         echo "Stow preflight failed for profile: ${profile}" >&2
@@ -33,7 +33,7 @@ apply_dotfiles() {
         return 1
     fi
     echo "Linking dotfiles with Stow..."
-    if ! DOTFILES_DIR="${dotfiles_dir}" \
+    if ! LC_ALL=C DOTFILES_DIR="${dotfiles_dir}" \
         "${dotfiles_dir}/scripts/stow-dotfiles.sh" \
         "--profile=${profile}"; then
         echo "Stow apply failed for profile: ${profile}" >&2
@@ -43,11 +43,17 @@ apply_dotfiles() {
 
 install_mise_tools() {
     local dotfiles_dir="$1"
+    local mise_bin="/usr/bin/mise"
+
+    if [ ! -x "${mise_bin}" ]; then
+        echo "The OS-managed mise executable was not found: ${mise_bin}" >&2
+        return 1
+    fi
 
     echo "Installing mise-managed development tools..."
     if ! (
         cd "${dotfiles_dir}"
-        mise install
+        "${mise_bin}" install
     ); then
         echo "mise tool installation failed." >&2
         return 1
@@ -56,11 +62,17 @@ install_mise_tools() {
 
 install_herdr_integration() {
     local dotfiles_dir="$1"
+    local mise_bin="/usr/bin/mise"
+
+    if [ ! -x "${mise_bin}" ]; then
+        echo "The OS-managed mise executable was not found: ${mise_bin}" >&2
+        return 1
+    fi
 
     echo "Installing the Herdr Codex integration..."
     if ! (
         cd "${dotfiles_dir}"
-        mise exec -- herdr integration install codex
+        "${mise_bin}" exec -- herdr integration install codex
     ); then
         echo "Herdr Codex integration installation failed." >&2
         return 1

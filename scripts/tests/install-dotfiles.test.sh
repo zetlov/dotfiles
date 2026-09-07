@@ -35,7 +35,7 @@ fi
 EOF
 cat >"${fixture_repo}/scripts/stow-dotfiles.sh" <<EOF
 #!/usr/bin/env bash
-printf 'stow:%s\n' "\$*" >>"${call_log}"
+printf 'stow:%s:%s\n' "\${LC_ALL:-unset}" "\$*" >>"${call_log}"
 if [ "\${FAIL_STOW:-0}" = "1" ]; then
     exit 18
 fi
@@ -45,14 +45,14 @@ chmod +x \
     "${fixture_repo}/scripts/stow-dotfiles.sh"
 
 HOME="${test_root}/home" preflight_dotfiles "${fixture_repo}" wsl
-expected_preflight=$'init:--dry-run --profile=wsl\nstow:--profile=wsl --preflight'
+expected_preflight=$'init:--dry-run --profile=wsl\nstow:C:--profile=wsl --preflight'
 if [ "$(cat "${call_log}")" != "${expected_preflight}" ]; then
     fail "dotfiles preflight invoked an unexpected command sequence"
 fi
 
 : >"${call_log}"
 HOME="${test_root}/home" apply_dotfiles "${fixture_repo}" desktop
-expected_apply=$'init:--profile=desktop\nstow:--profile=desktop'
+expected_apply=$'init:--profile=desktop\nstow:C:--profile=desktop'
 if [ "$(cat "${call_log}")" != "${expected_apply}" ]; then
     fail "dotfiles apply invoked an unexpected command sequence"
 fi
