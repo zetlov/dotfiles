@@ -65,6 +65,9 @@ add-zle-hook-widget line-init _reset_cursor_for_zle
 add-zle-hook-widget line-finish _reset_cursor_for_zle
 
 # enable autocomplete
+if [[ -d "$HOME/.local/share/zsh/site-functions" ]]; then
+  fpath=("$HOME/.local/share/zsh/site-functions" $fpath)
+fi
 autoload -U compinit ; compinit
 
 # Herdr completion

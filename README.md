@@ -191,6 +191,9 @@ hwork start api-review --agent claude -- --model opus
 hwork finish auth-fix
 ```
 
+Zsh completion provides subcommands, options, agents, Git refs, and saved task
+names for `hwork finish`.
+
 Run `finish` from the primary repository workspace or another workspace after
 the task agent has exited. It refuses to remove its own workspace, an active
 agent, changed tracked files, conflicts, unexpected untracked files, changed

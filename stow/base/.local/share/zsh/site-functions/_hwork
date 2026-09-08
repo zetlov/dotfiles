@@ -1,0 +1,61 @@
+#compdef hwork
+
+_hwork_saved_tasks() {
+  local -a tasks
+
+  tasks=("${(@f)$(command hwork __complete tasks 2>/dev/null)}")
+  (( ${#tasks} > 0 )) && _describe -t hwork-tasks 'saved task' tasks
+}
+
+_hwork_local_branches() {
+  local -a branches
+
+  branches=("${(@f)$(command git for-each-ref \
+    --format='%(refname:short)' refs/heads 2>/dev/null)}")
+  (( ${#branches} > 0 )) && _describe -t hwork-branches 'local branch' branches
+}
+
+_hwork_git_refs() {
+  local -a refs
+
+  refs=("${(@f)$(command git for-each-ref \
+    --format='%(refname:short)' refs/heads refs/remotes refs/tags 2>/dev/null)}")
+  (( ${#refs} > 0 )) && _describe -t hwork-refs 'Git ref' refs
+}
+
+_hwork() {
+  if (( CURRENT == 2 )); then
+    _values 'hwork command' \
+      'init[initialize shared files for the repository]' \
+      'start[create a worktree and start an agent]' \
+      'finish[remove a completed task worktree]' \
+      'help[show command help]' \
+      '--help[show command help]' \
+      '-h[show command help]'
+    return
+  fi
+
+  case "${words[2]}" in
+    init|help|--help|-h)
+      _arguments '1:command:(init help --help -h)'
+      ;;
+    start)
+      _arguments -s -S \
+        '1:command:(start)' \
+        '2:task name:' \
+        '--agent[agent to start]:agent:(codex claude)' \
+        '--branch[branch to create or reuse]:branch:_hwork_local_branches' \
+        '--base[base ref for a new branch]:Git ref:_hwork_git_refs' \
+        '--no-focus[do not focus the created workspace]' \
+        '*:agent argument:'
+      ;;
+    finish)
+      _arguments -s -S \
+        '1:command:(finish)' \
+        '2:saved task:_hwork_saved_tasks' \
+        '--accept-shared-changes[accept reviewed shared-file changes]'
+      ;;
+  esac
+}
+
+_hwork "$@"

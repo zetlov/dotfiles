@@ -119,6 +119,26 @@ validate_task() {
         || die "Task must match [A-Za-z0-9][A-Za-z0-9._-]{0,63}"
 }
 
+complete_tasks() {
+    local state_file
+    local task
+
+    resolve_repository
+    REPO_STATE_DIR="${STATE_ROOT}/repos/${REPO_KEY}"
+    [ -d "${REPO_STATE_DIR}" ] || return 0
+
+    for state_file in "${REPO_STATE_DIR}"/*.json; do
+        if [ ! -f "${state_file}" ] || [ -L "${state_file}" ]; then
+            continue
+        fi
+        task="${state_file##*/}"
+        task="${task%.json}"
+        if [[ "${task}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]]; then
+            printf '%s\n' "${task}"
+        fi
+    done
+}
+
 validate_shared_file() {
     local file="$1"
 
@@ -853,6 +873,12 @@ main() {
             require_command sha256sum
             require_command stat
             finish_task "$@"
+            ;;
+        __complete)
+            if [ "$#" -ne 1 ] || [ "$1" != tasks ]; then
+                die "Unknown completion request"
+            fi
+            complete_tasks
             ;;
         help|-h|--help)
             usage

@@ -4,6 +4,8 @@ set -euo pipefail
 
 ROOT_DIR=$(CDPATH='' cd "$(dirname "${BASH_SOURCE[0]}")/../.." >/dev/null && pwd)
 HWORK="${ROOT_DIR}/stow/base/.local/bin/hwork"
+HWORK_COMPLETION="${ROOT_DIR}/stow/base/.local/share/zsh/site-functions/_hwork"
+ZSHRC="${ROOT_DIR}/stow/base/.zshrc"
 TEST_ROOT=$(mktemp -d)
 trap 'rm -rf "${TEST_ROOT}"' EXIT
 
@@ -28,6 +30,18 @@ assert_symlink_target() {
     [ "$(realpath -m -- "${path}")" = "$(realpath -m -- "${expected}")" ] \
         || fail "unexpected symlink target: ${path}"
 }
+
+[ -f "${HWORK_COMPLETION}" ] || fail "hwork zsh completion is missing"
+zsh -n "${HWORK_COMPLETION}" || fail "hwork zsh completion has invalid syntax"
+HWORK_COMPLETION_DIR="${HWORK_COMPLETION%/*}" zsh -f -c '
+    fpath=("${HWORK_COMPLETION_DIR}" ${fpath})
+    autoload -Uz compinit
+    compinit -D
+    whence -w _hwork
+' | grep -Fqx '_hwork: function' \
+    || fail "compinit did not register hwork completion"
+assert_file_contains "${ZSHRC}" '.local/share/zsh/site-functions'
+assert_file_contains "${HWORK_COMPLETION}" "'-h[show command help]'"
 
 TEST_HOME="${TEST_ROOT}/home"
 TEST_DATA="${TEST_ROOT}/data"
@@ -190,6 +204,10 @@ FAKE_WORKTREE_PATH="${WORKTREE_ROOT}/alpha"
 export FAKE_WORKTREE_PATH
 run_hwork start alpha --agent codex -- --model test-model
 
+completion_tasks=$(run_hwork __complete tasks)
+[ "${completion_tasks}" = alpha ] \
+    || fail "task completion did not return the saved task"
+
 for shared_file in \
     .env \
     .env.local \
@@ -244,6 +262,9 @@ run_hwork finish alpha
 [ ! -e "${FAKE_WORKTREE_PATH}" ] || fail "finish did not remove the worktree"
 git -C "${SOURCE_REPO}" show-ref --verify --quiet refs/heads/work/alpha \
     || fail "finish must preserve the branch"
+if [ -n "$(run_hwork __complete tasks)" ]; then
+    fail "task completion returned a finished task"
+fi
 
 git -C "${SOURCE_REPO}" branch work/suffix-test
 FAKE_WORKTREE_PATH="${WORKTREE_ROOT}/suffix-test"
