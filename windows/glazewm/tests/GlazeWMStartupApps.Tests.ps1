@@ -22,11 +22,37 @@ Describe "GlazeWM startup applications" {
 
     $script | Should -Match "ConvertFrom-Json"
     $script | Should -Match "Get-StartApps"
-    $script | Should -Match 'Get-Process -Name \$processName'
+    $script | Should -Match 'Get-CimInstance Win32_Process'
     $script | Should -Match "shell:AppsFolder"
     $script | Should -Match "startup-apps-error\.log"
     $script | Should -Match "startup-apps-state\.json"
     $script | Should -Match 'Remove-Item -LiteralPath \$statePath'
+  }
+
+  It "validates fields according to each launch type" {
+    $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+    $script = Get-Content -LiteralPath $scriptPath -Raw
+
+    foreach ($app in @($config.applications)) {
+      $launchTypeProperty = $app.PSObject.Properties["launchType"]
+      $launchType = if ($null -eq $launchTypeProperty) {
+        "start-app"
+      } else {
+        [string]$launchTypeProperty.Value
+      }
+      if ($launchType -eq "executable") {
+        @($app.pathCandidates).Count | Should -BeGreaterThan 0
+      } else {
+        [string]$app.startAppName | Should -Not -BeNullOrEmpty
+      }
+    }
+
+    $script | Should -Match "Get-OptionalAppProperty"
+    $script | Should -Not -Match '\$app\.(arguments|launchType|pathCandidates|processCommandLinePattern|startAppName|startupWorkspace)\b'
+    $script | Should -Match (
+      'if \(-not \[string\]::IsNullOrWhiteSpace' +
+      '\(\$processCommandLinePattern\)\)'
+    )
   }
 
   It "places Zen on workspace 1 only from the startup helper" {

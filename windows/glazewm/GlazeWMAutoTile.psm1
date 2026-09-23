@@ -23,6 +23,41 @@ function Get-GlazeTilingDirection {
   return "vertical"
 }
 
+function Get-GlazeWindowProcessId {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true)]
+    [object]$Window,
+
+    [scriptblock]$HandleProcessResolver
+  )
+
+  if ($Window.PSObject.Properties.Name -contains "processId") {
+    return [int]$Window.processId
+  }
+  if (
+    -not ($Window.PSObject.Properties.Name -contains "handle") -or
+    -not ($Window.PSObject.Properties.Name -contains "processName")
+  ) {
+    return 0
+  }
+
+  $handle = [long]$Window.handle
+  if ($null -ne $HandleProcessResolver) {
+    return [int](& $HandleProcessResolver $handle)
+  }
+
+  $owner = @(Get-Process `
+    -Name ([string]$Window.processName) `
+    -ErrorAction SilentlyContinue | Where-Object {
+      $_.MainWindowHandle.ToInt64() -eq $handle
+    } | Select-Object -First 1)
+  if ($owner.Count -ne 1) {
+    return 0
+  }
+  return [int]$owner[0].Id
+}
+
 function Find-GlazeFocusedWindow {
   [CmdletBinding()]
   param(
@@ -538,7 +573,9 @@ function Invoke-GlazeStartupWorkspacePlacement {
     [ValidateRange(1, 300)]
     [int]$WaitSeconds = 60,
 
-    [scriptblock]$CommandInvoker
+    [scriptblock]$CommandInvoker,
+
+    [scriptblock]$WindowProcessIdResolver
   )
 
   $deadline = (Get-Date).AddSeconds($WaitSeconds)
@@ -572,10 +609,9 @@ function Invoke-GlazeStartupWorkspacePlacement {
             [string]$window.processName -eq $ProcessName -and
             (
               $ProcessId -le 0 -or
-              (
-                $window.PSObject.Properties.Name -contains "processId" -and
-                [int]$window.processId -eq $ProcessId
-              )
+              (Get-GlazeWindowProcessId `
+                -Window $window `
+                -HandleProcessResolver $WindowProcessIdResolver) -eq $ProcessId
             )
           ) {
             [pscustomobject]@{
@@ -882,6 +918,7 @@ Export-ModuleMember -Function @(
   "Get-GlazeGameWorkspaceTilingWindows",
   "Get-GlazeFocusedWindowFromEvent",
   "Get-GlazeTilingDirection",
+  "Get-GlazeWindowProcessId",
   "Get-GlazeWindowsInContainer",
   "Get-GlazeWorkspaceGridPlan",
   "Get-GlazeWorkspaceGridRebuildPlan",

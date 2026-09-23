@@ -17,6 +17,19 @@ trap {
   exit 1
 }
 
+function Get-OptionalAppProperty {
+  param(
+    [Parameter(Mandatory = $true)][object]$Application,
+    [Parameter(Mandatory = $true)][string]$Name
+  )
+
+  $property = $Application.PSObject.Properties[$Name]
+  if ($null -eq $property) {
+    return $null
+  }
+  return $property.Value
+}
+
 if ($env:OS -ne "Windows_NT") {
   throw "This startup launcher must run on Windows."
 }
@@ -64,15 +77,36 @@ if ($applications.Count -eq 0) {
 $seenProcesses = @{}
 foreach ($app in $applications) {
   $processName = [string]$app.processName
-  $startAppName = [string]$app.startAppName
+  $launchType = [string](Get-OptionalAppProperty `
+    -Application $app `
+    -Name "launchType")
+  if ([string]::IsNullOrWhiteSpace($launchType)) {
+    $launchType = "start-app"
+  }
   if ($processName -notmatch '^[A-Za-z0-9._ -]+$') {
     throw "Invalid startup process name: $processName"
   }
-  if ([string]::IsNullOrWhiteSpace($startAppName)) {
-    throw "A startup application has an empty Start Apps name."
+  if ($launchType -eq "executable") {
+    $pathCandidates = @(Get-OptionalAppProperty `
+      -Application $app `
+      -Name "pathCandidates")
+    if ($pathCandidates.Count -eq 0) {
+      throw "A startup executable has no path candidates: $($app.name)"
+    }
+  } elseif ($launchType -eq "start-app") {
+    $startAppName = [string](Get-OptionalAppProperty `
+      -Application $app `
+      -Name "startAppName")
+    if ([string]::IsNullOrWhiteSpace($startAppName)) {
+      throw "A startup application has an empty Start Apps name."
+    }
+  } else {
+    throw "Unsupported launch type for $($app.name): $launchType"
   }
   if ($app.PSObject.Properties.Name -contains "startupWorkspace") {
-    $startupWorkspace = [string]$app.startupWorkspace
+    $startupWorkspace = [string](Get-OptionalAppProperty `
+      -Application $app `
+      -Name "startupWorkspace")
     if (
       [string]::IsNullOrWhiteSpace($startupWorkspace) -or
       $startupWorkspace -notmatch '^[A-Za-z0-9._ -]+$'
@@ -81,7 +115,10 @@ foreach ($app in $applications) {
     }
   }
 
-  $matchKey = $processName.ToLowerInvariant() + "|" + [string]$app.processCommandLinePattern
+  $processCommandLinePattern = [string](Get-OptionalAppProperty `
+    -Application $app `
+    -Name "processCommandLinePattern")
+  $matchKey = $processName.ToLowerInvariant() + "|" + $processCommandLinePattern
   $normalized = $matchKey
   if ($seenProcesses.ContainsKey($normalized)) {
     throw "Duplicate startup process name: $processName"
@@ -108,26 +145,39 @@ foreach ($app in $applications) {
   try {
     $existing = @(Get-CimInstance Win32_Process -Filter "Name = '$processName.exe'" |
       Where-Object {
-        $pattern = [string]$app.processCommandLinePattern
+        $pattern = [string](Get-OptionalAppProperty `
+          -Application $app `
+          -Name "processCommandLinePattern")
         [string]::IsNullOrWhiteSpace($pattern) -or
           ([string]$_.CommandLine -match $pattern)
       })
     if ($existing.Count -eq 0) {
-      $launchType = [string]$app.launchType
+      $launchType = [string](Get-OptionalAppProperty `
+        -Application $app `
+        -Name "launchType")
       if ([string]::IsNullOrWhiteSpace($launchType)) {
         $launchType = "start-app"
       }
       if ($launchType -eq "executable") {
-        $path = @($app.pathCandidates | ForEach-Object {
+        $pathCandidates = @(Get-OptionalAppProperty `
+          -Application $app `
+          -Name "pathCandidates")
+        $path = @($pathCandidates | ForEach-Object {
           [Environment]::ExpandEnvironmentVariables([string]$_)
         } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1)
         if ($path.Count -ne 1) {
           throw "No executable candidate is installed."
         }
-        Start-Process -FilePath $path[0] -ArgumentList ([string]$app.arguments) | Out-Null
+        $arguments = [string](Get-OptionalAppProperty `
+          -Application $app `
+          -Name "arguments")
+        Start-Process -FilePath $path[0] -ArgumentList $arguments | Out-Null
       } else {
+        $startAppName = [string](Get-OptionalAppProperty `
+          -Application $app `
+          -Name "startAppName")
         $matches = @(
-          $startApps | Where-Object { $_.Name -eq [string]$app.startAppName }
+          $startApps | Where-Object { $_.Name -eq $startAppName }
         )
         if ($matches.Count -ne 1) {
           throw "Start Apps entry is missing or ambiguous."
@@ -162,25 +212,30 @@ foreach ($entry in $launchedApplications) {
     continue
   }
   $processName = [string]$app.processName
-  $deadline = (Get-Date).AddSeconds($workspacePlacementWaitSeconds)
-  do {
-    $process = @(Get-CimInstance Win32_Process -Filter "Name = '$processName.exe'" |
-      Where-Object {
-        $pattern = [string]$app.processCommandLinePattern
-        [string]::IsNullOrWhiteSpace($pattern) -or
-          ([string]$_.CommandLine -match $pattern)
-      } | Select-Object -First 1)
-    if ($process.Count -eq 1) {
-      $entry.ProcessId = [int]$process[0].ProcessId
-      break
-    }
-    Start-Sleep -Milliseconds 500
-  } while ((Get-Date) -lt $deadline)
+  $processCommandLinePattern = [string](Get-OptionalAppProperty `
+    -Application $app `
+    -Name "processCommandLinePattern")
+  if (-not [string]::IsNullOrWhiteSpace($processCommandLinePattern)) {
+    $deadline = (Get-Date).AddSeconds($workspacePlacementWaitSeconds)
+    do {
+      $process = @(Get-CimInstance Win32_Process -Filter "Name = '$processName.exe'" |
+        Where-Object {
+          [string]$_.CommandLine -match $processCommandLinePattern
+        } | Select-Object -First 1)
+      if ($process.Count -eq 1) {
+        $entry.ProcessId = [int]$process[0].ProcessId
+        break
+      }
+      Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+  }
   Invoke-GlazeStartupWorkspacePlacement `
     -GlazeWMPath $GlazeWMPath `
     -ProcessName ([string]$app.processName) `
     -ProcessId ([int]$entry.ProcessId) `
-    -WorkspaceName ([string]$app.startupWorkspace) `
+    -WorkspaceName ([string](Get-OptionalAppProperty `
+      -Application $app `
+      -Name "startupWorkspace")) `
     -WaitSeconds $workspacePlacementWaitSeconds
 }
 

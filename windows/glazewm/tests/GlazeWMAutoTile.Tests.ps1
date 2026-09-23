@@ -371,6 +371,53 @@ Describe "GlazeWM automatic tiling" {
     $script:placementInvocations[0] -join " " | Should -Be "query workspaces"
   }
 
+  It "resolves a startup window process ID from its handle" {
+    $script:placementInvocations = @()
+    $invoker = {
+      param($request)
+      $arguments = @($request.Arguments)
+      $script:placementInvocations += , @($arguments)
+      $response = @{
+        success = $true
+        data = @{
+          workspaces = @(
+            @{
+              type = "workspace"
+              name = "7"
+              children = @(
+                @{
+                  type = "window"
+                  id = "zen-profile"
+                  handle = 123
+                  processName = "zen"
+                  children = @()
+                }
+              )
+            }
+          )
+        }
+      } | ConvertTo-Json -Depth 8 -Compress
+      return [pscustomobject]@{ Output = @($response); ExitCode = 0 }
+    }
+    $resolver = {
+      param($handle)
+      $handle | Should -Be 123
+      return 42420
+    }
+
+    Invoke-GlazeStartupWorkspacePlacement `
+      -GlazeWMPath "fake-glazewm.exe" `
+      -ProcessName "zen" `
+      -ProcessId 42420 `
+      -WorkspaceName "7" `
+      -WaitSeconds 1 `
+      -CommandInvoker $invoker `
+      -WindowProcessIdResolver $resolver
+
+    $script:placementInvocations.Count | Should -Be 1
+    $script:placementInvocations[0] -join " " | Should -Be "query workspaces"
+  }
+
   It "pairs the two leftmost windows from a four-column layout" {
     $windows = @(
       [pscustomobject]@{ id = "a"; x = 0; y = 0; processName = "Zotero"; state = [pscustomobject]@{ type = "tiling" } },
