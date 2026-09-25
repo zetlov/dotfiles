@@ -108,6 +108,95 @@ Describe "GlazeWM monitor profile synchronization" {
       -PrimaryBounds $primary).Count | Should -Be 0
   }
 
+  It "prepares workspace bindings before reducing all displays to left-center" {
+    $monitors = @(
+      New-TestMonitor "left" -1920 495 1920 1080 @((New-TestWorkspace "left"))
+      New-TestMonitor "center" 0 0 3840 2160 @((New-TestWorkspace "1"))
+      New-TestMonitor "right" 3840 430 1920 1080 @((New-TestWorkspace "vert"))
+    )
+
+    $plan = @(Get-GlazeWorkspaceBindingPlan `
+      -ProfileName "left-center" `
+      -Monitors $monitors)
+
+    @($plan | ForEach-Object { "$($_.WorkspaceName):$($_.MonitorIndex)" }) |
+      Should -Be @(
+        "1:1", "2:1", "3:1", "4:1", "5:1", "6:1",
+        "7:1", "8:1", "9:1", "10:1", "11:1", "12:1",
+        "left:0", "vert:1"
+      )
+  }
+
+  It "evacuates every workspace to the current right display before right-only" {
+    $monitors = @(
+      New-TestMonitor "left" -1920 495 1920 1080 @((New-TestWorkspace "left"))
+      New-TestMonitor "center" 0 0 3840 2160 @((New-TestWorkspace "1"))
+      New-TestMonitor "right" 3840 430 1920 1080 @((New-TestWorkspace "vert"))
+    )
+
+    $plan = @(Get-GlazeWorkspaceBindingPlan `
+      -ProfileName "right-only" `
+      -Monitors $monitors)
+
+    $plan.Count | Should -Be 14
+    @($plan.MonitorIndex | Select-Object -Unique) | Should -Be @(2)
+  }
+
+  It "fails closed when right-only cannot identify an active right display" {
+    $monitors = @(
+      New-TestMonitor "left" -1920 495 1920 1080 @((New-TestWorkspace "left"))
+      New-TestMonitor "center" 0 0 3840 2160 @((New-TestWorkspace "1"))
+    )
+
+    {
+      Get-GlazeWorkspaceBindingPlan `
+        -ProfileName "right-only" `
+        -Monitors $monitors
+    } | Should -Throw "*right display is not currently active*"
+  }
+
+  It "fails closed when left-center would disable the only active right display" {
+    $monitors = @(
+      New-TestMonitor "right" 0 0 1920 1080 @(
+        (New-TestWorkspace "1"), (New-TestWorkspace "left"),
+        (New-TestWorkspace "vert")
+      )
+    )
+
+    {
+      Get-GlazeWorkspaceBindingPlan `
+        -ProfileName "left-center" `
+        -Monitors $monitors
+    } | Should -Throw "*center display is not currently active*"
+  }
+
+  It "updates every managed workspace binding through the supported CLI command" {
+    $monitors = @(
+      New-TestMonitor "left" -1920 495 1920 1080 @((New-TestWorkspace "left"))
+      New-TestMonitor "center" 0 0 3840 2160 @((New-TestWorkspace "1"))
+      New-TestMonitor "right" 3840 430 1920 1080 @((New-TestWorkspace "vert"))
+    )
+
+    InModuleScope GlazeWMMonitorSync -Parameters @{ Monitors = $monitors } {
+      Mock Get-GlazeMonitors { $Monitors }
+      Mock Invoke-GlazeCliCommand {}
+
+      Set-GlazeWorkspaceBindingsForProfile `
+        -GlazeWMPath "C:\GlazeWM\glazewm.exe" `
+        -ProfileName "left-center" `
+        -Monitors $Monitors
+
+      Should -Invoke Invoke-GlazeCliCommand -Times 14 -Exactly
+      Should -Invoke Invoke-GlazeCliCommand -Times 1 -Exactly `
+        -ParameterFilter {
+          $Arguments -join " " -eq (
+            "command update-workspace-config --workspace vert " +
+            "--bind-to-monitor 1"
+          )
+        }
+    }
+  }
+
   It "activates every managed workspace before monitor reconciliation" {
     $initialMonitor = New-TestMonitor "primary" 0 0 3840 2160 @(
       (New-TestWorkspace "1"), (New-TestWorkspace "left")
@@ -163,6 +252,51 @@ Describe "GlazeWM monitor profile synchronization" {
     }
   }
 
+  It "activates missing workspaces before applying live monitor bindings" {
+    $initialMonitor = New-TestMonitor "primary" 0 0 3840 2160 @(
+      (New-TestWorkspace "1"), (New-TestWorkspace "left")
+    )
+    $completeMonitor = New-TestMonitor "primary" 0 0 3840 2160 @(
+      (1..12 | ForEach-Object { New-TestWorkspace ([string]$_) }) +
+        @((New-TestWorkspace "left"), (New-TestWorkspace "vert"))
+    )
+
+    InModuleScope GlazeWMMonitorSync -Parameters @{
+      InitialMonitor = $initialMonitor
+      CompleteMonitor = $completeMonitor
+    } {
+      $global:GlazeTestSyncOrder =
+        [Collections.Generic.List[string]]::new()
+      Mock Get-WindowsPrimaryBounds {
+        [pscustomobject]@{ X = 0; Y = 0; Width = 3840; Height = 2160 }
+      }
+      Mock Wait-GlazeMonitorTopology { @($InitialMonitor) }
+      Mock Ensure-GlazeManagedWorkspaces {
+        $global:GlazeTestSyncOrder.Add("activate")
+        @($CompleteMonitor)
+      }
+      Mock Set-GlazeWorkspaceBindingsForCurrentTopology {
+        $global:GlazeTestSyncOrder.Add("bind")
+      }
+      Mock Get-GlazeMonitors { @($CompleteMonitor) }
+      Mock Get-GlazeFocusedWorkspaceName { "1" }
+      Mock Get-GlazeWorkspaceMonitorMovePlan { @() }
+      Mock Invoke-GlazeCliCommand {}
+
+      try {
+        Invoke-GlazeWorkspaceMonitorSync `
+          -GlazeWMPath "C:\GlazeWM\glazewm.exe"
+
+        @($global:GlazeTestSyncOrder) | Should -Be @("activate", "bind")
+      } finally {
+        Remove-Variable `
+          GlazeTestSyncOrder `
+          -Scope Global `
+          -ErrorAction SilentlyContinue
+      }
+    }
+  }
+
   It "matches the primary by device name across DPI-scaled coordinates" {
     $monitors = @(
       [pscustomobject]@{
@@ -209,9 +343,14 @@ Describe "GlazeWM monitor profile synchronization" {
       }
     )
 
-    Test-GlazeMonitorTopologyMatchesWindows `
-      -Monitors $monitors `
-      -WindowsBounds $windows | Should -BeTrue
+    InModuleScope GlazeWMMonitorSync -Parameters @{
+      Monitors = $monitors
+      Windows = $windows
+    } {
+      Test-GlazeMonitorTopologyMatchesWindows `
+        -Monitors $Monitors `
+        -WindowsBounds $Windows | Should -BeTrue
+    }
   }
 
   It "normalizes a single monitor response into a collection" {

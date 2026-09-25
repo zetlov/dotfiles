@@ -141,6 +141,73 @@ function Get-GlazeWorkspaceMonitorMovePlan {
   }
 }
 
+function Get-GlazeWorkspaceBindingPlan {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true)]
+    [ValidateSet("all", "left-center", "right-only")]
+    [string]$ProfileName,
+
+    [Parameter(Mandatory = $true)]
+    [ValidateNotNullOrEmpty()]
+    [object[]]$Monitors
+  )
+
+  $monitorCount = @($Monitors).Count
+  if ($monitorCount -gt 3) {
+    throw "GlazeWM reported more monitors than the managed profile supports."
+  }
+
+  $primaryIndex = switch ($ProfileName) {
+    "all" {
+      if ($monitorCount -ge 2) { 1 } else { 0 }
+      break
+    }
+    "left-center" {
+      if ($monitorCount -eq 1) {
+        throw (
+          "The center display is not currently active. Switch to the all " +
+          "profile before selecting left-center."
+        )
+      }
+      if ($monitorCount -ge 2) { 1 } else { 0 }
+      break
+    }
+    "right-only" {
+      if ($monitorCount -eq 2) {
+        throw (
+          "The right display is not currently active. Switch to the all " +
+          "profile before selecting right-only."
+        )
+      }
+      if ($monitorCount -eq 3) { 2 } else { 0 }
+      break
+    }
+  }
+  $leftIndex = if ($ProfileName -ne "right-only" -and $monitorCount -ge 2) {
+    0
+  } else {
+    $primaryIndex
+  }
+  $vertIndex = if ($ProfileName -eq "all" -and $monitorCount -eq 3) {
+    2
+  } else {
+    $primaryIndex
+  }
+
+  foreach ($name in @((1..12 | ForEach-Object { [string]$_ }) + @("left", "vert"))) {
+    $targetIndex = switch ($name) {
+      "left" { $leftIndex; break }
+      "vert" { $vertIndex; break }
+      default { $primaryIndex }
+    }
+    [pscustomobject]@{
+      WorkspaceName = $name
+      MonitorIndex = $targetIndex
+    }
+  }
+}
+
 function Get-GlazeMonitors {
   [CmdletBinding()]
   param([Parameter(Mandatory = $true)][string]$GlazeWMPath)
@@ -330,6 +397,54 @@ function Invoke-GlazeCliCommand {
   return $response
 }
 
+function Set-GlazeWorkspaceBindingsForProfile {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true)][string]$GlazeWMPath,
+    [Parameter(Mandatory = $true)]
+    [ValidateSet("all", "left-center", "right-only")]
+    [string]$ProfileName,
+    [object[]]$Monitors = @()
+  )
+
+  $currentMonitors = if (@($Monitors).Count -gt 0) {
+    @($Monitors)
+  } else {
+    @(Get-GlazeMonitors -GlazeWMPath $GlazeWMPath)
+  }
+  $plan = @(Get-GlazeWorkspaceBindingPlan `
+    -ProfileName $ProfileName `
+    -Monitors $currentMonitors)
+  foreach ($binding in $plan) {
+    Invoke-GlazeCliCommand -GlazeWMPath $GlazeWMPath -Arguments @(
+      "command",
+      "update-workspace-config",
+      "--workspace", $binding.WorkspaceName,
+      "--bind-to-monitor", [string]$binding.MonitorIndex
+    ) | Out-Null
+  }
+  return $plan
+}
+
+function Set-GlazeWorkspaceBindingsForCurrentTopology {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory = $true)][string]$GlazeWMPath,
+    [Parameter(Mandatory = $true)][object[]]$Monitors
+  )
+
+  $profileName = switch (@($Monitors).Count) {
+    3 { "all"; break }
+    2 { "left-center"; break }
+    1 { "right-only"; break }
+    default { throw "The active monitor count does not match a managed profile." }
+  }
+  return Set-GlazeWorkspaceBindingsForProfile `
+    -GlazeWMPath $GlazeWMPath `
+    -ProfileName $profileName `
+    -Monitors $Monitors
+}
+
 function Ensure-GlazeManagedWorkspaces {
   [CmdletBinding()]
   param(
@@ -364,12 +479,17 @@ function Invoke-GlazeWorkspaceMonitorSync {
 
   $primaryBounds = Get-WindowsPrimaryBounds
   $monitors = @(Wait-GlazeMonitorTopology -GlazeWMPath $GlazeWMPath)
+  $monitors = @(Ensure-GlazeManagedWorkspaces `
+    -GlazeWMPath $GlazeWMPath `
+    -Monitors $monitors)
+  Set-GlazeWorkspaceBindingsForCurrentTopology `
+    -GlazeWMPath $GlazeWMPath `
+    -Monitors $monitors |
+    Out-Null
+  $monitors = @(Get-GlazeMonitors -GlazeWMPath $GlazeWMPath)
   $focusedWorkspaceName = Get-GlazeFocusedWorkspaceName -Monitors $monitors
   $plan = @()
   try {
-    $monitors = @(Ensure-GlazeManagedWorkspaces `
-      -GlazeWMPath $GlazeWMPath `
-      -Monitors $monitors)
     $plan = @(Get-GlazeWorkspaceMonitorMovePlan `
       -Monitors $monitors `
       -PrimaryBounds $primaryBounds |
@@ -799,7 +919,6 @@ function Invoke-GlazeMonitorProfileRefresh {
   if ($LASTEXITCODE -ne 0) {
     return [pscustomobject]@{ Active = $false; Reason = "Manager inactive" }
   }
-  $moves = @(Invoke-GlazeWorkspaceMonitorSync -GlazeWMPath $GlazeWMPath)
   $zebar = if ($RestartZebar) {
     Ensure-GlazeZebar `
       -ZebarPath $ZebarPath `
@@ -807,6 +926,7 @@ function Invoke-GlazeMonitorProfileRefresh {
   } else {
     $null
   }
+  $moves = @(Invoke-GlazeWorkspaceMonitorSync -GlazeWMPath $GlazeWMPath)
   return [pscustomobject]@{
     Active = $true
     WorkspaceMoveCount = $moves.Count
@@ -816,6 +936,8 @@ function Invoke-GlazeMonitorProfileRefresh {
 
 Export-ModuleMember -Function @(
   "Get-GlazeWorkspaceMonitorMovePlan",
+  "Get-GlazeWorkspaceBindingPlan",
+  "Set-GlazeWorkspaceBindingsForProfile",
   "Invoke-GlazeWorkspaceMonitorSync",
   "Ensure-GlazeZebar",
   "Invoke-GlazeMonitorProfileRefresh"

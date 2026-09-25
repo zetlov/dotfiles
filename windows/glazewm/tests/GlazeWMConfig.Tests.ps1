@@ -235,7 +235,7 @@ Describe "GlazeWM managed configuration" {
     $script | Should -Match '-1978335090'
     $script | Should -Match '\$upgradeExitCode -in \$reinstallRequiredExitCodes'
     $script | Should -Match '\$uninstallExitCode -eq 1603'
-    $script | Should -Match 'requires.+?administrator approval'
+    $script | Should -Match 'requires[\s\S]+?administrator approval'
     $script | Should -Match '\$installedVersion -lt \$requiredSemanticVersion'
     $script | Should -Match '\$installedVersion -gt \$requiredSemanticVersion'
     $script | Should -Match '& \$GlazeWMPath --version'

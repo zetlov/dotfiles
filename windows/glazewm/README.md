@@ -91,9 +91,13 @@ Windows primary display, `left` to the leftmost display, and `vert` to the
 rightmost display. All managed workspaces remain active when empty, so a
 numeric workspace cannot be destroyed and recreated on whichever monitor was
 focused later. The synchronization pass activates every managed workspace
-before routing it, including workspaces that were inactive before a config
-reload. With fewer displays, auxiliary workspaces collapse onto the available
-edge or the sole primary display. An existing Zebar process is kept
+before assigning live monitor bindings and routing it, including workspaces
+that were inactive before a config reload. The base config intentionally omits
+topology-specific bindings so every keep-alive workspace can be created when a
+reduced display profile is active. With fewer displays, auxiliary workspaces
+collapse onto the available edge or the sole primary display. Zebar is ensured
+before workspace reconciliation so a routing error cannot suppress the bar.
+An existing Zebar process is kept
 alive across profile changes to avoid Zebar 3.3.1's orphaned-port bug. The
 helper verifies the visible managed bar, live listener ownership, and the 42 px
 primary-display top reservation. If a display-profile change clears the Windows
