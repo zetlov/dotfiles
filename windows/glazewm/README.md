@@ -104,8 +104,12 @@ primary-display top reservation. If a display-profile change clears the Windows
 work area while the bar remains healthy and correctly positioned, the helper
 reasserts `ABM_QUERYPOS` and `ABM_SETPOS` on the existing bar window. It verifies
 the live primary work area and requires the Shell-approved rectangle to match the
-actual widget rectangle. It never closes a stale widget unless the operator
-supplies `-AllowZebarWidgetRelaunch` after explicit user approval.
+actual widget rectangle. It never closes a stale widget unless the caller
+supplies `-AllowZebarWidgetRelaunch`. The managed monitor-profile switch
+supplies this flag when a widget rectangle still belongs to the previous
+primary display. It orderly recreates only that widget from the
+`primary-monitor` preset while preserving the healthy Zebar process and its
+asset-server listener.
 Replacing a widget pack while Zebar is running likewise requires the explicit
 `-AllowRuntimeStop` installer switch.
 
@@ -158,13 +162,55 @@ change this action, and the shifted fallback bindings also focus a monitor
 instead of moving the current workspace. This preserves the invariant that
 numeric workspaces 1 through 12 stay on the primary monitor.
 
+The synchronization helper first activates all keep-alive workspaces, then
+assigns live bindings for the current topology. Numeric workspaces bind to the
+current primary display; `left` and `vert` bind to their active outer displays
+or collapse onto primary in a reduced profile. This avoids referring to a
+missing monitor while GlazeWM is still creating startup workspaces and prevents
+an empty reconnected monitor from rejecting `move-workspace` with
+`No displayed workspace`.
+
+The managed profile switch changes live bindings before DisplayConfig disables
+a monitor. A named mutex serializes profile switches, and an unreachable
+GlazeWM IPC endpoint aborts before Windows display state changes. Expanding from
+`right-only` takes a separate fail-closed path: it snapshots workspace and
+window state by HWND, verifies every window is shell-uncloaked, exits GlazeWM
+gracefully, applies the display profile, restarts the manager, and restores the
+snapshot after directly synchronizing the new monitor topology. The restarted
+manager defers its normal startup-app placement once by consuming a one-time
+token. This avoids exposing GlazeWM 3.10.1 to an empty newly enabled monitor or
+letting startup placement overwrite the snapshot. Any uncloak verification
+failure leaves the manager running and prevents DisplayConfig changes.
+
+## Safe recovery
+
+Do not terminate or force-stop GlazeWM while it uses `hide_method: cloak`.
+Stopping the manager first can leave application windows shell-cloaked and
+absent from ordinary window enumeration. Use this order:
+
+1. If IPC responds, run `wm-reload-config`, then the managed monitor sync.
+2. If IPC does not respond, leave the manager running and restore every
+   shell-cloaked application view with `IApplicationView.SetCloak(Default, 0)`.
+3. Verify with `DwmGetWindowAttribute(DWMWA_CLOAKED)` that every recovered
+   application window reports zero.
+4. Only after that verification may the manager be restarted from its tray UI
+   or by signing out and back in.
+5. Run `Start-GlazeWorkspaceApps.ps1` to register surviving windows and restore
+   the configured workspace placement. It launches only applications that are
+   still missing.
+
+If step 2 or 3 fails for any window, stop the recovery and keep GlazeWM alive.
+Never use `Stop-Process -Force`, `taskkill /F`, or `wm-exit` as the first repair
+step.
+
 ## Rollback
 
 Komorebi's repository configuration and disabled Startup shortcut are kept as
-rollback material. Stop GlazeWM with its tray menu or:
+rollback material. Before returning to Komorebi, first close application
+windows normally or complete the safe recovery procedure above. Then exit
+GlazeWM from its tray menu and remove its autostart entry:
 
 ```powershell
-& "$env:ProgramFiles\glzr.io\GlazeWM\cli\glazewm.exe" command wm-exit
 Remove-ItemProperty `
   "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" `
   -Name "GlazeWM"

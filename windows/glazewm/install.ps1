@@ -267,6 +267,9 @@ $sourceDaemon = Join-Path $PSScriptRoot "autotile.ps1"
 $sourceMonitorSyncModule = Join-Path `
   $PSScriptRoot `
   "GlazeWMMonitorSync.psm1"
+$sourceSafeRestartModule = Join-Path `
+  $PSScriptRoot `
+  "GlazeWMSafeRestart.psm1"
 $sourceMonitorSyncScript = Join-Path `
   $PSScriptRoot `
   "Sync-GlazeMonitorLayout.ps1"
@@ -280,6 +283,7 @@ foreach ($sourcePath in @(
   $sourceWorkspaceHelpers,
   $sourceDaemon,
   $sourceMonitorSyncModule,
+  $sourceSafeRestartModule,
   $sourceMonitorSyncScript,
   $sourceStartupScript,
   $sourceStartupConfig,
@@ -310,6 +314,10 @@ $runtimeDeployments = @(
   [pscustomobject]@{
     Source = $sourceMonitorSyncModule
     Destination = Join-Path $RuntimeRoot "GlazeWMMonitorSync.psm1"
+  },
+  [pscustomobject]@{
+    Source = $sourceSafeRestartModule
+    Destination = Join-Path $RuntimeRoot "GlazeWMSafeRestart.psm1"
   },
   [pscustomobject]@{
     Source = $sourceMonitorSyncScript

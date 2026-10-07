@@ -34,6 +34,27 @@ Describe "GlazeWM monitor profile synchronization" {
     }
   }
 
+  It "allows three minutes for DisplayConfig topology convergence" {
+    $source = Get-Content `
+      -LiteralPath (Join-Path $PSScriptRoot "..\GlazeWMMonitorSync.psm1") `
+      -Raw
+
+    $source | Should -Match (
+      'Wait-GlazeMonitorTopology\s+`\r?\n' +
+      '\s+-GlazeWMPath \$GlazeWMPath\s+`\r?\n' +
+      '\s+-TimeoutSeconds 180'
+    )
+  }
+
+  It "serializes competing startup and profile synchronization passes" {
+    $source = Get-Content `
+      -LiteralPath (Join-Path $PSScriptRoot "..\GlazeWMMonitorSync.psm1") `
+      -Raw
+
+    $source | Should -Match 'Local\\DotfilesGlazeWorkspaceSync'
+    $source | Should -Match 'WaitOne\(\[TimeSpan\]::FromSeconds\(240\)\)'
+  }
+
   It "moves numeric workspaces to primary and keeps auxiliary roles on edges" {
     $monitors = @(
       New-TestMonitor "left" -1920 495 1920 1080 @(
@@ -601,6 +622,8 @@ if ($Arguments -join " " -eq "command wm-reload-config") {
       if ($global:GlazeTestAppBarRefreshed) { return 42 }
       return 0
     } -ModuleName GlazeWMMonitorSync
+    Mock Test-ZebarWindowAlignedWithPrimary { $true } `
+      -ModuleName GlazeWMMonitorSync
     Mock Invoke-ZebarAppBarPositionRefresh {
       $global:GlazeTestAppBarRefreshed = $true
     } -ModuleName GlazeWMMonitorSync
@@ -622,6 +645,51 @@ if ($Arguments -join " " -eq "command wm-reload-config") {
     } finally {
       Remove-Variable `
         GlazeTestAppBarRefreshed `
+        -Scope Global `
+        -ErrorAction SilentlyContinue
+    }
+  }
+
+  It "registers the AppBar after recreating the primary widget preset" {
+    $global:GlazeTestPresetReservationRefreshed = $false
+    $barProcess = [pscustomobject]@{
+      Id = 123
+      Responding = $true
+      MainWindowTitle = "Zebar - zetshell / bar"
+      MainWindowHandle = [IntPtr]12345
+    }
+    Mock Start-Process {} -ModuleName GlazeWMMonitorSync
+    Mock Start-Sleep {} -ModuleName GlazeWMMonitorSync
+    Mock Get-Process { $barProcess } -ModuleName GlazeWMMonitorSync
+    Mock Get-ZebarListener {
+      [pscustomobject]@{ OwningProcess = 123 }
+    } -ModuleName GlazeWMMonitorSync
+    Mock Get-PrimaryReservedTop {
+      if ($global:GlazeTestPresetReservationRefreshed) { return 42 }
+      return 0
+    } -ModuleName GlazeWMMonitorSync
+    Mock Test-ZebarWindowAlignedWithPrimary { $true } `
+      -ModuleName GlazeWMMonitorSync
+    Mock Invoke-ZebarAppBarPositionRefresh {
+      $global:GlazeTestPresetReservationRefreshed = $true
+    } -ModuleName GlazeWMMonitorSync
+
+    try {
+      $result = InModuleScope GlazeWMMonitorSync {
+        Start-GlazeZebarPrimaryPreset `
+          -ZebarPath "C:\Zebar\zebar.exe" `
+          -TimeoutSeconds 1 `
+          -ExpectedReservedTop 42
+      }
+
+      $result.ReservedTop | Should -Be 42
+      Should -Invoke `
+        Invoke-ZebarAppBarPositionRefresh `
+        -ModuleName GlazeWMMonitorSync `
+        -Times 1
+    } finally {
+      Remove-Variable `
+        GlazeTestPresetReservationRefreshed `
         -Scope Global `
         -ErrorAction SilentlyContinue
     }
@@ -660,9 +728,9 @@ if ($Arguments -join " " -eq "command wm-reload-config") {
     Mock Get-ZebarListener {
       return [pscustomobject]@{ OwningProcess = 123 }
     } -ModuleName GlazeWMMonitorSync
-    Mock Get-PrimaryReservedTop {
-      if ($global:GlazeTestZebarStarted) { return 42 }
-      return 0
+    Mock Get-PrimaryReservedTop { 42 } -ModuleName GlazeWMMonitorSync
+    Mock Test-ZebarWindowAlignedWithPrimary {
+      return $global:GlazeTestZebarStarted
     } -ModuleName GlazeWMMonitorSync
     Mock Invoke-ZebarAppBarPositionRefresh {} `
       -ModuleName GlazeWMMonitorSync
@@ -691,6 +759,10 @@ if ($Arguments -join " " -eq "command wm-reload-config") {
       $global:GlazeTestZebarClosed | Should -BeTrue
       Should -Invoke Start-Process -ModuleName GlazeWMMonitorSync -Times 1
       Should -Invoke Stop-Process -ModuleName GlazeWMMonitorSync -Times 0
+      Should -Invoke `
+        Invoke-ZebarAppBarPositionRefresh `
+        -ModuleName GlazeWMMonitorSync `
+        -Times 0
     } finally {
       Remove-Variable `
         GlazeTestZebarClosed `

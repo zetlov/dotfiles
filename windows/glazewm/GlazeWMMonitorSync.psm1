@@ -322,7 +322,7 @@ function Wait-GlazeMonitorTopology {
   [CmdletBinding()]
   param(
     [Parameter(Mandatory = $true)][string]$GlazeWMPath,
-    [ValidateRange(1, 60)][int]$TimeoutSeconds = 30
+    [ValidateRange(1, 180)][int]$TimeoutSeconds = 30
   )
 
   $windowsBounds = @(Get-WindowsScreenBounds)
@@ -473,12 +473,14 @@ function Ensure-GlazeManagedWorkspaces {
   return $current
 }
 
-function Invoke-GlazeWorkspaceMonitorSync {
+function Invoke-GlazeWorkspaceMonitorSyncCore {
   [CmdletBinding()]
   param([Parameter(Mandatory = $true)][string]$GlazeWMPath)
 
   $primaryBounds = Get-WindowsPrimaryBounds
-  $monitors = @(Wait-GlazeMonitorTopology -GlazeWMPath $GlazeWMPath)
+  $monitors = @(Wait-GlazeMonitorTopology `
+    -GlazeWMPath $GlazeWMPath `
+    -TimeoutSeconds 180)
   $monitors = @(Ensure-GlazeManagedWorkspaces `
     -GlazeWMPath $GlazeWMPath `
     -Monitors $monitors)
@@ -519,6 +521,31 @@ function Invoke-GlazeWorkspaceMonitorSync {
     throw "GlazeWM workspace monitor synchronization did not converge."
   }
   return $plan
+}
+
+function Invoke-GlazeWorkspaceMonitorSync {
+  [CmdletBinding()]
+  param([Parameter(Mandatory = $true)][string]$GlazeWMPath)
+
+  $syncMutex = New-Object System.Threading.Mutex `
+    -ArgumentList $false, "Local\DotfilesGlazeWorkspaceSync"
+  $mutexAcquired = $false
+  try {
+    try {
+      $mutexAcquired = $syncMutex.WaitOne([TimeSpan]::FromSeconds(240))
+    } catch [Threading.AbandonedMutexException] {
+      $mutexAcquired = $true
+    }
+    if (-not $mutexAcquired) {
+      throw "Another GlazeWM workspace synchronization is still running."
+    }
+    return Invoke-GlazeWorkspaceMonitorSyncCore -GlazeWMPath $GlazeWMPath
+  } finally {
+    if ($mutexAcquired) {
+      $syncMutex.ReleaseMutex()
+    }
+    $syncMutex.Dispose()
+  }
 }
 
 function Get-ZebarListener {
@@ -642,6 +669,26 @@ function Get-ZebarWindowBounds {
     throw "Windows did not return the managed Zebar window bounds."
   }
   return $bounds
+}
+
+function Test-ZebarWindowAlignedWithPrimary {
+  param(
+    [Parameter(Mandatory = $true)][object]$Bar,
+    [Parameter(Mandatory = $true)][int]$ExpectedHeight
+  )
+
+  $primary = Get-WindowsPrimaryBounds
+  $expectedBounds = [pscustomobject]@{
+    Left = $primary.X
+    Top = $primary.Y
+    Right = $primary.X + $primary.Width
+    Bottom = $primary.Y + $ExpectedHeight
+  }
+  $windowBounds = Get-ZebarWindowBounds `
+    -WindowHandle $Bar.MainWindowHandle
+  return Test-ZebarAppBarBoundsEqual `
+    -First $windowBounds `
+    -Second $expectedBounds
 }
 
 function Invoke-ZebarAppBarNativeMessage {
@@ -789,6 +836,7 @@ function Start-GlazeZebarPrimaryPreset {
   ) -WindowStyle Hidden | Out-Null
 
   $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  $reservationRefreshAttempted = $false
   do {
     Start-Sleep -Milliseconds 250
     $bar = Get-Process -Name "zebar" -ErrorAction SilentlyContinue |
@@ -798,6 +846,23 @@ function Start-GlazeZebarPrimaryPreset {
       Select-Object -First 1
     $listener = Get-ZebarListener
     $reservedTop = Get-PrimaryReservedTop
+    if (
+      $null -ne $bar -and
+      $null -ne $listener -and
+      [int]$listener.OwningProcess -eq [int]$bar.Id -and
+      $reservedTop -ne $ExpectedReservedTop -and
+      -not $reservationRefreshAttempted -and
+      (Test-ZebarWindowAlignedWithPrimary `
+        -Bar $bar `
+        -ExpectedHeight $ExpectedReservedTop)
+    ) {
+      Invoke-ZebarAppBarPositionRefresh `
+        -Bar $bar `
+        -ExpectedReservedTop $ExpectedReservedTop |
+        Out-Null
+      $reservationRefreshAttempted = $true
+      $reservedTop = Get-PrimaryReservedTop
+    }
   } while (
     (
       $null -eq $bar -or
@@ -854,9 +919,17 @@ function Ensure-GlazeZebar {
   if ($null -ne $existingBar) {
     $reservedTop = Get-PrimaryReservedTop
     if (
-      $null -ne $listener -and
-      [int]$listener.OwningProcess -eq [int]$existingBar.Id -and
-      $reservedTop -eq $ExpectedReservedTop
+      $null -eq $listener -or
+      [int]$listener.OwningProcess -ne [int]$existingBar.Id
+    ) {
+      throw "The visible Zebar bar does not own port 6124."
+    }
+    $windowAligned = Test-ZebarWindowAlignedWithPrimary `
+      -Bar $existingBar `
+      -ExpectedHeight $ExpectedReservedTop
+    if (
+      $reservedTop -eq $ExpectedReservedTop -and
+      $windowAligned
     ) {
       return [pscustomobject]@{
         ProcessId = $existingBar.Id
@@ -866,25 +939,21 @@ function Ensure-GlazeZebar {
         ReservedTop = $reservedTop
       }
     }
-    if (
-      $null -eq $listener -or
-      [int]$listener.OwningProcess -ne [int]$existingBar.Id
-    ) {
-      throw "The visible Zebar bar does not own port 6124."
-    }
-    Invoke-ZebarAppBarPositionRefresh `
-      -Bar $existingBar `
-      -ExpectedReservedTop $ExpectedReservedTop |
-      Out-Null
-    $reservedTop = Get-PrimaryReservedTop
-    if ($reservedTop -eq $ExpectedReservedTop) {
-      return [pscustomobject]@{
-        ProcessId = $existingBar.Id
-        ListenerOwningProcess = [int]$listener.OwningProcess
-        ListenerOwnerExists = $true
-        ListenerOwnedByBar = $true
-        ReservedTop = $reservedTop
-        ReservationRefreshed = $true
+    if ($windowAligned) {
+      Invoke-ZebarAppBarPositionRefresh `
+        -Bar $existingBar `
+        -ExpectedReservedTop $ExpectedReservedTop |
+        Out-Null
+      $reservedTop = Get-PrimaryReservedTop
+      if ($reservedTop -eq $ExpectedReservedTop) {
+        return [pscustomobject]@{
+          ProcessId = $existingBar.Id
+          ListenerOwningProcess = [int]$listener.OwningProcess
+          ListenerOwnerExists = $true
+          ListenerOwnedByBar = $true
+          ReservedTop = $reservedTop
+          ReservationRefreshed = $true
+        }
       }
     }
     if (-not $AllowWidgetRelaunch) {

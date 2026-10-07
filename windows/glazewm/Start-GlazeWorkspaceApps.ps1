@@ -137,6 +137,27 @@ if (-not (Get-Process -Name "glazewm" -ErrorAction SilentlyContinue)) {
   throw "GlazeWM did not start within $waitSeconds seconds."
 }
 
+$safeRestartToken = [string]$env:DOTFILES_GLAZE_SAFE_RESTART
+$safeRestartMarkerPath = if ($safeRestartToken -match '^[a-f0-9]{32}$') {
+  Join-Path $PSScriptRoot "safe-restart-$safeRestartToken.pending"
+} else {
+  ""
+}
+if (
+  -not [string]::IsNullOrWhiteSpace($safeRestartMarkerPath) -and
+  (Test-Path -LiteralPath $safeRestartMarkerPath -PathType Leaf) -and
+  (Get-Content -LiteralPath $safeRestartMarkerPath -Raw) -eq $safeRestartToken
+) {
+  Remove-Item -LiteralPath $safeRestartMarkerPath -Force
+  [pscustomobject]@{
+    CompletedAt = (Get-Date).ToString("o")
+    ApplicationCount = 0
+    WorkspaceSynchronized = $false
+    SafeRestartDeferred = $true
+  } | ConvertTo-Json | Set-Content -LiteralPath $statePath -Encoding UTF8
+  exit 0
+}
+
 $monitorSyncScript = Join-Path $PSScriptRoot "Sync-GlazeMonitorLayout.ps1"
 if (-not (Test-Path -LiteralPath $monitorSyncScript -PathType Leaf)) {
   throw "GlazeWM monitor sync script is missing: $monitorSyncScript"

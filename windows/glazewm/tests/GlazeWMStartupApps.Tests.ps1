@@ -120,6 +120,21 @@ Describe "GlazeWM startup applications" {
     $applicationIndex | Should -BeGreaterThan $initialSyncIndex
   }
 
+  It "defers startup placement during a safe monitor restart" {
+    $script = Get-Content -LiteralPath $scriptPath -Raw
+    $guardIndex = $script.IndexOf(
+      '$env:DOTFILES_GLAZE_SAFE_RESTART'
+    )
+    $initialSyncIndex = $script.IndexOf(
+      '& $monitorSyncScript -RestartZebar'
+    )
+
+    $guardIndex | Should -BeGreaterThan -1
+    $initialSyncIndex | Should -BeGreaterThan $guardIndex
+    $script | Should -Match 'safe-restart-\$safeRestartToken\.pending'
+    $script | Should -Match 'Remove-Item -LiteralPath \$safeRestartMarkerPath'
+  }
+
   It "does not abort application placement when initial Zebar sync fails" {
     $script = Get-Content -LiteralPath $scriptPath -Raw
 

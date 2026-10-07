@@ -231,6 +231,29 @@ Context "Managed scripts" {
     $source | Should -Match 'Invoke-MonitorProfile'
     $source | Should -Match 'Sync-GlazeMonitorLayout\.ps1'
     $source | Should -Match '-RestartZebar'
+    $source | Should -Match '-AllowZebarWidgetRelaunch'
+    $source | Should -Match 'Set-GlazeWorkspaceBindingsForProfile'
+    $source | Should -Match 'New-Object System\.Threading\.Mutex'
+    $source | Should -Match 'WaitOne'
+  }
+
+  It "prepares GlazeWM before changing DisplayConfig" {
+    $source = Get-Content -LiteralPath $switchScriptPath -Raw
+    $prepareIndex = $source.IndexOf('Set-GlazeWorkspaceBindingsForProfile')
+    $applyIndex = $source.IndexOf('$result = Invoke-MonitorProfile')
+
+    $prepareIndex | Should -BeGreaterThan -1
+    $applyIndex | Should -BeGreaterThan $prepareIndex
+  }
+
+  It "uses a fail-closed safe restart for one-to-many monitor expansion" {
+    $source = Get-Content -LiteralPath $switchScriptPath -Raw
+
+    $source | Should -Match 'GlazeWMSafeRestart\.psm1'
+    $source | Should -Match 'Test-GlazeMonitorExpansion'
+    $source | Should -Match 'Invoke-GlazeSafeMonitorExpansion'
+    $source | Should -Match 'Safe GlazeWM expansion support is missing'
+    $source | Should -Match 'System\.Windows\.Forms\.Screen.*AllScreens'
   }
 
   It "resolves the default install root after File parameter binding" {

@@ -64,15 +64,28 @@ apply or explicit recovery, an installed GlazeWM runtime is synchronized:
 workspaces 1 through 12 return to the Windows primary display, `left` and
 `vert` follow the active outer displays, and the existing primary Zebar preset
 is preserved when it still reserves the primary display. GlazeWM is reloaded
-once when its monitor topology is stale and can take up to 30 seconds to
+once when its monitor topology is stale and can take up to 180 seconds to
 observe a display removal. A missing primary reservation triggers an orderly
 AppBar position refresh on the existing Zebar window, followed by verification
-that the primary work area again reserves 42 px. A widget relaunch is only a
-fallback and requires the explicit `-AllowZebarWidgetRelaunch` switch after user
-approval. The Zebar runtime is never force-stopped during a profile change
+that the primary work area again reserves 42 px. If the widget rectangle still
+belongs to the previous primary display, the profile switch orderly recreates
+only that widget from the `primary-monitor` preset while preserving the healthy
+Zebar process and port 6124 listener. The Zebar runtime is never force-stopped
+during a profile change
 because Zebar 3.3.1 can leave port 6124 orphaned after process exit. If that
 desktop refresh fails, the already verified Windows display profile remains
 applied and the command reports the refresh error instead of silently hiding it.
+
+Before DisplayConfig disables a monitor, the switch verifies GlazeWM IPC and
+updates every managed workspace binding onto displays that remain active. A
+named mutex prevents overlapping switches. When expanding from `right-only`,
+the switch instead snapshots every managed HWND, verifies all windows are
+shell-uncloaked, gracefully restarts GlazeWM around the DisplayConfig apply,
+defers normal startup-app placement with a one-time token, synchronizes the new
+topology, and restores workspace and window state. It aborts before changing
+displays if any window cannot be verified as uncloaked. This makes direct
+`right-only` to `left-center` or `all` transitions safe without an intermediate
+profile.
 
 Every switch validates the saved topology with Windows, captures the current
 configuration, applies without persistence, verifies active displays, primary,

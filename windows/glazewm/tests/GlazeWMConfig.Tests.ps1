@@ -5,22 +5,16 @@ Describe "GlazeWM managed configuration" {
     $kanataPath = Join-Path $PSScriptRoot "..\..\kanata\kanata.kbd"
   }
 
-  It "defines profile-safe workspaces without fixed monitor indexes" {
+  It "keeps managed workspaces alive without topology-specific startup bindings" {
     $config = Get-Content -LiteralPath $configPath -Raw
 
-    foreach ($workspace in 1..12) {
+    foreach ($workspace in @((1..12) + @("left", "vert"))) {
       $config | Should -Match (
-        "(?ms)^  - name: '$workspace'\r?\n    keep_alive: true\r?$"
+        "(?ms)^  - name: '$workspace'\r?\n" +
+        "    keep_alive: true\r?$"
       )
     }
-    $config | Should -Match "(?m)^  - name: 'left'\r?$"
-    $config | Should -Match "(?m)^  - name: 'vert'\r?$"
-    foreach ($workspace in @("left", "vert")) {
-      $config | Should -Match (
-        "(?ms)^  - name: '$workspace'\r?\n    keep_alive: true\r?$"
-      )
-    }
-    $config | Should -Not -Match "bind_to_monitor"
+    $config | Should -Not -Match "(?m)^\s+bind_to_monitor:"
   }
 
   It "uses the existing Kanata Ctrl Alt chords for core navigation" {
@@ -106,6 +100,7 @@ Describe "GlazeWM managed configuration" {
     $script | Should -Match "autotile\.ps1"
     $script | Should -Match "Sync-GlazeMonitorLayout\.ps1"
     $script | Should -Match "GlazeWMMonitorSync\.psm1"
+    $script | Should -Match "GlazeWMSafeRestart\.psm1"
     $script | Should -Match 'sourceZebarInstaller'
     $script | Should -Not -Match "(?i)seelen"
   }
