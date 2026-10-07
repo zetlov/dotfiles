@@ -54,6 +54,38 @@ return {
         },
         handlers = {}, -- 何も書かなければプリセットで自動セットアップ :contentReference[oaicite:4]{index=4}
       })
+
+      dap.adapters.gdb = {
+        type = "executable",
+        command = "gdb",
+        args = { "--interpreter=dap", "--eval-command", "set print pretty on" },
+      }
+
+      local function pick_executable()
+        return vim.fn.input("Executable: ", vim.fn.getcwd() .. "/build/", "file")
+      end
+
+      local native_configurations = {
+        {
+          name = "Launch executable",
+          type = "gdb",
+          request = "launch",
+          program = pick_executable,
+          cwd = "${workspaceFolder}",
+          stopAtBeginningOfMainSubprogram = false,
+        },
+        {
+          name = "Attach to process",
+          type = "gdb",
+          request = "attach",
+          program = pick_executable,
+          pid = require("dap.utils").pick_process,
+          cwd = "${workspaceFolder}",
+        },
+      }
+
+      dap.configurations.c = native_configurations
+      dap.configurations.cpp = native_configurations
     end,
   },
 }

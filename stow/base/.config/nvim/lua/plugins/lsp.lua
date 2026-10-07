@@ -10,8 +10,8 @@ return {
 			{
 				"mason-org/mason-lspconfig.nvim",
 				opts = {
-					ensure_installed = { "lua_ls", "clangd", "pyright", "texlab" },
-					automatic_installation = true,
+					ensure_installed = { "lua_ls", "pyright", "texlab" },
+					automatic_enable = false,
 				},
 			},
 			{
@@ -20,12 +20,10 @@ return {
 					-- ここは「masonのパッケージ名」
 					ensure_installed = {
 						"pyright",
-						"clangd",
 						"texlab",
 						"lua-language-server",
 						"ruff",
 						"stylua",
-						"clang-format",
 						"latexindent",
 						"luacheck",
 					},
@@ -71,7 +69,7 @@ return {
 			-- C/C++
 			vim.lsp.config("clangd", {
 				root_markers = { "compile_commands.json", "compile_flags.txt", ".git" },
-				cmd = { "clangd", "--background-index", "--clang-tidy" },
+				cmd = { "/usr/bin/clangd", "--background-index", "--clang-tidy" },
 			})
 
 			-- LaTeX

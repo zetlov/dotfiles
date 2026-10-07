@@ -160,6 +160,12 @@ Tool ownership follows the runtime boundary:
   bootstrap path. A full `install.sh` run links the shared configuration and
   then runs `mise install`.
 
+C++ tools are OS-managed through `packages/common.txt`: the base toolchain,
+CMake, Ninja, Clang, ccache, and GDB. Neovim uses the system clangd and
+clang-format, with clang-tidy diagnostics supplied by clangd. Mason manages
+other language tools, not duplicate LLVM binaries. C/C++ debugging uses GDB's
+built-in DAP interpreter; both launch and attach configurations are available.
+
 The global Node.js entry tracks a major release so compatible updates arrive
 without jumping to a new major. Codex CLI, difit, Hunk, Herdr, and AWS CLI track
 their latest releases because they are interactive user tools, while repository

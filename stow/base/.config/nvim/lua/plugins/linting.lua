@@ -10,8 +10,6 @@ return {
         python = { "ruff" },
         lua = { "luacheck" },
         tex = { "chktex" },
-        c = { "clangtidy" },
-        cpp = { "clangtidy" },
       }
 
       vim.api.nvim_create_autocmd("BufWritePost", {

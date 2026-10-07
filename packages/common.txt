@@ -1,6 +1,10 @@
 # === 基盤 ===
 base-devel
+ccache
+clang
+cmake
 git
+gdb
 man-db
 openssh
 stow
@@ -14,6 +18,7 @@ zsh-syntax-highlighting
 kitty
 lazygit
 neovim
+ninja
 tmux
 vim
 

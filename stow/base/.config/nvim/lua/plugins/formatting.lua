@@ -15,6 +15,11 @@ return {
         cpp = { "clang_format" },
         tex = { "latexindent" },
       },
+      formatters = {
+        clang_format = {
+          command = "/usr/bin/clang-format",
+        },
+      },
     },
   },
 }
