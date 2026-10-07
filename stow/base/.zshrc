@@ -233,3 +233,13 @@ codex() {
 
     PATH="$_codex_path" command codex "$@"
 }
+
+claude() {
+    local _claude_path="$PATH"
+    # Claude uses the same Windows PowerShell fallback for WSL image paste.
+    if [[ -n "${WSL_INTEROP:-}" ]]; then
+        _claude_path="$HOME/.local/libexec/codex-wsl:$_claude_path"
+    fi
+
+    PATH="$_claude_path" command claude "$@"
+}

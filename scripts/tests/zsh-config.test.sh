@@ -63,6 +63,25 @@ printf '%s\n' '<x>' '<npm:@openai/codex>' '<-->' '<codex>' '<--version>' \
   >"${TEST_ROOT}/expected-codex.args"
 cmp -s "${TEST_ROOT}/expected-codex.args" "${codex_log}.args"
 
+cat >"${TEST_ROOT}/bin/claude" <<'EOF'
+#!/bin/sh
+set -eu
+printf '%s\n' "${PATH}" >"${CALL_LOG}.path"
+printf '<%s>\n' "$@" >"${CALL_LOG}.args"
+EOF
+chmod +x "${TEST_ROOT}/bin/claude"
+
+claude_log="${TEST_ROOT}/claude"
+HOME="${TEST_HOME}" \
+  WSL_INTEROP="/run/WSL/test_interop" \
+  ZSH_SYSTEM_PLUGIN_ROOT="${SYSTEM_PLUGIN_ROOT}" \
+  CALL_LOG="${claude_log}" \
+  PATH="${TEST_ROOT}/bin:/usr/bin" \
+  /usr/bin/zsh -f -c 'source "$1"; claude --version' zsh-test "${ZSHRC}"
+grep -Fq "${TEST_HOME}/.local/libexec/codex-wsl" "${claude_log}.path"
+printf '%s\n' '<--version>' >"${TEST_ROOT}/expected-claude.args"
+cmp -s "${TEST_ROOT}/expected-claude.args" "${claude_log}.args"
+
 [ -x "${CODEX_POWERSHELL_WRAPPER}" ]
 cat >"${TEST_ROOT}/bin/init" <<'EOF'
 #!/bin/sh
@@ -83,4 +102,4 @@ printf '%s\n' \
   >"${TEST_ROOT}/expected-init.args"
 cmp -s "${TEST_ROOT}/expected-init.args" "${codex_log}.init"
 
-printf 'PASS: zsh config and Codex WSL clipboard launcher behave as expected\n'
+printf 'PASS: zsh config and WSL clipboard launchers behave as expected\n'
