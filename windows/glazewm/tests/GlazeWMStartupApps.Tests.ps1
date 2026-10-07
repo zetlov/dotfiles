@@ -55,21 +55,32 @@ Describe "GlazeWM startup applications" {
     )
   }
 
-  It "places Zen on workspace 1 only from the startup helper" {
+  It "places each application only from the startup helper" {
     $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
     $script = Get-Content -LiteralPath $scriptPath -Raw
+    $expectedWorkspaces = @{
+      "Zen Browser (Personal)" = "1"
+      "Discord" = "2"
+      "Spotify" = "2"
+      "Todoist" = "3"
+      "Notion Calendar" = "3"
+      "Obsidian" = "4"
+      "Notion" = "4"
+      "Zen Browser (MadoriLABO)" = "7"
+      "Slack" = "7"
+      "Zen Browser (University)" = "9"
+      "Zotero" = "9"
+    }
+
+    foreach ($app in @($config.applications)) {
+      [string]$app.startupWorkspace | Should -Be $expectedWorkspaces[$app.name]
+    }
+
     $zen = @($config.applications | Where-Object {
       $_.name -eq "Zen Browser (Personal)"
     })[0]
 
-    $zen.startupWorkspace | Should -Be "1"
     $zen.arguments | Should -Be '-P "Personal"'
-    @($config.applications | Where-Object {
-      $_.name -eq "Zen Browser (MadoriLABO)"
-    })[0].startupWorkspace | Should -Be "7"
-    @($config.applications | Where-Object {
-      $_.name -eq "Zen Browser (University)"
-    })[0].startupWorkspace | Should -Be "9"
     [int]$config.workspacePlacementWaitSeconds | Should -BeGreaterThan 0
     $script | Should -Match "Invoke-GlazeStartupWorkspacePlacement"
   }
@@ -96,5 +107,26 @@ Describe "GlazeWM startup applications" {
     $gridIndex -gt $placementIndex | Should -Be $true
     $syncIndex -gt $gridIndex | Should -Be $true
     $stateIndex -gt $syncIndex | Should -Be $true
+  }
+
+  It "serializes initial Zebar sync before application placement" {
+    $script = Get-Content -LiteralPath $scriptPath -Raw
+    $initialSyncIndex = $script.IndexOf(
+      '& $monitorSyncScript -RestartZebar'
+    )
+    $applicationIndex = $script.IndexOf('$startApps = @(Get-StartApps)')
+
+    $initialSyncIndex | Should -BeGreaterThan -1
+    $applicationIndex | Should -BeGreaterThan $initialSyncIndex
+  }
+
+  It "does not abort application placement when initial Zebar sync fails" {
+    $script = Get-Content -LiteralPath $scriptPath -Raw
+
+    $script | Should -Match (
+      'try\s*\{[\s\S]*& \$monitorSyncScript -RestartZebar' +
+      '[\s\S]*\}\s*catch\s*\{'
+    )
+    $script | Should -Match 'InitialMonitorSyncError'
   }
 }

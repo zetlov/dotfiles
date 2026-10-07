@@ -137,6 +137,21 @@ if (-not (Get-Process -Name "glazewm" -ErrorAction SilentlyContinue)) {
   throw "GlazeWM did not start within $waitSeconds seconds."
 }
 
+$monitorSyncScript = Join-Path $PSScriptRoot "Sync-GlazeMonitorLayout.ps1"
+if (-not (Test-Path -LiteralPath $monitorSyncScript -PathType Leaf)) {
+  throw "GlazeWM monitor sync script is missing: $monitorSyncScript"
+}
+$initialMonitorSyncError = ""
+try {
+  & $monitorSyncScript -RestartZebar | Out-Null
+} catch {
+  $initialMonitorSyncError = $_.Exception.Message
+  Write-Warning (
+    "Initial monitor and Zebar sync failed; continuing startup application " +
+    "placement: $initialMonitorSyncError"
+  )
+}
+
 $startApps = @(Get-StartApps)
 $launchedApplications = @()
 $failures = @()
@@ -268,4 +283,5 @@ Invoke-GlazeWorkspaceMonitorSync -GlazeWMPath $GlazeWMPath | Out-Null
   CompletedAt = (Get-Date).ToString("o")
   ApplicationCount = $applications.Count
   WorkspaceSynchronized = $true
+  InitialMonitorSyncError = $initialMonitorSyncError
 } | ConvertTo-Json | Set-Content -LiteralPath $statePath -Encoding UTF8

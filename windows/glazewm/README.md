@@ -119,11 +119,11 @@ Replacing a widget pack while Zebar is running likewise requires the explicit
 - Workspace 9: Zen Browser (University profile) and Zotero
 - Workspace 11: registered games, floating and not centered
 
-The startup helper launches only missing applications. Zen is launched three
-times with the named Firefox-compatible profiles and each profile is placed on
-its corresponding workspace. Zen has no persistent window rule, so browser
-windows opened later stay on the currently active workspace. GlazeWM window
-rules continue to route the other listed applications.
+The startup helper launches only missing applications and places each listed
+application on its corresponding workspace. Zen is launched three times with
+the named Firefox-compatible profiles. None of these startup applications has
+a persistent window rule, so windows and dialogs opened later stay on the
+currently active workspace. Persistent GlazeWM routing is reserved for games.
 
 After startup placement and workspace-grid reconciliation finish, the same
 helper reruns workspace-to-monitor synchronization without invoking Zebar.

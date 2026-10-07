@@ -2,7 +2,6 @@ general:
   startup_commands:
     - 'shell-exec --hide-window powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%LOCALAPPDATA%\dotfiles\glazewm\autotile.ps1"'
     - 'shell-exec --hide-window powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%LOCALAPPDATA%\dotfiles\glazewm\Start-GlazeWorkspaceApps.ps1"'
-    - 'shell-exec --hide-window powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%LOCALAPPDATA%\dotfiles\glazewm\Sync-GlazeMonitorLayout.ps1" -RestartZebar'
   shutdown_commands: []
   config_reload_commands: []
   focus_follows_cursor: false
@@ -89,26 +88,6 @@ workspaces:
     keep_alive: true
 
 window_rules:
-  - commands: ['move --workspace 3']
-    match:
-      - window_process: { equals: 'Todoist' }
-      - window_process: { equals: 'Notion Calendar' }
-  - commands: ['move --workspace 2']
-    match:
-      - window_process: { equals: 'Spotify' }
-      - window_process: { equals: 'Discord' }
-  - commands: ['move --workspace 4']
-    match:
-      - window_process: { equals: 'Obsidian' }
-  - commands: ['move --workspace 4']
-    match:
-      - window_process: { equals: 'Notion' }
-  - commands: ['move --workspace 7']
-    match:
-      - window_process: { equals: 'slack' }
-  - commands: ['move --workspace 9']
-    match:
-      - window_process: { equals: 'zotero' }
   - commands: ['move --workspace 11', 'set-floating --centered=false']
     match:
       - window_process: { equals: 'StreetFighter6' }

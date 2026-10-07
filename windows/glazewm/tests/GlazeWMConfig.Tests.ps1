@@ -88,8 +88,9 @@ Describe "GlazeWM managed configuration" {
 
     $config | Should -Match "autotile\.ps1"
     $config | Should -Match "Start-GlazeWorkspaceApps\.ps1"
-    $config | Should -Match "Sync-GlazeMonitorLayout\.ps1"
-    $config | Should -Match "-RestartZebar"
+    $config | Should -Not -Match (
+      "(?m)^\s+- .*Sync-GlazeMonitorLayout\.ps1.*-RestartZebar"
+    )
     $config | Should -Not -Match "(?i)seelen"
   }
 
@@ -160,26 +161,24 @@ Describe "GlazeWM managed configuration" {
     $config | Should -Match ([regex]::Escape('"%LOCALAPPDATA%\dotfiles\glazewm\Start-GlazeWorkspaceApps.ps1"'))
   }
 
-  It "routes non-browser startup applications with persistent window rules" {
+  It "leaves startup application routing to the startup helper" {
     $config = Get-Content -LiteralPath $configPath -Raw
 
-    foreach ($rule in @(
-      "Todoist:3",
-      "Notion Calendar:3",
-      "Spotify:2",
-      "Discord:2",
-      "Obsidian:4",
-      "Notion:4",
-      "slack:7",
-      "zotero:9"
+    foreach ($processName in @(
+      "zen",
+      "Todoist",
+      "Notion Calendar",
+      "Spotify",
+      "Discord",
+      "Obsidian",
+      "Notion",
+      "slack",
+      "zotero"
     )) {
-      $parts = $rule.Split(":")
-      $pattern = "(?ms)commands: \['move --workspace $($parts[1])'\].{0,400}window_process: \{ equals: '$([regex]::Escape($parts[0]))' \}"
-      $config | Should -Match $pattern
+      $config | Should -Not -Match (
+        "(?m)^\s+- window_process: \{ equals: '$([regex]::Escape($processName))' \}\r?$"
+      )
     }
-    $config | Should -Not -Match (
-      "(?m)^\s+- window_process: \{ equals: 'zen' \}\r?$"
-    )
   }
 
   It "routes the configured game processes to floating workspace eleven" {
