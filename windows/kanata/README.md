@@ -90,7 +90,9 @@ profile active after a game exits.
 Entire Steam application directories can be excluded with
 `steam_ignore_directories`. The default `wallpaper_engine` entry also covers
 helper executables such as `winrtutil64.exe`, while Steam itself remains
-outside `steamapps\common` and is never classified as a game.
+outside `steamapps\common` and is never classified as a game. The Farmer Was
+Replaced is also excluded so its in-game code editor keeps the normal Space
+navigation shortcuts available.
 
 Kanata remains active while games are running, and compatibility with every
 anti-cheat system is not guaranteed.

@@ -16,7 +16,8 @@
     "webwallpaper64.exe"
   ],
   "steam_ignore_directories": [
-    "wallpaper_engine"
+    "wallpaper_engine",
+    "The Farmer Was Replaced"
   ],
   "hard_off_executables": [
     "Friends vs Friends.exe",

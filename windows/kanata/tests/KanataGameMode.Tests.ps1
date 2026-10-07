@@ -103,7 +103,7 @@ Context "Get-KanataGameModeSettings" {
     Assert-Equal $settings.SteamIgnoreExecutables.Count 10
     Assert-Equal (
       $settings.SteamIgnoreDirectories -join "|"
-    ) "wallpaper_engine"
+    ) "wallpaper_engine|The Farmer Was Replaced"
   }
 
   It "loads a valid settings file" {
@@ -310,6 +310,21 @@ Context "Test-KanataGameProcess" {
       -DisableForSteamGames $true `
       -SteamIgnoreExecutables $steamIgnore `
       -SteamIgnoreDirectories @("wallpaper_engine") `
+      -HardOffExecutables $hardOff
+
+    Assert-Equal $isGame $false
+  }
+
+  It "keeps Space shortcuts enabled in The Farmer Was Replaced" {
+    $isGame = Test-KanataGameProcess `
+      -ProcessName "TheFarmerWasReplaced" `
+      -ProcessPath (
+        "$steamCommon\The Farmer Was Replaced\TheFarmerWasReplaced.exe"
+      ) `
+      -SteamCommonPaths @($steamCommon) `
+      -DisableForSteamGames $true `
+      -SteamIgnoreExecutables $steamIgnore `
+      -SteamIgnoreDirectories @("The Farmer Was Replaced") `
       -HardOffExecutables $hardOff
 
     Assert-Equal $isGame $false
