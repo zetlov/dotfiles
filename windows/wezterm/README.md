@@ -5,13 +5,14 @@ links that file into the Linux home directory. Windows uses a copied deployment
 because loading a config through a WSL UNC path would make WezTerm startup
 depend on the WSL distribution that it may need to launch.
 
-The initial appearance matches the version-controlled Kitty baseline:
-JetBrainsMono Nerd Font at 13 pt, Catppuccin Mocha, 70% background opacity,
-zero padding, a steady bar cursor, a bottom tab bar, and no title bar. Windows
-Acrylic blur is intentionally disabled so unfocused windows retain the same
-background opacity. Zsh switches the cursor to a steady block in vi command
-mode and back to a bar in insert mode. New windows open in the `alarm` WSL
-domain by default. On Arch,
+The managed appearance uses JetBrainsMono Nerd Font at 13 pt, Catppuccin Mocha,
+90% background opacity, a dark vertical background gradient, dimmed inactive
+panes, zero padding, a steady bar cursor, a bottom tab bar, and no title bar.
+Windows Acrylic blur is intentionally disabled so unfocused windows retain the
+same background opacity. Zsh switches the cursor to a steady block in vi
+command mode and back to a bar in insert mode. Neovim uses a block in normal
+and visual modes and a thin bar while inserting. New windows open in the
+`archlinux` WSL domain by default. On Arch,
 Zetshell can override Kitty colors with a generated host-local theme. That file
 is not currently present and is not loaded by the Windows WezTerm config;
 dynamic theme synchronization can be added separately.

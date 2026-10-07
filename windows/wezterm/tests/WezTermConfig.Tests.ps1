@@ -34,21 +34,24 @@ BeforeAll {
   }
 }
 
-Context "Version-controlled Kitty baseline appearance" {
-  It "matches the Arch Kitty font and window appearance" {
+Context "Version-controlled terminal appearance" {
+  It "uses the managed font, cursor, and window appearance" {
     $config = Get-Content -LiteralPath $configPath -Raw
 
     Assert-Matches $config (
-      "(?s)wezterm\.font_with_fallback\s*\{\s*" +
-      "'JetBrainsMono Nerd Font'\s*,\s*" +
-      "'Noto Sans Mono CJK JP'\s*,?\s*\}"
+      "(?s)wezterm\.font_with_fallback\s*\(?\s*\{\s*" +
+      "['`"]JetBrainsMono Nerd Font['`"]\s*,\s*" +
+      "['`"]Noto Sans Mono CJK JP['`"]\s*,?\s*\}\s*\)?"
     )
     Assert-Matches $config "font_size\s*=\s*13"
-    Assert-Matches $config "default_cursor_style\s*=\s*'SteadyBar'"
-    Assert-Matches $config "window_background_opacity\s*=\s*0\.7"
+    Assert-Matches $config "default_cursor_style\s*=\s*['`"]SteadyBar['`"]"
+    Assert-Matches $config "color_scheme\s*=\s*['`"]Catppuccin Mocha['`"]"
+    Assert-Matches $config "window_background_opacity\s*=\s*0\.9"
     if ($config -match 'win32_system_backdrop\s*=\s*[''"]Acrylic[''"]') {
       throw "Windows Acrylic must remain disabled so unfocused windows stay translucent."
     }
+    Assert-Matches $config "(?s)inactive_pane_hsb\s*=\s*\{.*saturation\s*=\s*0\.85.*brightness\s*=\s*0\.75"
+    Assert-Matches $config "(?s)window_background_gradient\s*=\s*\{.*orientation\s*=\s*['`"]Vertical['`"].*#08090d.*#0a0e16.*#0d1422"
     Assert-Matches $config "use_fancy_tab_bar\s*=\s*false"
     Assert-Matches $config "hide_tab_bar_if_only_one_tab\s*=\s*true"
   }
@@ -66,23 +69,11 @@ Context "Version-controlled Kitty baseline appearance" {
     }
   }
 
-  It "hides the title bar and opens the alarm WSL domain by default" {
+  It "hides the title bar and opens the Arch Linux WSL domain by default" {
     $config = Get-Content -LiteralPath $configPath -Raw
 
-    Assert-Matches $config "window_decorations\s*=\s*'RESIZE'"
-    Assert-Matches $config "default_domain\s*=\s*'WSL:alarm'"
-  }
-
-  It "contains the Catppuccin Mocha colors used by Kitty" {
-    $config = Get-Content -LiteralPath $configPath -Raw
-
-    foreach ($color in @(
-      "#CDD6F4", "#1E1E2E", "#F5E0DC", "#CBA6F7",
-      "#45475A", "#F38BA8", "#A6E3A1", "#F9E2AF",
-      "#89B4FA", "#F5C2E7", "#94E2D5", "#BAC2DE"
-    )) {
-      Assert-Matches $config ([regex]::Escape($color))
-    }
+    Assert-Matches $config "window_decorations\s*=\s*['`"]RESIZE['`"]"
+    Assert-Matches $config "default_domain\s*=\s*['`"]WSL:archlinux['`"]"
   }
 }
 
@@ -97,9 +88,9 @@ Context "Codex composer input compatibility" {
 
   It "maps Shift-Enter to the Codex newline key without changing other Shift input" {
     $weztermConfig = Get-Content -LiteralPath $configPath -Raw
-    Assert-Matches $weztermConfig "key\s*=\s*'Enter'"
-    Assert-Matches $weztermConfig "mods\s*=\s*'SHIFT'"
-    Assert-Matches $weztermConfig "SendKey\s*\{\s*key\s*=\s*'j',\s*mods\s*=\s*'CTRL'\s*\}"
+    Assert-Matches $weztermConfig "key\s*=\s*['`"]Enter['`"]"
+    Assert-Matches $weztermConfig "mods\s*=\s*['`"]SHIFT['`"]"
+    Assert-Matches $weztermConfig "SendKey\s*\(?\s*\{\s*key\s*=\s*['`"]j['`"]\s*,\s*mods\s*=\s*['`"]CTRL['`"]\s*\}\s*\)?"
   }
 }
 
