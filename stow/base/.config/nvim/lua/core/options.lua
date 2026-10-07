@@ -9,6 +9,8 @@ vim.opt.matchtime = 1
 vim.opt.showcmd = true
 --- highlight current line
 vim.opt.cursorline = true
+--- use a block in normal modes and a thin bar while inserting
+vim.opt.guicursor = "n-v-c:block,i-ci-ve:ver25,r-cr:hor20,o:hor50"
 
 -- input
 --- tab
