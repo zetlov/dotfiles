@@ -32,7 +32,9 @@ with open(sys.argv[1], "rb") as config_file:
     config = tomllib.load(config_file)
 
 assert config["onboarding"] is False
-assert config["theme"]["name"] == "tokyo-night"
+assert config["theme"]["name"] == "terminal"
+assert config["theme"]["custom"]["panel_bg"] == "reset"
+assert config["theme"]["custom"]["sidebar_bg"] == "reset"
 assert config["terminal"]["default_shell"] == "zsh"
 assert config["update"]["channel"] == "stable"
 assert config["ui"]["status_indicators"] == "symbols"
@@ -40,6 +42,16 @@ assert "status_indecators" not in config["ui"]
 
 keys = config["keys"]
 commands = keys["command"]
+assert keys["switch_tab"] == ""
+assert keys["switch_workspace"] == "prefix+1..9"
+assert keys["last_pane"] == "prefix+backtick"
+assert keys["previous_workspace"] == "prefix+left"
+assert keys["next_workspace"] == "prefix+right"
+assert config["ui"]["sidebar"]["spaces"]["rows"][0] == [
+    "$num",
+    "state_icon",
+    "workspace",
+]
 assert {command["command"] for command in commands} == {"lazygit", "fzf"}
 command_keys = [command["key"] for command in commands]
 assert all(key.startswith("prefix+") for key in command_keys)

@@ -77,4 +77,14 @@ install_herdr_integration() {
         echo "Herdr Codex integration installation failed." >&2
         return 1
     fi
+
+    echo "Linking the Herdr numbered-workspaces plugin..."
+    if ! (
+        cd "${dotfiles_dir}"
+        "${mise_bin}" exec -- herdr plugin link \
+            "${dotfiles_dir}/scripts/herdr/numbered-workspaces" --enabled
+    ); then
+        echo "Herdr numbered-workspaces plugin linking failed." >&2
+        return 1
+    fi
 }

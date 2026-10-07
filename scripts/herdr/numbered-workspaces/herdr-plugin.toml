@@ -1,0 +1,39 @@
+id = "numbered-workspaces"
+name = "Numbered Workspaces"
+version = "1.0.0"
+min_herdr_version = "0.8.2"
+description = "Show workspace jump numbers in the same order as the Herdr sidebar."
+platforms = ["linux", "macos"]
+
+[[startup]]
+command = ["python3", "./renumber.py"]
+
+[[actions]]
+id = "renumber"
+title = "Renumber workspaces"
+contexts = ["global"]
+command = ["python3", "./renumber.py"]
+
+[[events]]
+on = "workspace.created"
+command = ["python3", "./renumber.py"]
+
+[[events]]
+on = "workspace.closed"
+command = ["python3", "./renumber.py"]
+
+[[events]]
+on = "workspace.moved"
+command = ["python3", "./renumber.py"]
+
+[[events]]
+on = "workspace.reordered"
+command = ["python3", "./renumber.py"]
+
+[[events]]
+on = "workspace.focused"
+command = ["python3", "./renumber.py"]
+
+[[events]]
+on = "worktree.removed"
+command = ["python3", "./renumber.py"]

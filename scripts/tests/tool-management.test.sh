@@ -84,6 +84,13 @@ if ! rg -q '"\$\{mise_bin\}" exec -- herdr integration install codex' \
     exit 1
 fi
 
+if ! rg -q 'herdr plugin link' "${DOTFILES_HELPER}" \
+    || ! rg -q 'scripts/herdr/numbered-workspaces' "${DOTFILES_HELPER}" \
+    || ! rg -q -- '--enabled' "${DOTFILES_HELPER}"; then
+    echo "FAIL: full bootstrap should link the managed numbered-workspaces plugin" >&2
+    exit 1
+fi
+
 link_line=$(rg -n '^apply_dotfiles ' "${BOOTSTRAP_SCRIPT}" | tail -n 1 | cut -d: -f1)
 mise_line=$(rg -n '^install_mise_tools ' "${BOOTSTRAP_SCRIPT}" | tail -n 1 | cut -d: -f1)
 if [ -z "${link_line}" ] || [ -z "${mise_line}" ] || [ "${mise_line}" -le "${link_line}" ]; then
