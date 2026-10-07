@@ -8,7 +8,12 @@ $rust\
 $golang\
 $php\
 $time\
+$line_break\
 $character"""
+
+[character]
+success_symbol = '[>](bold green)'
+error_symbol = '[>](bold red)'
 
 [directory]
 style = "fg:#e3e5e5 bg:none"
