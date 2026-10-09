@@ -34,6 +34,13 @@ Describe "GlazeWM managed configuration" {
     $script | Should -Match '\[string\]\$DeviceProfile = "desktop"'
     $script | Should -Match 'config\.surface\.yaml'
     $script | Should -Not -Match 'OSArchitecture.+surface'
+    $script | Should -Match '\$sourceConfigName = if \('
+    $script | Should -Match (
+      'Join-Path \$PSScriptRoot \$sourceConfigName'
+    )
+    $script | Should -Not -Match (
+      'Join-Path \$PSScriptRoot\s*\(\s*if\s*\('
+    )
   }
 
   It "synchronizes Surface displays immediately and restores an old watcher on rollback" {

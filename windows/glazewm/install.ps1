@@ -270,9 +270,12 @@ if (Test-Path -LiteralPath $komorebiShortcut -PathType Leaf) {
   )
 }
 
-$sourceConfig = Join-Path $PSScriptRoot (
-  if ($DeviceProfile -eq "surface") { "config.surface.yaml" } else { "config.yaml" }
-)
+$sourceConfigName = if ($DeviceProfile -eq "surface") {
+  "config.surface.yaml"
+} else {
+  "config.yaml"
+}
+$sourceConfig = Join-Path $PSScriptRoot $sourceConfigName
 $sourceModule = Join-Path $PSScriptRoot "GlazeWMAutoTile.psm1"
 $sourceWorkspaceHelpers = Join-Path `
   $PSScriptRoot `
