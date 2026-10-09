@@ -5,6 +5,7 @@ import {
   getMediaProgress,
   getMediaText,
   getNetworkPresentation,
+  getSurfaceWorkspaces,
   sortWorkspaces,
 } from './view-model';
 
@@ -19,6 +20,21 @@ test('sortWorkspaces orders numeric names before named workspaces', () => {
   assert.deepEqual(
     workspaces.map(workspace => workspace.name),
     ['1', '2', '10', 'vert'],
+  );
+});
+
+test('getSurfaceWorkspaces keeps numeric workspaces and omits desktop-only names', () => {
+  const workspaces = [
+    { name: 'left' },
+    { name: '6' },
+    { name: '2' },
+    { name: 'vert' },
+    { name: '1' },
+  ];
+
+  assert.deepEqual(
+    getSurfaceWorkspaces(workspaces).map(workspace => workspace.name),
+    ['1', '2', '6'],
   );
 });
 

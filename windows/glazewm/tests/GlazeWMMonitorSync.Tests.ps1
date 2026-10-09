@@ -549,6 +549,44 @@ if ($Arguments -join " " -eq "command wm-reload-config") {
     }
   }
 
+  It "refreshes an AppBar against an explicit non-primary monitor rectangle" {
+    InModuleScope GlazeWMMonitorSync {
+      $global:GlazeTestAppBarMessages = [Collections.Generic.List[string]]::new()
+      Mock Get-ZebarWindowBounds {
+        [pscustomobject]@{
+          Left = -1824; Top = 0; Right = 0; Bottom = 42
+        }
+      }
+      Mock Invoke-ZebarAppBarNativeMessage {
+        param($Message, $Data)
+        $global:GlazeTestAppBarMessages.Add(
+          "${Message}:$($Data.Bounds.Left),$($Data.Bounds.Top)," +
+          "$($Data.Bounds.Right),$($Data.Bounds.Bottom)"
+        )
+        return $Data
+      }
+
+      try {
+        Invoke-ZebarAppBarPositionRefresh `
+          -Bar ([pscustomobject]@{ MainWindowHandle = [IntPtr]12345 }) `
+          -ExpectedReservedTop 42 `
+          -ExpectedMonitorBounds ([pscustomobject]@{
+            X = -1824; Y = 0; Width = 1824; Height = 2736
+          }) | Out-Null
+
+        $global:GlazeTestAppBarMessages | Should -Be @(
+          "2:-1824,0,0,42"
+          "3:-1824,0,0,42"
+        )
+      } finally {
+        Remove-Variable `
+          GlazeTestAppBarMessages `
+          -Scope Global `
+          -ErrorAction SilentlyContinue
+      }
+    }
+  }
+
   It "rejects a bar outside the primary rectangle before AppBar messages" {
     InModuleScope GlazeWMMonitorSync {
       Mock Get-WindowsPrimaryBounds {

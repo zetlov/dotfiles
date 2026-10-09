@@ -4,10 +4,17 @@ function Invoke-WindowsComponentEntrypoint {
     [Parameter(Mandatory = $true)]
     [object]$Component,
 
-    [switch]$AddKanataDefenderExclusion = $false
+    [switch]$AddKanataDefenderExclusion = $false,
+    [ValidateSet("desktop", "surface")][string]$DeviceProfile = "desktop",
+    [switch]$AllowZebarRuntimeStop = $false
   )
 
-  $parameters = if (
+  $parameters = if ($Component.Name -eq "glazewm") {
+    @{
+      DeviceProfile = $DeviceProfile
+      AllowZebarRuntimeStop = $AllowZebarRuntimeStop
+    }
+  } elseif (
     $AddKanataDefenderExclusion -and
     $Component.Name -eq "kanata" -and
     $Component.Mode -eq "Install"
@@ -56,7 +63,9 @@ function Invoke-WindowsComponentPlan {
 
     [switch]$AllowRollbackOnly = $false,
 
-    [switch]$AddKanataDefenderExclusion = $false
+    [switch]$AddKanataDefenderExclusion = $false,
+    [ValidateSet("desktop", "surface")][string]$DeviceProfile = "desktop",
+    [switch]$AllowZebarRuntimeStop = $false
   )
 
   Assert-WindowsComponentExecutionPreflight `
@@ -80,9 +89,14 @@ function Invoke-WindowsComponentPlan {
       ) {
         Invoke-WindowsComponentEntrypoint `
           -Component $trustedComponent `
-          -AddKanataDefenderExclusion
+          -AddKanataDefenderExclusion `
+          -DeviceProfile $DeviceProfile `
+          -AllowZebarRuntimeStop:$AllowZebarRuntimeStop
       } else {
-        Invoke-WindowsComponentEntrypoint -Component $trustedComponent
+        Invoke-WindowsComponentEntrypoint `
+          -Component $trustedComponent `
+          -DeviceProfile $DeviceProfile `
+          -AllowZebarRuntimeStop:$AllowZebarRuntimeStop
       }
     } catch {
       throw (
@@ -109,7 +123,9 @@ function Invoke-WindowsComponentSelection {
 
     [switch]$Preflight = $false,
 
-    [switch]$AddKanataDefenderExclusion = $false
+    [switch]$AddKanataDefenderExclusion = $false,
+    [ValidateSet("desktop", "surface")][string]$DeviceProfile = "desktop",
+    [switch]$AllowZebarRuntimeStop = $false
   )
 
   $windowsRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
@@ -151,6 +167,12 @@ function Invoke-WindowsComponentSelection {
       -AllowRollbackOnly:$AllowRollbackOnly `
       -WindowsRoot $windowsRoot
   )
+  if (
+    $DeviceProfile -eq "surface" -and
+    @($plan | Where-Object { $_.Name -eq "monitor-profiles" }).Count -gt 0
+  ) {
+    throw "Surface profile does not support workstation monitor profiles."
+  }
   Assert-WindowsComponentPlan `
     -Plan $plan `
     -Catalog $catalog `
@@ -182,5 +204,7 @@ function Invoke-WindowsComponentSelection {
     -Catalog $catalog `
     -WindowsRoot $windowsRoot `
     -AllowRollbackOnly:$AllowRollbackOnly `
-    -AddKanataDefenderExclusion:$AddKanataDefenderExclusion
+    -AddKanataDefenderExclusion:$AddKanataDefenderExclusion `
+    -DeviceProfile $DeviceProfile `
+    -AllowZebarRuntimeStop:$AllowZebarRuntimeStop
 }

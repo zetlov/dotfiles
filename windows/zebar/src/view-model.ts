@@ -28,6 +28,12 @@ export function sortWorkspaces<T extends WorkspaceSummary>(
   });
 }
 
+export function getSurfaceWorkspaces<T extends WorkspaceSummary>(
+  workspaces: readonly T[],
+): T[] {
+  return sortWorkspaces(workspaces.filter(workspace => /^\d+$/.test(workspace.name)));
+}
+
 export function clampPercent(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.min(100, Math.max(0, Math.round(value)));

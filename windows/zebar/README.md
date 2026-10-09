@@ -18,6 +18,11 @@ The first version includes:
 - three floating 42 px glass islands inspired by the Arch bar, macOS, and
   Seelen UI
 
+The Surface profile uses a separate lightweight bundle. It keeps numeric
+GlazeWM workspaces, the centered date and clock, battery, network, audio, and
+the system tray. It does not initialize CPU, memory, GPU, media, or monitor
+profile providers and has no shell-command privileges.
+
 Arch-specific package updates and the Quickshell notification center are not
 shown. They do not have equivalent Zebar providers.
 
@@ -52,3 +57,11 @@ sync keeps an existing reserved bar running and refuses a new start with an
 explicit sign-out or reboot requirement. If the bar remains healthy but Windows
 loses its work-area reservation, monitor sync refreshes `ABM_QUERYPOS` and
 `ABM_SETPOS` against the existing widget window instead of restarting Zebar.
+
+For Surface, pass `-DeviceProfile surface` and the validated internal-panel
+GDI name (for example, `-InternalMonitorName '\\.\DISPLAY1'`). The installer
+selects only the `surface-bar` widget and replaces the template monitor name
+in its `internal-monitor` preset. Desktop remains the default and installs the
+existing `bar` widget with the `primary-monitor` preset. The installer returns
+the selected `WidgetName` and `PresetName` so its caller can start exactly one
+widget without duplicating profile-specific startup logic.

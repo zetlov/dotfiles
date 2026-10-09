@@ -75,6 +75,22 @@ assert_option_state() {
 }
 
 assert_option_state "1:1:0:0:0:0"
+parse_install_options --windows-device-profile=surface
+if [ "${WINDOWS_DEVICE_PROFILE}" != "surface" ]; then
+    echo "FAIL: Surface device profile should be selected explicitly" >&2
+    exit 1
+fi
+parse_install_options --windows-device-profile=surface \
+    --allow-zebar-runtime-stop
+if [ "${ALLOW_ZEBAR_RUNTIME_STOP}" -ne 1 ]; then
+    echo "FAIL: Zebar runtime stop authorization should be explicit" >&2
+    exit 1
+fi
+if parse_install_options --windows-device-profile=surface \
+    --with-monitor-profiles >/dev/null 2>&1; then
+    echo "FAIL: Surface profile should reject workstation monitor profiles" >&2
+    exit 1
+fi
 assert_option_state "0:0:0:0:0:0" --without-tex --without-glazewm
 assert_option_state "1:1:0:1:0:0" --with-monitor-profiles
 assert_option_state "1:1:0:0:1:0" --with-nvidia

@@ -155,6 +155,12 @@ preflight_windows_components() {
         -NoProfile -ExecutionPolicy Bypass -File "${windows_installer}"
         -Mode Install -Preflight
     )
+    if [ "${WINDOWS_DEVICE_PROFILE:-desktop}" = "surface" ]; then
+        argv+=(-DeviceProfile surface)
+    fi
+    if [ "${ALLOW_ZEBAR_RUNTIME_STOP:-0}" = "1" ]; then
+        argv+=(-AllowZebarRuntimeStop)
+    fi
     if [ -n "${additional_component}" ]; then
         argv+=(-AdditionalComponentCsv "${additional_component}")
     fi
@@ -220,6 +226,12 @@ apply_windows_components() {
         -NoProfile -ExecutionPolicy Bypass -File "${windows_installer}"
         -Mode Install
     )
+    if [ "${WINDOWS_DEVICE_PROFILE:-desktop}" = "surface" ]; then
+        argv+=(-DeviceProfile surface)
+    fi
+    if [ "${ALLOW_ZEBAR_RUNTIME_STOP:-0}" = "1" ]; then
+        argv+=(-AllowZebarRuntimeStop)
+    fi
     if [ -n "${additional_component}" ]; then
         argv+=(-AdditionalComponentCsv "${additional_component}")
     fi

@@ -33,6 +33,8 @@ Describe "Zetshell Zebar configuration" {
     $root = Join-Path $PSScriptRoot ".."
     $packPath = Join-Path $root "zpack.json"
     $sourcePath = Join-Path $root "src\index.tsx"
+    $surfaceSourcePath = Join-Path $root "src\surface.tsx"
+    $surfaceHtmlPath = Join-Path $root "surface.html"
     $stylePath = Join-Path $root "src\index.css"
     $installerPath = Join-Path $root "install.ps1"
     $processHelpersPath = Join-Path $root "ZebarProcessHelpers.ps1"
@@ -60,6 +62,34 @@ Describe "Zetshell Zebar configuration" {
       Assert-Equal $false
     $preset.dockToEdge.enabled | Assert-Equal $true
     $preset.dockToEdge.edge | Assert-Equal "top"
+  }
+
+  It "defines a Surface bar bundle without desktop shell privileges" {
+    $pack = Get-Content -LiteralPath $packPath -Raw | ConvertFrom-Json
+    $widget = @($pack.widgets | Where-Object name -eq "surface-bar")[0]
+    $preset = @($widget.presets)[0]
+
+    $widget.htmlPath | Assert-Equal "./dist/surface.html"
+    $widget.name | Assert-Equal "surface-bar"
+    @($widget.privileges.shellCommands).Count | Assert-Equal 0
+    $preset.name | Assert-Equal "internal-monitor"
+    $preset.monitorSelection.type | Assert-Equal "name"
+    $preset.monitorSelection.match | Assert-Equal "__INTERNAL_MONITOR_NAME__"
+  }
+
+  It "initializes only lightweight Surface providers" {
+    $source = Get-Content -LiteralPath $surfaceSourcePath -Raw
+    $html = Get-Content -LiteralPath $surfaceHtmlPath -Raw
+
+    foreach ($provider in @("glazewm", "battery", "audio", "date", "network", "systray")) {
+      $source | Assert-Match "${provider}:\s*\{\s*type:\s*'${provider}'"
+    }
+    foreach ($provider in @("cpu", "gpu", "memory", "media")) {
+      $source | Assert-Match -Not "${provider}:\s*\{\s*type:\s*'${provider}'"
+    }
+    $source | Assert-Match -Not 'monitor-profiles'
+    $source | Assert-Match -Not 'gpu-monitor'
+    $html | Assert-Match 'src="/src/surface\.tsx"'
   }
 
   It "uses local bundled assets and the requested providers" {
@@ -193,6 +223,16 @@ Describe "Zetshell Zebar configuration" {
     $installer | Assert-Match 'Get-FileHash'
   }
 
+  It "requires a validated internal GDI monitor name for Surface" {
+    $installer = Get-Content -LiteralPath $installerPath -Raw
+
+    $installer | Assert-Match '\[ValidateSet\("desktop", "surface"\)\]'
+    $installer | Assert-Match '\[string\]\$DeviceProfile = "desktop"'
+    $installer | Assert-Match '\$InternalMonitorName'
+    $installer | Assert-Match '\\\\\.\\DISPLAY'
+    $installer | Assert-Match '(?s)monitorSelection\.match\s*=\s*\$InternalMonitorName'
+  }
+
   It "pins and validates the Zebar runtime version" {
     $installer = Get-Content -LiteralPath $installerPath -Raw
 
@@ -208,7 +248,9 @@ Describe "Zetshell Zebar configuration" {
     $installer | Assert-Match '\$zebarWasRunning'
     $installer | Assert-Match 'if \(-not \$installed -and \$zebarWasRunning'
     $installer | Assert-Match 'start-widget-preset'
-    $installer | Assert-Match '"--preset", "primary-monitor"'
+    $installer | Assert-Match '\$previousWidgetName = "bar"'
+    $installer | Assert-Match '\$previousPresetName = "primary-monitor"'
+    $installer | Assert-Match '"--preset", \$previousPresetName'
     $installer | Assert-Match -Not 'all-monitors'
   }
 
@@ -237,5 +279,7 @@ Describe "Zetshell Zebar configuration" {
 
     $installer | Assert-Match '\[switch\]\$AllowRuntimeStop'
     $installer | Assert-Match '(?s)\$zebarWasRunning.+?-not \$AllowRuntimeStop.+?explicit authorization'
+    $installer | Assert-Match 'Changed = \$false'
+    $installer | Assert-Match 'Changed = \$true'
   }
 }

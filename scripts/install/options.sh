@@ -12,6 +12,8 @@ parse_install_options() {
     SYSTEM_UPGRADE=0
     CONTAINER_BACKEND=auto
     STOW_PROFILE=auto
+    WINDOWS_DEVICE_PROFILE=desktop
+    ALLOW_ZEBAR_RUNTIME_STOP=0
 
     local enable_tex=0
     local disable_tex=0
@@ -38,6 +40,13 @@ parse_install_options() {
             --profile=auto) STOW_PROFILE=auto ;;
             --profile=desktop) STOW_PROFILE=desktop ;;
             --profile=wsl) STOW_PROFILE=wsl ;;
+            --windows-device-profile=desktop) WINDOWS_DEVICE_PROFILE=desktop ;;
+            --windows-device-profile=surface) WINDOWS_DEVICE_PROFILE=surface ;;
+            --allow-zebar-runtime-stop) ALLOW_ZEBAR_RUNTIME_STOP=1 ;;
+            --windows-device-profile=*)
+                echo "Windows device profile must be desktop or surface." >&2
+                return 1
+                ;;
             --profile=*)
                 echo "Stow profile must be auto, desktop, or wsl." >&2
                 return 1
@@ -63,6 +72,10 @@ parse_install_options() {
     fi
     if [ "${enable_glazewm}" -eq 1 ] && [ "${WITH_KOMOREBI}" -eq 1 ]; then
         echo "Choose only one Windows window manager." >&2
+        return 1
+    fi
+    if [ "${WINDOWS_DEVICE_PROFILE}" = "surface" ] && [ "${WITH_MONITOR_PROFILES}" -eq 1 ]; then
+        echo "Surface profile does not support workstation monitor profiles." >&2
         return 1
     fi
 

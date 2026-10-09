@@ -23,6 +23,7 @@ and reviewing `yay` separately:
 ./install.sh --without-tex
 ./install.sh --without-glazewm
 ./install.sh --with-monitor-profiles
+./install.sh --windows-device-profile=surface
 ./install.sh --with-komorebi
 ./install.sh --with-nvidia
 ./install.sh --system-upgrade
@@ -32,6 +33,14 @@ The default full bootstrap includes TeX and, on WSL, GlazeWM with its managed
 Zebar bar. Use `--without-tex` or `--without-glazewm` to omit them. Monitor
 profiles remain machine-specific and require `--with-monitor-profiles`.
 Selecting the rollback-only `--with-komorebi` replaces GlazeWM for that run.
+The explicit `--windows-device-profile=surface` profile keeps workspaces 1-5
+alive on the built-in panel, uses workspace 6 for one attached display, omits
+workstation startup applications and monitor profiles, and deploys the reduced
+Surface bar. It is not inferred from ARM64 because non-Surface ARM PCs use the
+desktop profile.
+When switching an already-running Zebar installation between desktop and
+Surface packs, add `--allow-zebar-runtime-stop`; this explicitly authorizes the
+short Zebar stop required to replace its installed pack.
 `--minimal` is the aggregate opt-out: it also omits TeX and GlazeWM unless a
 legacy `--with-tex` or `--with-glazewm` flag explicitly re-enables one.
 

@@ -9,6 +9,7 @@ windows/glazewm/tests/GlazeWMConfig.Tests.ps1
 windows/glazewm/tests/GlazeWMMonitorSync.Tests.ps1
 windows/glazewm/tests/GlazeWMProcess.Tests.ps1
 windows/glazewm/tests/GlazeWMSafeRestart.Tests.ps1
+windows/glazewm/tests/GlazeSurfaceDisplay.Tests.ps1
 windows/glazewm/tests/GlazeWMStartupApps.Tests.ps1
 windows/kanata/tests/KanataGameMode.Tests.ps1
 windows/kanata/tests/KanataInstaller.Tests.ps1

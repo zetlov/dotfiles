@@ -1,8 +1,97 @@
 Describe "GlazeWM managed configuration" {
   BeforeAll {
     $configPath = Join-Path $PSScriptRoot "..\config.yaml"
+    $surfaceConfigPath = Join-Path $PSScriptRoot "..\config.surface.yaml"
     $startPath = Join-Path $PSScriptRoot "..\install.ps1"
     $kanataPath = Join-Path $PSScriptRoot "..\..\kanata\kanata.kbd"
+  }
+
+  It "keeps the Surface workspace and startup policy separate" {
+    $config = Get-Content -LiteralPath $surfaceConfigPath -Raw
+
+    foreach ($workspace in 1..5) {
+      $config | Should -Match (
+        "(?ms)^  - name: '$workspace'\r?\n" +
+        "    keep_alive: true\r?$"
+      )
+    }
+    foreach ($workspace in 6..12) {
+      $config | Should -Match (
+        "(?ms)^  - name: '$workspace'\r?\n" +
+        "    keep_alive: false\r?$"
+      )
+    }
+    $config | Should -Not -Match "(?m)^  - name: '(left|vert)'"
+    $config | Should -Not -Match "Switch-MonitorProfile"
+    $config | Should -Not -Match "Start-GlazeWorkspaceApps"
+    $config | Should -Match "Watch-GlazeSurfaceDisplay\.ps1"
+  }
+
+  It "selects an explicit desktop or Surface profile without ARM inference" {
+    $script = Get-Content -LiteralPath $startPath -Raw
+
+    $script | Should -Match '\[ValidateSet\("desktop", "surface"\)\]'
+    $script | Should -Match '\[string\]\$DeviceProfile = "desktop"'
+    $script | Should -Match 'config\.surface\.yaml'
+    $script | Should -Not -Match 'OSArchitecture.+surface'
+  }
+
+  It "synchronizes Surface displays immediately and restores an old watcher on rollback" {
+    $script = Get-Content -LiteralPath $startPath -Raw
+
+    $script | Should -Match (
+      'Invoke-GlazeSurfaceWorkspaceSync\s+`?\r?\n?' +
+      '\s*-GlazeWMPath \$GlazeWMPath'
+    )
+    $script | Should -Match '\$surfaceWatcherWasRunning = \$false'
+    $script | Should -Match (
+      'if \(\$surfaceWatcherWasRunning\)[\s\S]+?' +
+      'Start-HiddenPowerShellScript -ScriptPath \$deployedSurfaceWatcher'
+    )
+  }
+
+  It "keeps the Surface watcher single-instance and retries transient failures" {
+    $watcherPath = Join-Path $PSScriptRoot "..\Watch-GlazeSurfaceDisplay.ps1"
+    $watcher = Get-Content -LiteralPath $watcherPath -Raw
+
+    $watcher | Should -Match 'Local\\DotfilesGlazeSurfaceDisplayWatcher'
+    $watcher | Should -Match 'WaitOne\(0\)'
+    $watcher | Should -Match '\$retryAttemptsRemaining = 3'
+    $watcher | Should -Match 'Invoke-SurfaceDisplaySyncSafely'
+    $watcher | Should -Match (
+      'if \(Invoke-SurfaceDisplaySyncSafely\)[\s\S]+?' +
+      'Update-SurfaceDisplayDebounceState'
+    )
+    $surfaceModule = Get-Content `
+      -LiteralPath (Join-Path $PSScriptRoot "..\GlazeSurfaceDisplay.psm1") `
+      -Raw
+    $surfaceModule | Should -Match 'display topologies have not converged'
+    $surfaceModule | Should -Match 'Repair-SurfaceZebarAppBar'
+    $surfaceModule | Should -Match (
+      '(?s)\$focused = \$null.+?try \{.+?finally \{.+?' +
+      'could not restore workspace focus'
+    )
+  }
+
+  It "requires explicit authorization before replacing a running Zebar pack" {
+    $script = Get-Content -LiteralPath $startPath -Raw
+
+    $script | Should -Match '\[switch\]\$AllowZebarRuntimeStop'
+    $script | Should -Match (
+      '-AllowRuntimeStop:\$AllowZebarRuntimeStop'
+    )
+  }
+
+  It "restores the previous Zebar pack when a later installation step fails" {
+    $script = Get-Content -LiteralPath $startPath -Raw
+
+    $script | Should -Match '\$zebarDeploymentChanged = \$false'
+    $script | Should -Match '\$zebarState\.Changed'
+    $script | Should -Match (
+      'if \(\$zebarDeploymentChanged\)[\s\S]+?' +
+      '-LiteralPath \$zebarSnapshot[\s\S]+?' +
+      '\$previousZebarWidgetName'
+    )
   }
 
   It "keeps managed workspaces alive without topology-specific startup bindings" {
@@ -122,11 +211,11 @@ Describe "GlazeWM managed configuration" {
       '(?s)\$SkipStartupApps.+?requires.+?\$PreserveZebarRuntime'
     )
     $script | Should -Match (
-      'if \(-not \$SkipStartupApps\) \{[\s\S]*?' +
+      'if \(\$runStartupApps -and -not \$SkipStartupApps\) \{[\s\S]*?' +
       '\$startupAppsProcess = Start-HiddenPowerShellScript'
     )
     $script | Should -Match (
-      'if \(-not \$SkipStartupApps\) \{[\s\S]*?' +
+      'if \(\$runStartupApps -and -not \$SkipStartupApps\) \{[\s\S]*?' +
       '\$startupAppsDeadline = \(Get-Date\)'
     )
   }
@@ -338,7 +427,10 @@ Describe "GlazeWM managed configuration" {
     $script = Get-Content -LiteralPath $startPath -Raw
 
     $script | Should -Match '\$ZebarStartupTimeoutSeconds = 30'
-    $script | Should -Match 'MainWindowTitle -eq "Zebar - zetshell / bar"'
+    $script | Should -Match (
+      'MainWindowTitle -eq "Zebar - zetshell / \$WidgetName"'
+    )
+    $script | Should -Match 'managedZebarWidgetName'
     $script | Should -Match 'Zebar did not start within'
   }
 

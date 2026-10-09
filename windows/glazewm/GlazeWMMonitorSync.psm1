@@ -709,7 +709,8 @@ function Invoke-ZebarAppBarPositionRefresh {
   [CmdletBinding()]
   param(
     [Parameter(Mandatory = $true)][object]$Bar,
-    [ValidateRange(1, 200)][int]$ExpectedReservedTop
+    [ValidateRange(1, 200)][int]$ExpectedReservedTop,
+    [object]$ExpectedMonitorBounds
   )
 
   if (
@@ -720,19 +721,26 @@ function Invoke-ZebarAppBarPositionRefresh {
   }
   Initialize-ZebarAppBarInterop
 
-  $primary = Get-WindowsPrimaryBounds
+  $monitorBounds = if ($null -ne $ExpectedMonitorBounds) {
+    $ExpectedMonitorBounds
+  } else {
+    Get-WindowsPrimaryBounds
+  }
   $expectedBounds = New-Object ZebarAppBarInterop+Rect
-  $expectedBounds.Left = $primary.X
-  $expectedBounds.Top = $primary.Y
-  $expectedBounds.Right = $primary.X + $primary.Width
-  $expectedBounds.Bottom = $primary.Y + $ExpectedReservedTop
+  $expectedBounds.Left = $monitorBounds.X
+  $expectedBounds.Top = $monitorBounds.Y
+  $expectedBounds.Right = $monitorBounds.X + $monitorBounds.Width
+  $expectedBounds.Bottom = $monitorBounds.Y + $ExpectedReservedTop
   $windowBounds = Get-ZebarWindowBounds `
     -WindowHandle $Bar.MainWindowHandle
   if (-not (Test-ZebarAppBarBoundsEqual `
     -First $windowBounds `
     -Second $expectedBounds
   )) {
-    throw "The managed Zebar bar is not aligned with the primary monitor."
+    $monitorDescription = if ($null -ne $ExpectedMonitorBounds) {
+      "expected monitor"
+    } else { "primary monitor" }
+    throw "The managed Zebar bar is not aligned with the $monitorDescription."
   }
 
   $data = New-Object ZebarAppBarInterop+AppBarData
@@ -1008,6 +1016,7 @@ Export-ModuleMember -Function @(
   "Get-GlazeWorkspaceBindingPlan",
   "Set-GlazeWorkspaceBindingsForProfile",
   "Invoke-GlazeWorkspaceMonitorSync",
+  "Invoke-ZebarAppBarPositionRefresh",
   "Ensure-GlazeZebar",
   "Invoke-GlazeMonitorProfileRefresh"
 )

@@ -1,5 +1,8 @@
 [CmdletBinding()]
 param(
+  [ValidateSet("desktop", "surface")]
+  [string]$DeviceProfile = "desktop",
+
   [string]$ManagerPath = (
     Join-Path $env:ProgramFiles "glzr.io\GlazeWM\glazewm.exe"
   ),
@@ -29,6 +32,8 @@ param(
   [int]$StartupAppsTimeoutSeconds = 150,
 
   [switch]$PreserveZebarRuntime,
+
+  [switch]$AllowZebarRuntimeStop,
 
   [switch]$SkipStartupApps
 )
@@ -189,10 +194,11 @@ function Wait-GlazeHelperExit {
 }
 
 function Get-ZetshellZebarProcess {
+  param([string]$WidgetName = "bar")
   return Get-Process -Name "zebar" -ErrorAction SilentlyContinue |
     Where-Object {
       $_.Responding -and
-      $_.MainWindowTitle -eq "Zebar - zetshell / bar"
+      $_.MainWindowTitle -eq "Zebar - zetshell / $WidgetName"
     } |
     Select-Object -First 1
 }
@@ -237,13 +243,19 @@ function Wait-GlazeWMReady {
 function Start-ManagedZebar {
   param([Parameter(Mandatory = $true)][object]$ZebarState)
 
+  $widgetName = if ($ZebarState.PSObject.Properties.Name -contains "WidgetName") {
+    [string]$ZebarState.WidgetName
+  } else { "bar" }
+  $presetName = if ($ZebarState.PSObject.Properties.Name -contains "PresetName") {
+    [string]$ZebarState.PresetName
+  } else { "primary-monitor" }
   Start-Process `
     -FilePath $ZebarState.ZebarPath `
     -ArgumentList @(
       "start-widget-preset",
       "--pack", $ZebarState.Pack,
-      "--widget-name", "bar",
-      "--preset", "primary-monitor"
+      "--widget-name", $widgetName,
+      "--preset", $presetName
     ) `
     -WindowStyle Hidden |
     Out-Null
@@ -258,7 +270,9 @@ if (Test-Path -LiteralPath $komorebiShortcut -PathType Leaf) {
   )
 }
 
-$sourceConfig = Join-Path $PSScriptRoot "config.yaml"
+$sourceConfig = Join-Path $PSScriptRoot (
+  if ($DeviceProfile -eq "surface") { "config.surface.yaml" } else { "config.yaml" }
+)
 $sourceModule = Join-Path $PSScriptRoot "GlazeWMAutoTile.psm1"
 $sourceWorkspaceHelpers = Join-Path `
   $PSScriptRoot `
@@ -273,6 +287,8 @@ $sourceSafeRestartModule = Join-Path `
 $sourceMonitorSyncScript = Join-Path `
   $PSScriptRoot `
   "Sync-GlazeMonitorLayout.ps1"
+$sourceSurfaceDisplayModule = Join-Path $PSScriptRoot "GlazeSurfaceDisplay.psm1"
+$sourceSurfaceWatcher = Join-Path $PSScriptRoot "Watch-GlazeSurfaceDisplay.ps1"
 $sourceStartupScript = Join-Path $PSScriptRoot "Start-GlazeWorkspaceApps.ps1"
 $sourceStartupConfig = Join-Path $PSScriptRoot "startup-apps.json"
 $sourceZebarInstaller = Join-Path $PSScriptRoot "..\zebar\install.ps1"
@@ -285,6 +301,8 @@ foreach ($sourcePath in @(
   $sourceMonitorSyncModule,
   $sourceSafeRestartModule,
   $sourceMonitorSyncScript,
+  $sourceSurfaceDisplayModule,
+  $sourceSurfaceWatcher,
   $sourceStartupScript,
   $sourceStartupConfig,
   $sourceZebarInstaller
@@ -322,6 +340,14 @@ $runtimeDeployments = @(
   [pscustomobject]@{
     Source = $sourceMonitorSyncScript
     Destination = Join-Path $RuntimeRoot "Sync-GlazeMonitorLayout.ps1"
+  },
+  [pscustomobject]@{
+    Source = $sourceSurfaceDisplayModule
+    Destination = Join-Path $RuntimeRoot "GlazeSurfaceDisplay.psm1"
+  },
+  [pscustomobject]@{
+    Source = $sourceSurfaceWatcher
+    Destination = Join-Path $RuntimeRoot "Watch-GlazeSurfaceDisplay.ps1"
   },
   [pscustomobject]@{
     Source = $sourceStartupScript
@@ -412,6 +438,10 @@ $deployedMonitorSyncScript = Join-Path `
   $RuntimeRoot `
   "Sync-GlazeMonitorLayout.ps1"
 $deployedStartupScript = Join-Path $RuntimeRoot "Start-GlazeWorkspaceApps.ps1"
+$deployedSurfaceDisplayModule = Join-Path `
+  $RuntimeRoot `
+  "GlazeSurfaceDisplay.psm1"
+$deployedSurfaceWatcher = Join-Path $RuntimeRoot "Watch-GlazeSurfaceDisplay.ps1"
 $startupStatePath = Join-Path $RuntimeRoot "startup-apps-state.json"
 $startupErrorPath = Join-Path $RuntimeRoot "startup-apps-error.log"
 $daemon = $null
@@ -422,8 +452,42 @@ $managerStartedByInstaller = $false
 $preserveStartedRuntime = $false
 $startedRuntimeAutostartRegistered = $false
 $daemonWasRunning = $false
+$surfaceWatcherWasRunning = $false
 $startedDaemonProcess = $null
 $startupAppsProcess = $null
+$surfaceWatcherProcess = $null
+$zebarDeploymentChanged = $false
+$zebarDestination = Join-Path $env:USERPROFILE ".glzr\zebar\zetshell"
+$zebarSnapshot = Join-Path $rollbackRoot "zebar"
+$zebarDestinationExisted = Test-Path `
+  -LiteralPath $zebarDestination `
+  -PathType Container
+$zebarWasRunningBeforeInstall = @(
+  Get-Process -Name "zebar" -ErrorAction SilentlyContinue
+).Count -gt 0
+$previousZebarWidgetName = "bar"
+$previousZebarPresetName = "primary-monitor"
+if ($zebarDestinationExisted) {
+  Copy-Item `
+    -LiteralPath $zebarDestination `
+    -Destination $zebarSnapshot `
+    -Recurse
+  try {
+    $previousZebarPack = Get-Content `
+      -LiteralPath (Join-Path $zebarSnapshot "zpack.json") `
+      -Raw |
+      ConvertFrom-Json
+    $previousZebarWidget = @($previousZebarPack.widgets)[0]
+    $previousZebarWidgetName = [string]$previousZebarWidget.name
+    $previousZebarPresetName = [string](@($previousZebarWidget.presets)[0].name)
+  } catch {
+    # Retain the legacy desktop defaults for an unreadable previous pack.
+  }
+}
+$runStartupApps = $DeviceProfile -eq "desktop"
+$managedZebarWidgetName = if ($DeviceProfile -eq "surface") {
+  "surface-bar"
+} else { "bar" }
 try {
   if ($PreserveZebarRuntime -and -not $managerWasRunning) {
     throw (
@@ -434,7 +498,22 @@ try {
   if ($PreserveZebarRuntime) {
     $zebarState = $null
   } else {
-    $zebarState = & $sourceZebarInstaller | Select-Object -Last 1
+    if ($DeviceProfile -eq "surface") {
+      Import-Module $sourceSurfaceDisplayModule -Force -ErrorAction Stop
+      $internalDisplay = Get-SurfaceInternalDisplay `
+        -Displays @(Get-SurfaceActiveDisplays)
+      $zebarState = & $sourceZebarInstaller `
+        -DeviceProfile surface `
+        -InternalMonitorName ([string]$internalDisplay.DeviceName) `
+        -AllowRuntimeStop:$AllowZebarRuntimeStop |
+        Select-Object -Last 1
+    } else {
+      $zebarState = & $sourceZebarInstaller `
+        -DeviceProfile desktop `
+        -AllowRuntimeStop:$AllowZebarRuntimeStop |
+        Select-Object -Last 1
+    }
+    $zebarDeploymentChanged = [bool]$zebarState.Changed
   }
   Copy-Item -LiteralPath $sourceConfig -Destination $liveConfig -Force
   foreach ($deployment in $runtimeDeployments) {
@@ -458,6 +537,16 @@ try {
     Stop-GlazeProcessTree -ProcessId $existingDaemon.ProcessId
     Wait-GlazeHelperExit `
       -ProcessId $existingDaemon.ProcessId `
+      -TimeoutSeconds $StartupTimeoutSeconds
+  }
+
+  $existingSurfaceWatcher = Get-GlazeHelperProcess `
+    -ScriptPath $deployedSurfaceWatcher
+  $surfaceWatcherWasRunning = $null -ne $existingSurfaceWatcher
+  if ($surfaceWatcherWasRunning) {
+    Stop-GlazeProcessTree -ProcessId $existingSurfaceWatcher.ProcessId
+    Wait-GlazeHelperExit `
+      -ProcessId $existingSurfaceWatcher.ProcessId `
       -TimeoutSeconds $StartupTimeoutSeconds
   }
 
@@ -501,14 +590,23 @@ try {
     throw "GlazeWM did not become ready within $StartupTimeoutSeconds seconds."
   }
 
+  if ($DeviceProfile -eq "surface") {
+    Import-Module $deployedSurfaceDisplayModule -Force -ErrorAction Stop
+    Invoke-GlazeSurfaceWorkspaceSync `
+      -GlazeWMPath $GlazeWMPath | Out-Null
+  }
+
   if ($managerWasRunning) {
     $startedDaemonProcess = Start-HiddenPowerShellScript `
       -ScriptPath $deployedDaemon
-    if (-not $SkipStartupApps) {
+    if ($runStartupApps -and -not $SkipStartupApps) {
       $startupAppsProcess = Start-HiddenPowerShellScript `
         -ScriptPath $deployedStartupScript
     }
-    if ($PreserveZebarRuntime) {
+    if ($DeviceProfile -eq "surface") {
+      $surfaceWatcherProcess = Start-HiddenPowerShellScript `
+        -ScriptPath $deployedSurfaceWatcher
+    } elseif ($PreserveZebarRuntime) {
       & $deployedMonitorSyncScript `
         -GlazeWMPath $GlazeWMPath | Out-Null
     } else {
@@ -517,6 +615,14 @@ try {
         -ZebarPath $zebarState.ZebarPath `
         -RestartZebar | Out-Null
     }
+  }
+
+  if (
+    $DeviceProfile -eq "surface" -and
+    -not $PreserveZebarRuntime -and
+    $null -eq (Get-ZetshellZebarProcess -WidgetName $managedZebarWidgetName)
+  ) {
+    Start-ManagedZebar -ZebarState $zebarState
   }
 
   $daemonDeadline = (Get-Date).AddSeconds($StartupTimeoutSeconds)
@@ -545,19 +651,35 @@ try {
     throw "The automatic tiling helper exited during startup."
   }
 
+  if ($DeviceProfile -eq "surface") {
+    $surfaceWatcherDeadline = (Get-Date).AddSeconds($StartupTimeoutSeconds)
+    do {
+      Start-Sleep -Milliseconds 250
+      $surfaceWatcher = Get-GlazeHelperProcess `
+        -ScriptPath $deployedSurfaceWatcher
+    } while (
+      $null -eq $surfaceWatcher -and
+      (Get-Date) -lt $surfaceWatcherDeadline
+    )
+    if ($null -eq $surfaceWatcher) {
+      throw "GlazeWM started, but the Surface display watcher did not."
+    }
+  }
+
   if (-not $PreserveZebarRuntime) {
     $zebarDeadline = (Get-Date).AddSeconds($ZebarStartupTimeoutSeconds)
     $zebarProcess = $null
     do {
       Start-Sleep -Milliseconds 250
-      $zebarProcess = Get-ZetshellZebarProcess
+      $zebarProcess = Get-ZetshellZebarProcess `
+        -WidgetName $managedZebarWidgetName
     } while ($null -eq $zebarProcess -and (Get-Date) -lt $zebarDeadline)
     if ($null -eq $zebarProcess) {
       throw "Zebar did not start within $ZebarStartupTimeoutSeconds seconds."
     }
   }
 
-  if (-not $SkipStartupApps) {
+  if ($runStartupApps -and -not $SkipStartupApps) {
     $startupAppsDeadline = (Get-Date).AddSeconds($StartupAppsTimeoutSeconds)
     do {
       Start-Sleep -Milliseconds 250
@@ -604,6 +726,7 @@ try {
     -Type String
 
   $state = [pscustomobject]@{
+    DeviceProfile = $DeviceProfile
     ConfigPath = $liveConfig
     ManagerProcessId = $manager.Id
     AutoTileProcessId = $daemon.ProcessId
@@ -667,11 +790,46 @@ try {
       "again to finish validation."
     )
   } elseif (-not $installationSucceeded) {
+    if (
+      $null -ne $surfaceWatcherProcess -and
+      -not $surfaceWatcherProcess.HasExited
+    ) {
+      Stop-GlazeProcessTree `
+        -ProcessId $surfaceWatcherProcess.Id `
+        -ErrorAction SilentlyContinue
+    }
     if ($null -ne $startupAppsProcess -and -not $startupAppsProcess.HasExited) {
       Stop-Process `
         -Id $startupAppsProcess.Id `
         -Force `
         -ErrorAction SilentlyContinue
+    }
+    if ($zebarDeploymentChanged) {
+      Get-Process -Name "zebar" -ErrorAction SilentlyContinue |
+        Stop-Process -Force -ErrorAction SilentlyContinue
+      Remove-Item `
+        -LiteralPath $zebarDestination `
+        -Recurse `
+        -Force `
+        -ErrorAction SilentlyContinue
+      if ($zebarDestinationExisted) {
+        Copy-Item `
+          -LiteralPath $zebarSnapshot `
+          -Destination $zebarDestination `
+          -Recurse
+      }
+      if ($zebarWasRunningBeforeInstall -and $zebarDestinationExisted) {
+        Start-Process `
+          -FilePath $zebarState.ZebarPath `
+          -ArgumentList @(
+            "start-widget-preset",
+            "--pack", "zetshell",
+            "--widget-name", $previousZebarWidgetName,
+            "--preset", $previousZebarPresetName
+          ) `
+          -WindowStyle Hidden |
+          Out-Null
+      }
     }
     if (
       $null -ne $startedDaemonProcess -and
@@ -774,7 +932,24 @@ try {
         )
       }
     }
-    if ($null -ne $zebarState -and $null -eq (Get-ZetshellZebarProcess)) {
+    if (
+      $surfaceWatcherWasRunning -and
+      $null -eq (Get-GlazeHelperProcess -ScriptPath $deployedSurfaceWatcher)
+    ) {
+      try {
+        [void](Start-HiddenPowerShellScript -ScriptPath $deployedSurfaceWatcher)
+      } catch {
+        Write-Warning (
+          "Rollback could not restart the Surface display watcher: " +
+          $_.Exception.Message
+        )
+      }
+    }
+    if (
+      $null -ne $zebarState -and
+      -not $zebarDeploymentChanged -and
+      $null -eq (Get-ZetshellZebarProcess -WidgetName $managedZebarWidgetName)
+    ) {
       Start-ManagedZebar -ZebarState $zebarState
     }
   }

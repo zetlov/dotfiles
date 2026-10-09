@@ -1,5 +1,8 @@
 [CmdletBinding()]
 param(
+  [ValidateSet("desktop", "surface")]
+  [string]$DeviceProfile = "desktop",
+
   [ValidateSet("Install", "Update")]
   [string]$Mode = "Install",
 
@@ -17,7 +20,9 @@ param(
 
   [switch]$ListComponents = $false,
 
-  [switch]$AddKanataDefenderExclusion = $false
+  [switch]$AddKanataDefenderExclusion = $false,
+
+  [switch]$AllowZebarRuntimeStop = $false
 )
 
 Set-StrictMode -Version Latest
@@ -40,6 +45,8 @@ if ($ListComponents) {
       "PlanOnly",
       "Preflight",
       "AddKanataDefenderExclusion"
+      "DeviceProfile"
+      "AllowZebarRuntimeStop"
     ) | Where-Object { $PSBoundParameters.ContainsKey($_) }
   )
   if ($conflictingOptions.Count -gt 0) {
@@ -122,6 +129,8 @@ $invokeParameters = @{
   PlanOnly = $PlanOnly
   Preflight = $Preflight
   AddKanataDefenderExclusion = $AddKanataDefenderExclusion
+  DeviceProfile = $DeviceProfile
+  AllowZebarRuntimeStop = $AllowZebarRuntimeStop
 }
 
 Invoke-WindowsComponentSelection @invokeParameters

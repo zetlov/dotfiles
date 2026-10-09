@@ -564,6 +564,44 @@ Describe "Windows component orchestrator" {
       -Times 0
   }
 
+  It "rejects workstation monitor profiles for the Surface profile" {
+    {
+      Invoke-WindowsComponentSelection `
+        -Mode Install `
+        -Component "monitor-profiles" `
+        -DeviceProfile surface `
+        -PlanOnly
+    } | Should -Throw "*Surface profile*monitor profiles*"
+  }
+
+  It "propagates the Surface profile through component execution" {
+    Mock Assert-WindowsRuntimeCompatibility {} `
+      -ModuleName WindowsOrchestrator
+    Mock Invoke-WindowsComponentEntrypoint {} `
+      -ModuleName WindowsOrchestrator
+
+    Invoke-WindowsComponentSelection `
+      -Mode Install `
+      -Component @("wezterm", "glazewm") `
+      -DeviceProfile surface `
+      -AllowZebarRuntimeStop
+
+    Should -Invoke Invoke-WindowsComponentEntrypoint `
+      -ModuleName WindowsOrchestrator `
+      -Times 1 `
+      -ParameterFilter {
+        $Component.Name -eq "glazewm" -and
+        $DeviceProfile -eq "surface" -and
+        $AllowZebarRuntimeStop
+      }
+    Should -Invoke Invoke-WindowsComponentEntrypoint `
+      -ModuleName WindowsOrchestrator `
+      -Times 1 `
+      -ParameterFilter {
+        $Component.Name -eq "wezterm" -and $DeviceProfile -eq "surface"
+      }
+  }
+
   It "rejects PlanOnly and Preflight together" {
     {
       Invoke-WindowsComponentSelection -PlanOnly -Preflight

@@ -11,6 +11,11 @@ param(
   [ValidatePattern('^\d+\.\d+\.\d+$')]
   [string]$RequiredVersion = "3.3.1",
 
+  [ValidateSet("desktop", "surface")]
+  [string]$DeviceProfile = "desktop",
+
+  [string]$InternalMonitorName,
+
   [switch]$AllowRuntimeStop
 )
 
@@ -19,6 +24,17 @@ $ErrorActionPreference = "Stop"
 
 if ($env:OS -ne "Windows_NT") {
   throw "This script must run on Windows."
+}
+if ($DeviceProfile -eq "surface") {
+  if ([string]::IsNullOrWhiteSpace($InternalMonitorName)) {
+    throw "InternalMonitorName is required for the Surface device profile."
+  }
+  if ($InternalMonitorName -notmatch '^\\\\\.\\DISPLAY\d+$') {
+    throw (
+      "InternalMonitorName must be a GDI display name such as " +
+      "\\.\DISPLAY1."
+    )
+  }
 }
 
 $expectedDestination = [IO.Path]::GetFullPath(
@@ -72,14 +88,36 @@ try {
 } catch {
   throw "Cannot parse Zebar widget pack: $sourcePack"
 }
-if ($pack.name -ne "zetshell" -or @($pack.widgets).Count -ne 1) {
+if ($pack.name -ne "zetshell" -or @($pack.widgets).Count -ne 2) {
   throw "Unexpected Zebar widget pack identity."
 }
+$widgetName = if ($DeviceProfile -eq "surface") { "surface-bar" } else { "bar" }
+$presetName = if ($DeviceProfile -eq "surface") {
+  "internal-monitor"
+} else {
+  "primary-monitor"
+}
+$selectedWidgets = @($pack.widgets | Where-Object { $_.name -eq $widgetName })
+if ($selectedWidgets.Count -ne 1) {
+  throw "Zebar widget template not found: $widgetName"
+}
+$selectedWidget = $selectedWidgets[0]
+if ($DeviceProfile -eq "surface") {
+  $selectedWidget.presets[0].monitorSelection.match = $InternalMonitorName
+}
+$effectivePack = [ordered]@{
+  name = $pack.name
+  version = $pack.version
+  description = $pack.description
+  widgets = @($selectedWidget)
+}
+$effectivePackJson = $effectivePack | ConvertTo-Json -Depth 20
 
 function Test-ZebarPackMatches {
   param(
     [Parameter(Mandatory = $true)][string]$SourceRoot,
-    [Parameter(Mandatory = $true)][string]$DestinationRoot
+    [Parameter(Mandatory = $true)][string]$DestinationRoot,
+    [Parameter(Mandatory = $true)][string]$ExpectedPackJson
   )
 
   if (-not (Test-Path -LiteralPath $DestinationRoot -PathType Container)) {
@@ -93,14 +131,26 @@ function Test-ZebarPackMatches {
       return $false
     }
   }
-  $sourceFiles = @(
-    Get-Item -LiteralPath (Join-Path $SourceRoot "zpack.json")
-    Get-ChildItem -LiteralPath (Join-Path $SourceRoot "dist") -File -Recurse
-  )
-  $destinationFiles = @(
-    Get-Item -LiteralPath (Join-Path $DestinationRoot "zpack.json")
-    Get-ChildItem -LiteralPath (Join-Path $DestinationRoot "dist") -File -Recurse
-  )
+  try {
+    $destinationPack = Get-Content `
+      -LiteralPath (Join-Path $DestinationRoot "zpack.json") `
+      -Raw |
+      ConvertFrom-Json |
+      ConvertTo-Json -Depth 20
+  } catch {
+    return $false
+  }
+  if ($destinationPack -ne $ExpectedPackJson) {
+    return $false
+  }
+  $sourceFiles = @(Get-ChildItem `
+    -LiteralPath (Join-Path $SourceRoot "dist") `
+    -File `
+    -Recurse)
+  $destinationFiles = @(Get-ChildItem `
+    -LiteralPath (Join-Path $DestinationRoot "dist") `
+    -File `
+    -Recurse)
   $sourceRelative = @($sourceFiles | ForEach-Object {
     $_.FullName.Substring($SourceRoot.Length).TrimStart('\', '/')
   } | Sort-Object)
@@ -126,12 +176,17 @@ function Test-ZebarPackMatches {
 
 if (Test-ZebarPackMatches `
   -SourceRoot $PSScriptRoot `
-  -DestinationRoot $DestinationRoot
+  -DestinationRoot $DestinationRoot `
+  -ExpectedPackJson $effectivePackJson
 ) {
   return [pscustomobject]@{
     Pack = "zetshell"
     Destination = $DestinationRoot
     ZebarPath = $ZebarPath
+    DeviceProfile = $DeviceProfile
+    WidgetName = $widgetName
+    PresetName = $presetName
+    Changed = $false
   }
 }
 . $sourceProcessHelpers
@@ -145,6 +200,21 @@ $backupRoot = Join-Path $destinationParent (
   "zetshell.old-" + [guid]::NewGuid().ToString("N")
 )
 $hadExisting = Test-Path -LiteralPath $DestinationRoot -PathType Container
+$previousWidgetName = "bar"
+$previousPresetName = "primary-monitor"
+if ($hadExisting) {
+  try {
+    $previousPack = Get-Content `
+      -LiteralPath (Join-Path $DestinationRoot "zpack.json") `
+      -Raw |
+      ConvertFrom-Json
+    $previousWidget = @($previousPack.widgets)[0]
+    $previousWidgetName = $previousWidget.name
+    $previousPresetName = @($previousWidget.presets)[0].name
+  } catch {
+    # Retain the legacy desktop defaults when the installed pack is unreadable.
+  }
+}
 $zebarWasRunning = @(
   Get-Process -Name "zebar" -ErrorAction SilentlyContinue
 ).Count -gt 0
@@ -163,7 +233,10 @@ try {
   Get-Process -Name "zebar" -ErrorAction SilentlyContinue |
     Stop-Process -Force -ErrorAction SilentlyContinue
   New-Item -ItemType Directory -Path $stagingRoot | Out-Null
-  Copy-Item -LiteralPath $sourcePack -Destination $stagingRoot
+  Set-Content `
+    -LiteralPath (Join-Path $stagingRoot "zpack.json") `
+    -Value $effectivePackJson `
+    -Encoding UTF8
   Copy-Item -LiteralPath $sourceDist -Destination $stagingRoot -Recurse
   if ($hadExisting) {
     Move-Item -LiteralPath $DestinationRoot -Destination $backupRoot
@@ -182,8 +255,8 @@ try {
       -ArgumentList @(
         "start-widget-preset",
         "--pack", "zetshell",
-        "--widget-name", "bar",
-        "--preset", "primary-monitor"
+        "--widget-name", $previousWidgetName,
+        "--preset", $previousPresetName
       ) `
       -WindowStyle Hidden |
       Out-Null
@@ -199,4 +272,8 @@ try {
   Pack = "zetshell"
   Destination = $DestinationRoot
   ZebarPath = $ZebarPath
+  DeviceProfile = $DeviceProfile
+  WidgetName = $widgetName
+  PresetName = $presetName
+  Changed = $true
 }

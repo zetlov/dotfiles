@@ -13,6 +13,29 @@ From WSL:
 ./install.sh
 ```
 
+For the managed Surface profile:
+
+```bash
+./install.sh --windows-device-profile=surface
+```
+
+This explicit profile keeps workspaces 1 through 5 alive on the built-in
+panel. Workspaces 6 through 12 remain dynamic; one attached external display
+activates workspace 6, while workspaces 7 through 12 are never moved by the
+topology synchronizer. `left`, `vert`, workstation startup applications, and
+monitor-profile controls are omitted. More than one external display fails
+closed.
+
+If Zebar is already running with the desktop pack, perform the first switch
+with `--allow-zebar-runtime-stop`. Reapplying an unchanged Surface pack does
+not need that authorization.
+
+The Surface watcher coalesces Windows display-change events for 1.5 seconds.
+It identifies the built-in panel through DisplayConfig output technology, so a
+portrait rotation does not change workspace ownership. It updates GlazeWM
+bindings without restarting GlazeWM or Zebar, then refreshes the existing
+Surface bar's AppBar reservation against the internal-panel rectangle.
+
 Add `--with-monitor-profiles` only on the machine with the managed three-display
 topology. Zebar hides its monitor-profile selector when that component is not
 installed. Use `--without-glazewm` when the WSL bootstrap should omit both
