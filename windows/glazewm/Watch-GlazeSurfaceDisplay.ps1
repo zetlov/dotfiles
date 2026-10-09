@@ -40,12 +40,13 @@ try {
     -InputObject ([Microsoft.Win32.SystemEvents]) `
     -EventName DisplaySettingsChanged `
     -SourceIdentifier $sourceIdentifier
+  $clock = [Diagnostics.Stopwatch]::StartNew()
   $state = New-SurfaceDisplayDebounceState
   $retryAttemptsRemaining = 3
   if (-not (Invoke-SurfaceDisplaySyncSafely)) {
     $state = Update-SurfaceDisplayDebounceState `
       -State $state `
-      -NowMilliseconds ([Environment]::TickCount64)
+      -NowMilliseconds $clock.ElapsedMilliseconds
   }
   while ($true) {
     $event = Wait-Event -SourceIdentifier $sourceIdentifier -Timeout 1
@@ -53,12 +54,12 @@ try {
       Remove-Event -EventIdentifier $event.EventIdentifier -ErrorAction SilentlyContinue
       $state = Update-SurfaceDisplayDebounceState `
         -State $state `
-        -NowMilliseconds ([Environment]::TickCount64)
+        -NowMilliseconds $clock.ElapsedMilliseconds
       $retryAttemptsRemaining = 3
     }
     if (Test-SurfaceDisplayDebounceReady `
       -State $state `
-      -NowMilliseconds ([Environment]::TickCount64) `
+      -NowMilliseconds $clock.ElapsedMilliseconds `
       -QuietPeriodMilliseconds $QuietPeriodMilliseconds
     ) {
       if (Invoke-SurfaceDisplaySyncSafely) {
@@ -68,7 +69,7 @@ try {
         if ($retryAttemptsRemaining -gt 0) {
           $state = Update-SurfaceDisplayDebounceState `
             -State $state `
-            -NowMilliseconds ([Environment]::TickCount64)
+            -NowMilliseconds $clock.ElapsedMilliseconds
         } else {
           $state = New-SurfaceDisplayDebounceState
         }

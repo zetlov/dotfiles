@@ -64,6 +64,9 @@ Describe "GlazeWM managed configuration" {
     $watcher | Should -Match 'Local\\DotfilesGlazeSurfaceDisplayWatcher'
     $watcher | Should -Match 'WaitOne\(0\)'
     $watcher | Should -Match '\$retryAttemptsRemaining = 3'
+    $watcher | Should -Match '\[Diagnostics\.Stopwatch\]::StartNew\(\)'
+    $watcher | Should -Match '\$clock\.ElapsedMilliseconds'
+    $watcher | Should -Not -Match '\[Environment\]::TickCount64'
     $watcher | Should -Match 'Invoke-SurfaceDisplaySyncSafely'
     $watcher | Should -Match (
       'if \(Invoke-SurfaceDisplaySyncSafely\)[\s\S]+?' +
