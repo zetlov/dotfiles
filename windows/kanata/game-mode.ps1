@@ -196,9 +196,9 @@ try {
     [void]$stopEvent.WaitOne($settings.PollIntervalMilliseconds)
   }
 } finally {
+  $stopEvent.Dispose()
   if ($ownsMutex) {
     $mutex.ReleaseMutex()
   }
-  $stopEvent.Dispose()
   $mutex.Dispose()
 }

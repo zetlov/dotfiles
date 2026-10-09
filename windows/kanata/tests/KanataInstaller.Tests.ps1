@@ -217,7 +217,7 @@ Context "Keyboard modifier configuration" {
     $configPath = Join-Path $PSScriptRoot "..\kanata.kbd"
     $config = Get-Content -LiteralPath $configPath -Raw
 
-    Assert-Equal ($config -match "(?ms)^\(defvirtualkeys\s+game-mode\s+nop0\s*\)") $true
+    Assert-Equal ($config -match "(?m)^\s*game-mode\s+nop0\s*$") $true
     Assert-Equal $config.Contains("((input virtual game-mode)) spc break") $true
     Assert-Equal $config.Contains(
       "() (tap-hold-press `$tap `$hold spc (layer-while-held nav)) break"

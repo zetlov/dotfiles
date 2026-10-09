@@ -560,6 +560,17 @@ Context "Run entry ownership" {
 }
 
 Context "Watcher lifecycle implementation" {
+  It "disposes the signaled stop event before releasing the mutex" {
+    $watcherSource = Get-Content `
+      -LiteralPath (Join-Path $PSScriptRoot "..\game-mode.ps1") `
+      -Raw
+
+    Assert-Equal ($watcherSource -match (
+      '(?s)finally \{.*?\$stopEvent\.Dispose\(\).*?' +
+      'if \(\$ownsMutex\).*?\$mutex\.ReleaseMutex\(\)'
+    )) $true
+  }
+
   It "waits for the watcher to acquire its mutex" {
     $moduleSource = Get-Content `
       -LiteralPath (Join-Path $PSScriptRoot "..\KanataGameMode.psm1") `
