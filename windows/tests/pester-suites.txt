@@ -12,6 +12,7 @@ windows/glazewm/tests/GlazeWMSafeRestart.Tests.ps1
 windows/glazewm/tests/GlazeSurfaceDisplay.Tests.ps1
 windows/glazewm/tests/GlazeWMStartupApps.Tests.ps1
 windows/kanata/tests/KanataGameMode.Tests.ps1
+windows/kanata/tests/KanataImeBridge.Tests.ps1
 windows/kanata/tests/KanataInstaller.Tests.ps1
 windows/komorebi/tests/KomorebiInstaller.Tests.ps1
 windows/monitor-profiles/tests/MonitorProfiles.Tests.ps1

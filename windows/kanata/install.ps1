@@ -68,6 +68,14 @@ $gameModeSources = @(
     Path = Join-Path $PSScriptRoot "KanataGameMode.psm1"
   },
   @{
+    Name = "KanataSurfaceIme.psm1"
+    Path = Join-Path $PSScriptRoot "KanataSurfaceIme.psm1"
+  },
+  @{
+    Name = "KanataImeBridge.psm1"
+    Path = Join-Path $PSScriptRoot "KanataImeBridge.psm1"
+  },
+  @{
     Name = "game-mode.ps1"
     Path = Join-Path $PSScriptRoot "game-mode.ps1"
   },
@@ -106,9 +114,8 @@ $defenderExclusionAdded = $false
 $defenderExclusionOwned = $false
 $surfaceImeScancodeMapAdded = $false
 $surfaceImeScancodeMapOwned = $false
-$imeOffPowerToysMappingAdded = $false
+$imeOffPowerToysMappingRemoved = $false
 $imeOffPowerToysMappingOwned = $false
-$surfaceImeEnabled = $false
 $installCompleted = $false
 $installError = $null
 $rollbackPrepared = $false
@@ -121,6 +128,8 @@ $managedFileNames = @(
   "kanata-game.kbd",
   "install.json",
   "KanataGameMode.psm1",
+  "KanataImeBridge.psm1",
+  "KanataSurfaceIme.psm1",
   "game-mode.ps1",
   "game-mode.json"
 )
@@ -203,16 +212,15 @@ try {
     Write-Host "Defender allow : $exeDst"
   }
   if ($Driver -eq "winio" -and (Test-KanataSurfaceDevice)) {
-    $surfaceImeEnabled = $true
     $surfaceImeScancodeMapAdded = Add-KanataSurfaceImeScancodeMap
     $surfaceImeScancodeMapOwned = (
       $surfaceImeScancodeMapOwned -or $surfaceImeScancodeMapAdded
     )
-    $imeOffPowerToysMappingAdded = Add-KanataImeOffPowerToysMapping
-    $imeOffPowerToysMappingOwned = (
-      $imeOffPowerToysMappingOwned -or $imeOffPowerToysMappingAdded
-    )
-    Write-Host "Surface IME    : IME Off -> F13 (PowerToys)"
+    if ($imeOffPowerToysMappingOwned) {
+      $imeOffPowerToysMappingRemoved = Remove-KanataImeOffPowerToysMapping
+      $imeOffPowerToysMappingOwned = $false
+    }
+    Write-Host "Surface IME    : IME Off -> Kanata virtual key (native bridge)"
     Write-Host "Surface IME    : IME On -> F15 (Scancode Map)"
   }
 
@@ -259,10 +267,6 @@ try {
 
   Start-KanataGameModeWatcher -InstallDir $InstallDir
   Write-Host "Started Kanata game mode watcher."
-  if ($surfaceImeEnabled) {
-    Restart-KanataPowerToys
-    Write-Host "Prioritized the PowerToys Surface IME hook."
-  }
   $installCompleted = $true
 } catch {
   $installError = $_
@@ -333,9 +337,9 @@ try {
       )
     }
   }
-  if (-not $installCompleted -and $imeOffPowerToysMappingAdded) {
+  if (-not $installCompleted -and $imeOffPowerToysMappingRemoved) {
     try {
-      Remove-KanataImeOffPowerToysMapping | Out-Null
+      Add-KanataImeOffPowerToysMapping | Out-Null
     } catch {
       Write-Warning (
         "Failed to roll back the Surface IME PowerToys mapping: " +

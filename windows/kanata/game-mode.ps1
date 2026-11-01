@@ -8,6 +8,7 @@ $ErrorActionPreference = "Stop"
 $modulePath = Join-Path $InstallDir "KanataGameMode.psm1"
 Import-Module $modulePath -Force -ErrorAction Stop
 $InstallDir = Resolve-KanataInstallDir -Path $InstallDir
+Import-Module (Join-Path $InstallDir "KanataSurfaceIme.psm1") -Force
 
 $paths = Get-KanataWatcherPaths -InstallDir $InstallDir
 $settings = Get-KanataGameModeSettings -Path $paths.Settings
@@ -63,6 +64,22 @@ try {
     exit 0
   }
 
+  $metaPath = Join-Path $InstallDir "install.json"
+  $useImeBridge = $false
+  try {
+    if (Test-Path -LiteralPath $metaPath -PathType Leaf) {
+      $meta = Get-Content -LiteralPath $metaPath -Raw | ConvertFrom-Json
+      $driver = $meta.PSObject.Properties["driver"]
+      $useImeBridge = ($driver -and $driver.Value -eq "winio" -and
+        (Test-KanataSurfaceDevice))
+    }
+    if ($useImeBridge) {
+      Import-Module (Join-Path $InstallDir "KanataImeBridge.psm1") -Force
+    }
+  } catch {
+    $useImeBridge = $false
+    Write-GameModeLog -ErrorMessage ("IME bridge initialization: " + $_.Exception.Message)
+  }
   $steamCommonPaths = @()
   $steamRefreshAt = [datetime]::MinValue
   $resumeKanataAt = [datetime]::MinValue
@@ -125,6 +142,7 @@ try {
 
       $kanataProcess = $kanataProcesses[0]
       if ($managedKanataId -ne $kanataProcess.Id) {
+        if ($useImeBridge) { Stop-KanataImeBridge }
         if (Test-KanataAnyKeyboardKeyPressed) {
           [void]$stopEvent.WaitOne($settings.PollIntervalMilliseconds)
           continue
@@ -149,6 +167,12 @@ try {
         $managedKanataId = $kanataProcess.Id
         $gameModeEnabled = $false
         $resumeKanataAt = [datetime]::MinValue
+      }
+
+      if ($useImeBridge) {
+        Start-KanataImeBridge
+        $bridgeError = Get-KanataImeBridgeError
+        if ($bridgeError) { Write-GameModeLog -ErrorMessage $bridgeError }
       }
 
       $gameStateMismatch = (($games.Count -gt 0) -ne $gameModeEnabled)
@@ -196,6 +220,9 @@ try {
     [void]$stopEvent.WaitOne($settings.PollIntervalMilliseconds)
   }
 } finally {
+  if ($ownsMutex -and (Get-Command Stop-KanataImeBridge -ErrorAction SilentlyContinue)) {
+    Stop-KanataImeBridge
+  }
   $stopEvent.Dispose()
   if ($ownsMutex) {
     $mutex.ReleaseMutex()

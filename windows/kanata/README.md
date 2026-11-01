@@ -18,12 +18,12 @@ registry update, and Kanata process run with normal user privileges.
 
 ## Key behavior
 
-- On the managed Microsoft Surface, the installer maps IME Off to `F13` with
-  PowerToys Keyboard Manager and IME On to `F15` with the system `Scancode
-  Map`. PowerToys must already be running. The system mapping requires one UAC
-  approval and a Windows restart when first installed.
-- The installer restarts PowerToys after Kanata so Keyboard Manager receives
-  the Surface IME Off event before Kanata's keyboard hook.
+- On the managed Microsoft Surface, a native input bridge forwards IME Off
+  press/release events to Kanata's `surface-imeoff` virtual key over loopback
+  TCP. Tap for IME off; hold for the same GlazeWM shortcut layer as `F13`.
+  The bridge runs inside the game mode watcher and needs no PowerToys remap.
+- IME On is mapped to `F15` with the system `Scancode Map`. This mapping
+  requires one UAC approval and a Windows restart when first installed.
 - Tap `F13` for IME off or `F15` for IME on. Hold either key to activate the
   GlazeWM shortcut layer.
 - Left/Right Win and Left/Right Alt remain native Windows keys.
@@ -48,8 +48,16 @@ registry update, and Kanata process run with normal user privileges.
 The Surface source codes were measured as `E0 F1` / virtual key `26` for IME
 Off and scan code `79` for IME On. The Windows `Scancode Map` does not transform
 the `E0 F1` event on this device, so only IME On uses that mechanism. Microsoft
-documents Scan 1 code `66` for `F15`; PowerToys maps virtual key `26` to virtual
-key `124` (`F13`). Non-Surface devices keep their existing keyboard mapping.
+documents Scan 1 code `66` for `F15`. PowerToys-generated `F13` events cannot
+activate Kanata's layer because Kanata's Windows hook ignores injected events.
+The bridge instead captures only native virtual key `26`, queues press/release
+messages outside the hook callback, and connects only to `127.0.0.1:5829`.
+Non-Surface devices keep their existing keyboard mapping.
+
+Run `update-config.ps1` to install the bridge on an existing installation.
+Install and update remove the old PowerToys mapping only when `install.json`
+records that this installer owns it; other PowerToys mappings are preserved.
+Bridge connection failures are recorded in `%LOCALAPPDATA%\kanata\game-mode.log`.
 
 ## Game mode
 

@@ -69,6 +69,8 @@ function Get-KanataImeOffPowerToysProfileUpdate {
 }
 
 function Restart-KanataPowerToys {
+  param([bool]$RequireKeyboardManager = $true)
+
   $runner = Get-Process -Name "PowerToys" -ErrorAction SilentlyContinue |
     Select-Object -First 1
   if ($null -eq $runner -or [string]::IsNullOrWhiteSpace($runner.Path)) {
@@ -88,6 +90,8 @@ function Restart-KanataPowerToys {
   }
 
   Start-Process -FilePath $runnerPath | Out-Null
+  # Keyboard Manager need not start after its last mapping is removed.
+  if (-not $RequireKeyboardManager) { return }
   $deadline = (Get-Date).AddSeconds(10)
   do {
     Start-Sleep -Milliseconds 100
@@ -130,7 +134,7 @@ function Set-KanataImeOffPowerToysMapping {
       -LiteralPath $temporaryPath `
       -Destination $profilePath `
       -Force
-    Restart-KanataPowerToys
+    Restart-KanataPowerToys -RequireKeyboardManager ($Action -eq "Add")
   } catch {
     [IO.File]::WriteAllText(
       $profilePath,

@@ -9,6 +9,7 @@ $ErrorActionPreference = "Stop"
 $gameModeModule = Join-Path $PSScriptRoot "KanataGameMode.psm1"
 Import-Module $gameModeModule -Force -ErrorAction Stop
 $InstallDir = Resolve-KanataInstallDir -Path $InstallDir
+Import-Module (Join-Path $PSScriptRoot "KanataPowerToys.psm1") -Force
 
 function Resolve-DotfilesRoot {
   return (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
@@ -21,11 +22,14 @@ $exeDst = Join-Path $InstallDir "kanata.exe"
 $managedFiles = @(
   "kanata.kbd",
   "KanataGameMode.psm1",
+  "KanataImeBridge.psm1",
+  "KanataSurfaceIme.psm1",
   "game-mode.ps1",
   "game-mode.json"
 )
 $legacyManagedFiles = @("kanata-game.kbd")
-$rollbackFileNames = @($managedFiles + $legacyManagedFiles)
+$rollbackFileNames = @($managedFiles + $legacyManagedFiles + "install.json")
+$imeOffPowerToysMappingRemoved = $false
 
 foreach ($name in $managedFiles) {
   $sourcePath = Join-Path $sourceDir $name
@@ -105,6 +109,16 @@ try {
       Remove-Item -LiteralPath $legacyPath -Force
     }
   }
+  $metaPath = Join-Path $InstallDir "install.json"
+  if (Test-Path -LiteralPath $metaPath -PathType Leaf) {
+    $meta = Get-Content -LiteralPath $metaPath -Raw | ConvertFrom-Json
+    $ownedMapping = $meta.PSObject.Properties["ime_off_powertoys_mapping_added"]
+    if ($ownedMapping -and [bool]$ownedMapping.Value) {
+      $imeOffPowerToysMappingRemoved = Remove-KanataImeOffPowerToysMapping
+      $meta.ime_off_powertoys_mapping_added = $false
+      $meta | ConvertTo-Json | Set-Content -LiteralPath $metaPath -Encoding UTF8
+    }
+  }
   Set-KanataGameModeRunEntry -InstallDir $InstallDir
 
   if ($Restart -or $watcherWasRunning) {
@@ -153,6 +167,9 @@ try {
             -Name $name `
             -ErrorAction SilentlyContinue
         }
+      }
+      if ($imeOffPowerToysMappingRemoved) {
+        Add-KanataImeOffPowerToysMapping | Out-Null
       }
       if ($watcherWasRunning) {
         Start-KanataGameModeWatcher -InstallDir $InstallDir

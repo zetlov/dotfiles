@@ -437,25 +437,22 @@ Context "Game mode installer integration" {
     Assert-Equal $installScript.Contains("Start-KanataGameModeWatcher") $true
     Assert-Equal $installScript.Contains("Add-KanataSurfaceImeScancodeMap") $true
     Assert-Equal $installScript.Contains("Add-KanataImeOffPowerToysMapping") $true
+    Assert-Equal $installScript.Contains("Remove-KanataImeOffPowerToysMapping") $true
     Assert-Equal $installScript.Contains(
       "surface_ime_scancode_map_added"
     ) $true
     Assert-Equal $installScript.Contains(
       "ime_off_powertoys_mapping_added"
     ) $true
-    $watcherStart = $installScript.IndexOf(
-      "Start-KanataGameModeWatcher -InstallDir `$InstallDir"
-    )
-    $powerToysRestart = $installScript.IndexOf(
-      "Restart-KanataPowerToys"
-    )
-    Assert-Equal ($watcherStart -ge 0) $true
-    Assert-Equal ($powerToysRestart -gt $watcherStart) $true
+    Assert-Equal $installScript.Contains("KanataImeBridge.psm1") $true
+    Assert-Equal $installScript.Contains("Restart-KanataPowerToys") $false
   }
 
   It "lets the watcher restart Kanata after config updates" {
     foreach ($name in @(
       "kanata.kbd",
+      "KanataImeBridge.psm1",
+      "KanataSurfaceIme.psm1",
       "KanataGameMode.psm1",
       "game-mode.ps1",
       "game-mode.json"
